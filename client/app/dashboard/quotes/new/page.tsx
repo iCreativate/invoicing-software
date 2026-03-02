@@ -1099,9 +1099,8 @@ export default function NewQuotePage() {
                 type="button"
                 onClick={async () => {
                   // Ensure company is loaded before showing preview
-                  if (!company && user?.companyId) {
-                    await fetchCompany(user.companyId);
-                  }
+                  const cid = user?.companyId;
+                  if (!company && cid) await fetchCompany(cid);
                   setShowPreview(true);
                 }}
                 disabled={!formData.clientId || !formData.items.some(item => item.description)}
@@ -1252,7 +1251,7 @@ export default function NewQuotePage() {
                         {!company && user?.companyId && (
                           <button
                             onClick={async () => {
-                              await fetchCompany(user.companyId);
+                              if (user?.companyId) await fetchCompany(user.companyId);
                             }}
                             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                           >
