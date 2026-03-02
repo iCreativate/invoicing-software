@@ -22,9 +22,9 @@ const nextConfig: NextConfig = {
     removeConsole: process.env.NODE_ENV === 'production',
   },
 
-  // CSP: allow 'unsafe-eval' in development only (Next/React dev tooling, HMR)
+  // CSP: strict in production (no unsafe-eval). Dev allows unsafe-eval for HMR/Fast Refresh.
   async headers() {
-    if (process.env.NODE_ENV !== 'development') return [];
+    const isDev = process.env.NODE_ENV === 'development';
     return [
       {
         source: '/:path*',
@@ -33,11 +33,16 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              // Production: no 'unsafe-eval' (avoids eval/new Function). Dev: needed for Next.js HMR.
+              isDev
+                ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+                : "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: https: http://localhost:5001",
+              "img-src 'self' data: blob: https: http:",
               "font-src 'self' data: https://fonts.gstatic.com",
-              "connect-src 'self' http://localhost:5001 http://localhost:3003 ws://localhost:3003 wss://localhost:3003",
+              isDev
+                ? "connect-src 'self' http://localhost:5001 http://localhost:3003 ws://localhost:3003 wss://localhost:3003 https:"
+                : "connect-src 'self' https:",
             ].join('; '),
           },
         ],

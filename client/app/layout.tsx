@@ -19,6 +19,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Timely - Modern Finance, Payroll & Operations Platform",
   description: "All-in-one financial platform for modern businesses",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export const viewport: Viewport = {
