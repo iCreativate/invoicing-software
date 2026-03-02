@@ -14,6 +14,7 @@ interface User {
   firstName: string;
   lastName: string;
   role: string;
+  companyId?: string;
 }
 
 interface Client {
@@ -410,7 +411,7 @@ export default function NewQuotePage() {
         body: JSON.stringify({
           companyId: companyId,
           clientId: formData.clientId || undefined,
-          dueDate: formData.dueDate || undefined,
+          dueDate: formData.expiryDate || undefined,
           totalAmount: calculateTotals.total,
           currency: company?.currency || 'ZAR',
           paymentTerms: formData.expiryDate && formData.issueDate 

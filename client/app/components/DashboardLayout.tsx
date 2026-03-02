@@ -17,7 +17,7 @@ interface DashboardLayoutProps {
   children: React.ReactNode;
   user: User;
   pageTitle: string;
-  pageDescription?: string;
+  pageDescription?: React.ReactNode;
   actionButton?: React.ReactNode;
 }
 

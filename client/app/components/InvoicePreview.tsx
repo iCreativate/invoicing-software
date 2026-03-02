@@ -57,7 +57,7 @@ interface InvoicePreviewProps {
   };
   bankAccounts?: Array<{
     bankName: string;
-    accountName: string;
+    accountName?: string;
     accountNumber: string;
     branchCode?: string;
     swiftCode?: string;

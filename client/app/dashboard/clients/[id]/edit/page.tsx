@@ -179,7 +179,8 @@ export default function ClientEditPage() {
     );
   }
 
-  const fields: { key: keyof typeof formData; label: string; required?: boolean; type?: string }[] = [
+  type TextFieldKey = Exclude<keyof typeof formData, 'isActive'>;
+  const fields: { key: TextFieldKey; label: string; required?: boolean; type?: string }[] = [
     { key: 'name', label: 'Name', required: true },
     { key: 'email', label: 'Email', type: 'email' },
     { key: 'phone', label: 'Phone', type: 'tel' },
@@ -225,7 +226,7 @@ export default function ClientEditPage() {
                 id={key}
                 type={type}
                 required={required}
-                value={String(formData[key] ?? '')}
+                value={formData[key]}
                 onChange={(e) => setFormData((prev) => ({ ...prev, [key]: e.target.value }))}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               />
