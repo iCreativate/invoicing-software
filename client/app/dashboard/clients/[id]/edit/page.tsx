@@ -225,7 +225,7 @@ export default function ClientEditPage() {
                 id={key}
                 type={type}
                 required={required}
-                value={formData[key]}
+                value={String(formData[key] ?? '')}
                 onChange={(e) => setFormData((prev) => ({ ...prev, [key]: e.target.value }))}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               />
