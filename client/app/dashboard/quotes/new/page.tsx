@@ -42,6 +42,7 @@ interface Company {
   country?: string;
   taxNumber?: string;
   vatNumber?: string;
+  currency?: string;
 }
 
 const invoiceTemplates = [
