@@ -179,7 +179,7 @@ export default function ClientEditPage() {
     );
   }
 
-  const fields = [
+  const fields: { key: keyof typeof formData; label: string; required?: boolean; type?: string }[] = [
     { key: 'name', label: 'Name', required: true },
     { key: 'email', label: 'Email', type: 'email' },
     { key: 'phone', label: 'Phone', type: 'tel' },
@@ -191,7 +191,7 @@ export default function ClientEditPage() {
     { key: 'country', label: 'Country' },
     { key: 'taxNumber', label: 'Tax number' },
     { key: 'vatNumber', label: 'VAT number' },
-  ] as const;
+  ];
 
   return (
     <DashboardLayout
