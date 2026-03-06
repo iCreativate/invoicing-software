@@ -92,12 +92,9 @@ Timely is an all-in-one financial platform for modern businesses — from invoic
    # Edit .env with your configuration
    ```
 
-4. Set up PostgreSQL database:
-   ```bash
-   createdb timely_db
-   ```
+4. Set up the database (use [Supabase](https://supabase.com) or local PostgreSQL). See [SETUP.md](SETUP.md) for Supabase connection string and `.env` setup.
 
-5. Run migrations:
+5. Run migrations (if not using TypeORM sync):
    ```bash
    npm run migration:run
    ```

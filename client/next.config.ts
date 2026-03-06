@@ -37,12 +37,12 @@ const nextConfig: NextConfig = {
               isDev
                 ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
                 : "script-src 'self' 'unsafe-inline'",
-              "style-src 'self' 'unsafe-inline'",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: blob: https: http:",
               "font-src 'self' data: https://fonts.gstatic.com",
               isDev
                 ? "connect-src 'self' http://localhost:5001 http://localhost:3003 ws://localhost:3003 wss://localhost:3003 https:"
-                : "connect-src 'self' https:",
+                : "connect-src 'self' https:" + (process.env.NEXT_PUBLIC_API_URL ? " " + process.env.NEXT_PUBLIC_API_URL : ""),
             ].join('; '),
           },
         ],
