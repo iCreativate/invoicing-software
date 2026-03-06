@@ -1,7 +1,12 @@
-# Deploy the Next.js app in client/ (Netlify Next.js runtime; do not set publish in UI).
+# Deploy the Next.js app in client/ (Netlify Next.js runtime).
+# In Netlify UI: Base directory = client, Build command = npm run build, Publish directory = LEAVE EMPTY.
 [build]
   base    = "client"
   command = "npm run build"
 
 [build.environment]
   NODE_VERSION = "20"
+
+# Required: use Netlify's Next.js adapter so routes (/, /dashboard, etc.) work
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
