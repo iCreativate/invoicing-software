@@ -1,5 +1,4 @@
-# Deploy the Next.js app in client/ (not the root Express server).
-# In Netlify UI: set "Base directory" to client if not using this file.
+# Deploy the Next.js app in client/ (Netlify Next.js runtime; do not set publish in UI).
 [build]
   base    = "client"
   command = "npm run build"

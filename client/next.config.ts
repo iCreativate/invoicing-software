@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
 
-  // Optimize images
+  // Optimize images (Netlify Next.js runtime supports this)
   images: {
     formats: ['image/avif', 'image/webp'],
     minimumCacheTTL: 60,
