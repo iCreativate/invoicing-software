@@ -92,7 +92,7 @@ Timely is an all-in-one financial platform for modern businesses — from invoic
    # Edit .env with your configuration
    ```
 
-4. Set up the database (use [Supabase](https://supabase.com) or local PostgreSQL). See [SETUP.md](SETUP.md) for Supabase connection string and `.env` setup.
+4. Set up the database and backend: use [Railway](https://railway.app) (backend + PostgreSQL), [Supabase](https://supabase.com), or local PostgreSQL. See [SETUP.md](SETUP.md) for details.
 
 5. Run migrations (if not using TypeORM sync):
    ```bash
@@ -107,7 +107,7 @@ Timely is an all-in-one financial platform for modern businesses — from invoic
 ## 📝 Scripts
 
 - `npm run dev` - Start both server and client in development mode
-- `npm run build` - Build for production
+- `npm run build` - Build server only (for deploy). `npm run build:all` - Build server + client
 - `npm start` - Start production server
 - `npm test` - Run tests
 - `npm run lint` - Lint code

@@ -20,19 +20,26 @@ cd client && npm install && cd ..
 
 ### 2. Database Setup
 
-You can use **Supabase** (recommended for production) or **local PostgreSQL**.
+You can use **Railway**, **Supabase**, or **local PostgreSQL**.
 
-#### Option A: Supabase (recommended)
+#### Option A: Railway (backend + database in one place)
+
+1. Create a project at [railway.app](https://railway.app) and connect your GitHub repo.
+2. Add a **PostgreSQL** service (New → Database → PostgreSQL). Railway sets `DATABASE_URL` automatically.
+3. Add a **Web Service** for the backend (New → GitHub Repo → this repo). In service **Settings** or **Variables**:
+   - **Build Command:** `npm run build:server`
+   - **Start Command:** `npm start`
+   - Add variable **DATABASE_URL** → “Add from Railway” → select your PostgreSQL service.
+   - Add **JWT_SECRET**, **FRONTEND_URL** (your Netlify URL), **NODE_ENV** = `production`.
+4. Generate a **public URL** for the backend and set that as **NEXT_PUBLIC_API_URL** in Netlify.
+
+#### Option B: Supabase
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Go to **Project Settings → Database** and copy the **Connection string** (URI). Use the **Session mode** or **Transaction** pooler string (e.g. port `6543` with `?pgbouncer=true`, or port `5432` for direct).
-3. In your `.env`, set:
-   ```env
-   DATABASE_URL=postgresql://postgres.[ref]:[YOUR-PASSWORD]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true
-   ```
-   Replace `[YOUR-PASSWORD]` with your database password. SSL is enabled automatically when `DATABASE_URL` is set.
+2. Go to **Project Settings → Database** (or **Connect** in the top bar) and copy the **Connection string** (URI).
+3. In your `.env`, set `DATABASE_URL` to that URI (replace `[YOUR-PASSWORD]` with your DB password). SSL is enabled automatically when `DATABASE_URL` is set.
 
-#### Option B: Local PostgreSQL
+#### Option C: Local PostgreSQL
 
 1. Create a database: `createdb timely_db`
 2. In `.env`, set `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (see `.env.example`).
@@ -44,14 +51,14 @@ cp .env.example .env
 # Edit .env with your database and secrets
 ```
 
-Create a `.env` file in the root directory. For **Supabase**, you only need `DATABASE_URL`. For **local** Postgres, use `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`. Example:
+Create a `.env` file in the root directory. For **Railway** or **Supabase**, set `DATABASE_URL`. For **local** Postgres, use `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`. Example:
 
 ```env
 PORT=5001
 NODE_ENV=development
 
-# Supabase (paste your connection string from Supabase Dashboard → Settings → Database)
-DATABASE_URL=postgresql://postgres.xxxx:password@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+# Railway or Supabase (connection string)
+# DATABASE_URL=postgresql://...
 
 JWT_SECRET=your_super_secret_jwt_key_change_this_in_production
 JWT_EXPIRES_IN=7d
@@ -84,6 +91,8 @@ npm run dev:client
 ```
 
 ### 5. Build for Production
+
+From the repo root, `npm run build` builds only the **server** (used by Railway and other backends). To build both server and client (e.g. for local testing), use `npm run build:all`.
 
 ```bash
 npm run build
