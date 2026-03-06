@@ -1,5 +1,6 @@
 'use client';
 
+import { API_BASE } from '@/app/config';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -82,7 +83,7 @@ export default function SettingsPage() {
   const fetchCompany = async (companyId: string) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/companies/${companyId}`, {
+      const response = await fetch(`${API_BASE}/api/companies/${companyId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -118,7 +119,7 @@ export default function SettingsPage() {
   const fetchBankAccounts = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/banking/accounts', {
+      const response = await fetch(`${API_BASE}/api/banking/accounts`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -142,8 +143,8 @@ export default function SettingsPage() {
     try {
       const token = localStorage.getItem('token');
       const url = editingAccount
-        ? `http://localhost:5001/api/banking/accounts/${editingAccount}`
-        : 'http://localhost:5001/api/banking/accounts';
+        ? `${API_BASE}/api/banking/accounts/${editingAccount}`
+        : `${API_BASE}/api/banking/accounts`;
       const method = editingAccount ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
@@ -189,7 +190,7 @@ export default function SettingsPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/banking/accounts/${id}`, {
+      const response = await fetch(`${API_BASE}/api/banking/accounts/${id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -241,7 +242,7 @@ export default function SettingsPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/companies/${company?.id}/logo`, {
+      const response = await fetch(`${API_BASE}/api/companies/${company?.id}/logo`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -267,7 +268,7 @@ export default function SettingsPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/companies/${company?.id}`, {
+      const response = await fetch(`${API_BASE}/api/companies/${company?.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

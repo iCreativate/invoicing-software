@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import DashboardLayout from '../components/DashboardLayout';
+import { API_BASE } from '@/app/config';
 
 interface User {
   id: string;
@@ -41,7 +42,7 @@ export default function DashboardPage() {
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/invoices/stats', {
+      const response = await fetch(`${API_BASE}/api/invoices/stats`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -58,13 +59,13 @@ export default function DashboardPage() {
       } else {
         setStatsError(
           response.status >= 500
-            ? 'Server error. Ensure the backend is running (port 5000) and the database is connected.'
+            ? 'Server error. Ensure the backend is running and the database is connected.'
             : 'Could not load stats.'
         );
       }
     } catch (error) {
       console.error('Failed to fetch stats:', error);
-      setStatsError('Cannot reach the server. Ensure the backend is running on port 5000 and try again.');
+      setStatsError('Cannot reach the server. Ensure the backend is running and try again.');
     }
   };
 

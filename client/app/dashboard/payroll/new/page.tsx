@@ -1,5 +1,6 @@
 'use client';
 
+import { API_BASE } from '@/app/config';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -48,7 +49,7 @@ export default function ProcessPayrollPage() {
   const fetchEmployeeCount = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/employees', {
+      const response = await fetch(`${API_BASE}/api/employees`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.ok) {
@@ -72,7 +73,7 @@ export default function ProcessPayrollPage() {
     setSubmitting(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/payroll', {
+      const response = await fetch(`${API_BASE}/api/payroll`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

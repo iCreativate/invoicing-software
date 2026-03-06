@@ -1,5 +1,6 @@
 'use client';
 
+import { API_BASE } from '@/app/config';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -48,7 +49,7 @@ export default function InvoicesPage() {
   const fetchInvoices = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/invoices', {
+      const response = await fetch(`${API_BASE}/api/invoices`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

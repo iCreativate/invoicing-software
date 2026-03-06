@@ -1,5 +1,6 @@
 'use client';
 
+import { API_BASE } from '@/app/config';
 import React from 'react';
 
 interface Company {
@@ -229,7 +230,7 @@ export default function InvoicePreview({
         <div className="flex-1">
           {company.logo ? (
             <img 
-              src={company.logo.startsWith('http') ? company.logo : `http://localhost:5001${company.logo}`} 
+              src={company.logo.startsWith('http') ? company.logo : `${API_BASE}${company.logo}`} 
               alt={company.name}
               className="mb-2"
               style={{ 

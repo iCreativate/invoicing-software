@@ -1,5 +1,6 @@
 'use client';
 
+import { API_BASE } from '@/app/config';
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -148,7 +149,7 @@ export default function EditInvoicePage() {
     try {
       setLoadingInvoice(true);
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/invoices/${id}`, {
+      const response = await fetch(`${API_BASE}/api/invoices/${id}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -209,7 +210,7 @@ export default function EditInvoicePage() {
   const fetchCompany = async (companyId: string) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/companies/${companyId}`, {
+      const response = await fetch(`${API_BASE}/api/companies/${companyId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -234,7 +235,7 @@ export default function EditInvoicePage() {
   const fetchBankAccounts = async (companyId: string) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/banking/accounts`, {
+      const response = await fetch(`${API_BASE}/api/banking/accounts`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -260,7 +261,7 @@ export default function EditInvoicePage() {
   const fetchClients = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/clients', {
+      const response = await fetch(`${API_BASE}/api/clients`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -303,7 +304,7 @@ export default function EditInvoicePage() {
         return;
       }
 
-      const response = await fetch('http://localhost:5001/api/clients', {
+      const response = await fetch(`${API_BASE}/api/clients`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -355,7 +356,7 @@ export default function EditInvoicePage() {
       if (error.name === 'AbortError') {
         alert('Request timed out. Please try again.');
       } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        alert('Cannot connect to the server. Please make sure:\n1. The backend server is running on http://localhost:5001\n2. There are no firewall or network issues');
+        alert(`Cannot connect to the server. Please make sure:\n1. The backend server is running at ${API_BASE}\n2. There are no firewall or network issues`);
       } else {
         const errorMessage = error.message || 'An error occurred. Please try again.';
         alert(`Error: ${errorMessage}`);
@@ -448,7 +449,7 @@ export default function EditInvoicePage() {
         colors: invoiceColors,
       };
 
-      const response = await fetch(`http://localhost:5001/api/invoices/${invoiceId}`, {
+      const response = await fetch(`${API_BASE}/api/invoices/${invoiceId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -482,7 +483,7 @@ export default function EditInvoicePage() {
     } catch (error: any) {
       console.error('Error updating invoice:', error);
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        alert('Cannot connect to the server. Please ensure:\n1. The backend server is running on http://localhost:5001\n2. Run "npm run dev" from the project root directory');
+        alert(`Cannot connect to the server. Please ensure the backend is running at ${API_BASE} (e.g. "npm run dev" from project root).`);
       } else {
         alert(`An error occurred while updating the invoice: ${error.message || 'Unknown error'}`);
       }
@@ -501,7 +502,7 @@ export default function EditInvoicePage() {
         return;
       }
 
-      const response = await fetch(`http://localhost:5001/api/invoices/${invoiceId}/send`, {
+      const response = await fetch(`${API_BASE}/api/invoices/${invoiceId}/send`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -535,7 +536,7 @@ export default function EditInvoicePage() {
     } catch (error: any) {
       console.error('Error sending invoice:', error);
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        alert('Cannot connect to the server. Please ensure:\n1. The backend server is running on http://localhost:5001\n2. Run "npm run dev" from the project root directory');
+        alert(`Cannot connect to the server. Please ensure the backend is running at ${API_BASE} (e.g. "npm run dev" from project root).`);
       } else {
         alert(`An error occurred while sending the invoice: ${error.message || 'Unknown error'}`);
       }
@@ -561,7 +562,7 @@ export default function EditInvoicePage() {
         return;
       }
 
-      const response = await fetch('http://localhost:5001/api/ai/generate-terms', {
+      const response = await fetch(`${API_BASE}/api/ai/generate-terms`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -605,7 +606,7 @@ export default function EditInvoicePage() {
       
       // Provide more specific error messages
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        alert('Cannot connect to the server. Please ensure:\n1. The backend server is running on http://localhost:5001\n2. Run "npm run dev" from the project root directory');
+        alert(`Cannot connect to the server. Please ensure the backend is running at ${API_BASE} (e.g. "npm run dev" from project root).`);
       } else {
         alert(`An error occurred while generating Terms & Conditions: ${error.message || 'Unknown error'}`);
       }
@@ -993,7 +994,7 @@ export default function EditInvoicePage() {
                 <div className="flex items-start gap-6">
                   {company.logo && (
                     <div className="w-24 h-24 bg-white rounded-lg flex items-center justify-center overflow-hidden border-2 border-gray-200">
-                      <img src={`http://localhost:5001${company.logo}`} alt={company.name} className="w-full h-full object-contain" />
+                      <img src={`${API_BASE}${company.logo}`} alt={company.name} className="w-full h-full object-contain" />
                     </div>
                   )}
                   <div className="flex-1">
@@ -1365,7 +1366,7 @@ export default function EditInvoicePage() {
                     
                     console.log('Updating invoice with data:', invoiceData);
 
-                    const response = await fetch(`http://localhost:5001/api/invoices/${invoiceId}`, {
+                    const response = await fetch(`${API_BASE}/api/invoices/${invoiceId}`, {
                       method: 'PUT',
                       headers: {
                         'Content-Type': 'application/json',
@@ -1399,7 +1400,7 @@ export default function EditInvoicePage() {
                   } catch (error: any) {
                     console.error('Error updating invoice:', error);
                     if (error.name === 'TypeError' && error.message.includes('fetch')) {
-                      alert('Cannot connect to the server. Please ensure:\n1. The backend server is running on http://localhost:5001\n2. Run "npm run dev" from the project root directory');
+                      alert(`Cannot connect to the server. Please ensure the backend is running at ${API_BASE} (e.g. "npm run dev" from project root).`);
                     } else {
                       alert(`An error occurred while updating the invoice: ${error.message || 'Unknown error'}`);
                     }

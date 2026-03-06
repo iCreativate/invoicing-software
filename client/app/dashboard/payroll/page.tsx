@@ -1,5 +1,6 @@
 'use client';
 
+import { API_BASE } from '@/app/config';
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -62,7 +63,7 @@ export default function PayrollPage() {
   const fetchPayrolls = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/payroll', {
+      const response = await fetch(`${API_BASE}/api/payroll`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -92,7 +93,7 @@ export default function PayrollPage() {
     setUpdatingId(id);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/payroll/${id}`, {
+      const response = await fetch(`${API_BASE}/api/payroll/${id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

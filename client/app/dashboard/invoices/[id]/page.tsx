@@ -1,5 +1,6 @@
 'use client';
 
+import { API_BASE } from '@/app/config';
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -97,7 +98,7 @@ export default function InvoiceViewPage() {
   const fetchBankAccounts = async (companyId: string) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/banking/accounts', {
+      const response = await fetch(`${API_BASE}/api/banking/accounts`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.ok) {
@@ -121,7 +122,7 @@ export default function InvoiceViewPage() {
   const fetchInvoice = async (id: string) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/invoices/${id}`, {
+      const response = await fetch(`${API_BASE}/api/invoices/${id}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -154,7 +155,7 @@ export default function InvoiceViewPage() {
     setSavingNumber(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/invoices/${invoiceId}`, {
+      const response = await fetch(`${API_BASE}/api/invoices/${invoiceId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

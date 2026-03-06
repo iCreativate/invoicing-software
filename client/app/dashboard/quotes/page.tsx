@@ -1,5 +1,6 @@
 'use client';
 
+import { API_BASE } from '@/app/config';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -51,7 +52,7 @@ export default function QuotesPage() {
         return;
       }
 
-      const response = await fetch('http://localhost:5001/api/quotes', {
+      const response = await fetch(`${API_BASE}/api/quotes`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -95,7 +96,7 @@ export default function QuotesPage() {
     } catch (error: any) {
       console.error('Failed to fetch quotes:', error);
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        console.error('Cannot connect to the server. Please ensure the backend server is running on http://localhost:5001');
+        console.error('Cannot connect to the server. Please ensure the backend server is running.');
       }
       setQuotes([]);
     } finally {

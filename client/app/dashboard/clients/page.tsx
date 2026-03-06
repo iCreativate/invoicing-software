@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import DashboardLayout from '../../components/DashboardLayout';
+import { API_BASE } from '@/app/config';
 
 interface User {
   id: string;
@@ -56,7 +57,7 @@ export default function ClientsPage() {
   const fetchClients = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/clients', {
+      const response = await fetch(`${API_BASE}/api/clients`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

@@ -31,7 +31,7 @@ export default function Error({
         <p className="text-slate-600 text-sm mb-6 break-words">
           {isServerOrNetwork ? (
             <>
-              The app couldn’t reach the server or the server hit an error. Check that the backend is running on port 5000
+              The app couldn’t reach the server or the server hit an error. Check that the backend is running
               and that the database is up, then try again.
             </>
           ) : (

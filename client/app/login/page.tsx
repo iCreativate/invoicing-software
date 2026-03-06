@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { API_BASE } from '@/app/config';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -42,7 +43,7 @@ export default function LoginPage() {
     try {
       // First, ensure demo users exist
       try {
-        const seedResponse = await fetch('http://localhost:5001/api/auth/seed-demo', {
+        const seedResponse = await fetch(`${API_BASE}/api/auth/seed-demo`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -62,7 +63,7 @@ export default function LoginPage() {
       // Try to login
       let response: Response;
       try {
-        response = await fetch('http://localhost:5001/api/auth/login', {
+        response = await fetch(`${API_BASE}/api/auth/login`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -116,7 +117,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5001/api/auth/login', {
+      const response = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
