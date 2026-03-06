@@ -20,35 +20,43 @@ cd client && npm install && cd ..
 
 ### 2. Database Setup
 
-1. Create a PostgreSQL database:
-```bash
-createdb timely_db
-```
+You can use **Supabase** (recommended for production) or **local PostgreSQL**.
 
-2. Update `.env` file with your database credentials:
-```bash
-cp .env.example .env
-# Edit .env with your database settings
-```
+#### Option A: Supabase (recommended)
+
+1. Create a project at [supabase.com](https://supabase.com).
+2. Go to **Project Settings → Database** and copy the **Connection string** (URI). Use the **Session mode** or **Transaction** pooler string (e.g. port `6543` with `?pgbouncer=true`, or port `5432` for direct).
+3. In your `.env`, set:
+   ```env
+   DATABASE_URL=postgresql://postgres.[ref]:[YOUR-PASSWORD]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true
+   ```
+   Replace `[YOUR-PASSWORD]` with your database password. SSL is enabled automatically when `DATABASE_URL` is set.
+
+#### Option B: Local PostgreSQL
+
+1. Create a database: `createdb timely_db`
+2. In `.env`, set `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (see `.env.example`).
 
 ### 3. Environment Variables
 
-Create a `.env` file in the root directory with the following:
+```bash
+cp .env.example .env
+# Edit .env with your database and secrets
+```
+
+Create a `.env` file in the root directory. For **Supabase**, you only need `DATABASE_URL`. For **local** Postgres, use `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`. Example:
 
 ```env
-PORT=5000
+PORT=5001
 NODE_ENV=development
 
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=your_password
-DB_NAME=timely_db
+# Supabase (paste your connection string from Supabase Dashboard → Settings → Database)
+DATABASE_URL=postgresql://postgres.xxxx:password@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true
 
 JWT_SECRET=your_super_secret_jwt_key_change_this_in_production
 JWT_EXPIRES_IN=7d
 
-FRONTEND_URL=http://localhost:3000
+FRONTEND_URL=http://localhost:3003
 ```
 
 ### 4. Run the Application
@@ -60,8 +68,8 @@ npm run dev
 ```
 
 This will start:
-- Backend server on http://localhost:5000
-- Frontend application on http://localhost:3000
+- Backend server on http://localhost:5001
+- Frontend application on http://localhost:3003
 
 #### Run Separately
 
@@ -135,16 +143,12 @@ The application uses TypeORM with automatic schema synchronization in developmen
 
 ### Database Connection Issues
 
-If you encounter database connection errors:
-1. Ensure PostgreSQL is running
-2. Verify database credentials in `.env`
-3. Check if the database exists: `psql -l | grep timely_db`
+- **Supabase:** Ensure `DATABASE_URL` in `.env` is the full connection string from Supabase (Settings → Database). Use the password you set for the `postgres` user.
+- **Local:** Ensure PostgreSQL is running and credentials in `.env` are correct. Check the database exists: `psql -l | grep timely_db`.
 
 ### Port Already in Use
 
-If port 5000 or 3000 is already in use:
-1. Change `PORT` in `.env` for backend
-2. Change port in `client/package.json` scripts for frontend
+If port 5001 or 3003 is already in use, change `PORT` in `.env` for the backend, or the port in `client/package.json` for the frontend.
 
 ## Support
 

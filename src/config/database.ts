@@ -17,21 +17,29 @@ import { Transaction } from '../entities/Transaction';
 import { Expense } from '../entities/Expense';
 import { JournalEntry } from '../entities/JournalEntry';
 
+const useDatabaseUrl = !!process.env.DATABASE_URL;
+
 const config: DataSourceOptions = {
   type: 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  username: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'timely_db',
+  ...(useDatabaseUrl
+    ? { url: process.env.DATABASE_URL }
+    : {
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT || '5432'),
+        username: process.env.DB_USER || 'postgres',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || 'timely_db',
+      }),
   synchronize: process.env.NODE_ENV === 'development',
   logging: process.env.NODE_ENV === 'development',
+  // Supabase and other cloud Postgres require SSL when using DATABASE_URL
+  ...(useDatabaseUrl ? { ssl: { rejectUnauthorized: false } } : {}),
   // Connection pooling for better performance
   extra: {
-    max: 20, // Maximum number of connections in the pool
-    min: 5, // Minimum number of connections in the pool
-    idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
-    connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection cannot be established
+    max: 20,
+    min: 5,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 2000,
   },
   entities: [
     User,
