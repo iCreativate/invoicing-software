@@ -1,7 +1,7 @@
-# Deploy the Next.js app in client/ (Netlify Next.js runtime).
+# Deploy the TimelyInvoices Next.js app in apps/web (Netlify Next.js runtime).
 # Publish must differ from base; plugin uses .next output.
 [build]
-  base    = "client"
+  base    = "apps/web"
   command = "npm run build"
   publish = ".next"
 
