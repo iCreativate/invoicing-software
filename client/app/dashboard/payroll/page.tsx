@@ -5,6 +5,8 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import DashboardLayout from '../../components/DashboardLayout';
+import { MobileCard, MobileCardList, KeyValue, KeyValueGrid } from '../../components/MobileCardList';
+import { ResponsiveTableShell } from '../../components/ResponsiveTableShell';
 
 interface User {
   id: string;
@@ -386,106 +388,164 @@ export default function PayrollPage() {
             )}
           </div>
         ) : (
-          <div className="glass rounded-3xl shadow-xl border border-gray-200/50 overflow-hidden animate-scaleIn min-w-0 max-w-full">
-            <div className="overflow-x-auto min-w-0">
-              <table className="w-full">
-                <thead className="bg-gradient-to-r from-gray-100/80 to-gray-50/80 border-b-2 border-gray-200/50">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Payroll #</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Employee</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Pay Period</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Gross</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Net</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Pay Date</th>
-                    <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredPayrolls.map((payroll) => (
-                    <tr key={payroll.id} className="hover:bg-white/40 transition-all duration-200">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-bold text-gray-900">{payroll.payrollNumber}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-semibold text-gray-900">{payroll.employeeName}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-gray-900 text-sm">{payroll.payPeriod || '—'}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-gray-900">R {(payroll.grossSalary ?? 0).toLocaleString()}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-green-600">R {(payroll.netSalary ?? 0).toLocaleString()}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(payroll.status)}`}>
-                          {payroll.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-gray-900">{formatPayDate(payroll.payDate)}</div>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2 flex-wrap">
-                          {payroll.status === 'draft' && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => updateStatus(payroll.id, 'paid')}
-                                disabled={updatingId === payroll.id}
-                                className="p-2.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-xl transition-all shadow-sm hover:shadow-md glass disabled:opacity-60"
-                                title="Mark as paid"
-                              >
-                                {updatingId === payroll.id ? (
-                                  <span className="w-5 h-5 block border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
-                                ) : (
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
-                                )}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => updateStatus(payroll.id, 'cancelled')}
-                                disabled={updatingId === payroll.id}
-                                className="p-2.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-all shadow-sm hover:shadow-md glass disabled:opacity-60"
-                                title="Cancel"
-                              >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                              </button>
-                            </>
-                          )}
-                          <Link
-                            href={`/dashboard/payroll/${payroll.id}`}
-                            className="p-2.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-110 glass"
-                            title="View details"
+          <>
+            {/* Mobile cards (< md) */}
+            <div className="md:hidden">
+              <MobileCardList>
+                {filteredPayrolls.map((payroll) => (
+                  <MobileCard key={payroll.id}>
+                    <div className="flex items-start justify-between gap-3 min-w-0">
+                      <div className="min-w-0">
+                        <div className="font-black text-gray-900 break-words">{payroll.payrollNumber || '—'}</div>
+                        <div className="text-sm text-gray-500 font-medium break-words">{payroll.employeeName || '—'}</div>
+                      </div>
+                      <span className={`inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold border shadow-sm flex-shrink-0 ${getStatusColor(payroll.status)}`}>
+                        {payroll.status || 'draft'}
+                      </span>
+                    </div>
+
+                    <KeyValueGrid>
+                      <KeyValue label="Net" value={<span className="font-black text-green-600">R {(payroll.netSalary ?? 0).toLocaleString()}</span>} />
+                      <KeyValue label="Gross" value={`R ${(payroll.grossSalary ?? 0).toLocaleString()}`} />
+                      <KeyValue label="Pay date" value={formatPayDate(payroll.payDate)} />
+                      <KeyValue label="Period" value={payroll.payPeriod || '—'} />
+                    </KeyValueGrid>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {payroll.status === 'draft' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => updateStatus(payroll.id, 'paid')}
+                            disabled={updatingId === payroll.id}
+                            className="flex-1 min-w-[140px] px-4 py-2.5 rounded-xl border border-green-200 bg-green-50 text-green-700 font-semibold disabled:opacity-60"
                           >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                          </Link>
-                          <Link
-                            href="/dashboard/employees"
-                            className="p-2.5 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-110 glass"
-                            title="Employees"
+                            {updatingId === payroll.id ? 'Updating…' : 'Mark paid'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateStatus(payroll.id, 'cancelled')}
+                            disabled={updatingId === payroll.id}
+                            className="flex-1 min-w-[140px] px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 text-red-700 font-semibold disabled:opacity-60"
                           >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                            </svg>
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                            Cancel
+                          </button>
+                        </>
+                      )}
+                      <Link
+                        href={`/dashboard/payroll/${payroll.id}`}
+                        className="flex-1 min-w-[140px] text-center px-4 py-2.5 glass hover:glass-strong text-gray-700 rounded-xl font-semibold transition-all duration-200 border border-gray-200/50"
+                      >
+                        View
+                      </Link>
+                    </div>
+                  </MobileCard>
+                ))}
+              </MobileCardList>
             </div>
-          </div>
+
+            {/* Table (>= md) */}
+            <div className="hidden md:block">
+              <ResponsiveTableShell className="animate-scaleIn">
+                <table className="w-full">
+                  <thead className="bg-gradient-to-r from-gray-100/80 to-gray-50/80 border-b-2 border-gray-200/50">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Payroll #</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Employee</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Pay Period</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Gross</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Net</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Pay Date</th>
+                      <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredPayrolls.map((payroll) => (
+                      <tr key={payroll.id} className="hover:bg-white/40 transition-all duration-200">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="font-bold text-gray-900">{payroll.payrollNumber}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="font-semibold text-gray-900">{payroll.employeeName}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-gray-900 text-sm">{payroll.payPeriod || '—'}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-gray-900">R {(payroll.grossSalary ?? 0).toLocaleString()}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-green-600">R {(payroll.netSalary ?? 0).toLocaleString()}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(payroll.status)}`}>
+                            {payroll.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-gray-900">{formatPayDate(payroll.payDate)}</div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2 flex-wrap">
+                            {payroll.status === 'draft' && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => updateStatus(payroll.id, 'paid')}
+                                  disabled={updatingId === payroll.id}
+                                  className="p-2.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-xl transition-all shadow-sm hover:shadow-md glass disabled:opacity-60"
+                                  title="Mark as paid"
+                                >
+                                  {updatingId === payroll.id ? (
+                                    <span className="w-5 h-5 block border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateStatus(payroll.id, 'cancelled')}
+                                  disabled={updatingId === payroll.id}
+                                  className="p-2.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-all shadow-sm hover:shadow-md glass disabled:opacity-60"
+                                  title="Cancel"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                </button>
+                              </>
+                            )}
+                            <Link
+                              href={`/dashboard/payroll/${payroll.id}`}
+                              className="p-2.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-110 glass"
+                              title="View details"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            </Link>
+                            <Link
+                              href="/dashboard/employees"
+                              className="p-2.5 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-110 glass"
+                              title="Employees"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                              </svg>
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </ResponsiveTableShell>
+            </div>
+          </>
         )}
       </div>
     </DashboardLayout>

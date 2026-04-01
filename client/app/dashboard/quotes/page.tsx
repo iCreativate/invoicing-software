@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import DashboardLayout from '../../components/DashboardLayout';
+import { MobileCard, MobileCardList, KeyValue, KeyValueGrid } from '../../components/MobileCardList';
+import { ResponsiveTableShell } from '../../components/ResponsiveTableShell';
 
 interface User {
   id: string;
@@ -189,69 +191,113 @@ export default function QuotesPage() {
           </Link>
         </div>
       ) : (
-        <div className="glass rounded-3xl shadow-xl border border-gray-200/50 overflow-hidden animate-scaleIn min-w-0 max-w-full">
-          <div className="overflow-x-auto min-w-0">
-            <table className="w-full">
-              <thead className="bg-gradient-to-r from-gray-100/80 to-gray-50/80 border-b-2 border-gray-200/50">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-black text-gray-700 uppercase tracking-widest">Quote #</th>
-                  <th className="px-6 py-4 text-left text-xs font-black text-gray-700 uppercase tracking-widest">Client</th>
-                  <th className="px-6 py-4 text-left text-xs font-black text-gray-700 uppercase tracking-widest">Amount</th>
-                  <th className="px-6 py-4 text-left text-xs font-black text-gray-700 uppercase tracking-widest">Status</th>
-                  <th className="px-6 py-4 text-left text-xs font-black text-gray-700 uppercase tracking-widest">Expiry Date</th>
-                  <th className="px-6 py-4 text-right text-xs font-black text-gray-700 uppercase tracking-widest">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200/50">
-                {filteredQuotes.map((quote) => (
-                  <tr key={quote.id} className="hover:bg-white/40 transition-all duration-200">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="font-black text-gray-900">{quote.quoteNumber}</div>
-                      <div className="text-sm text-gray-500 font-medium">{quote.issueDate}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="font-bold text-gray-900">{quote.clientName}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">R {quote.totalAmount.toLocaleString()}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold border-2 shadow-sm ${getStatusColor(quote.status)}`}>
-                        {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-gray-900 font-semibold">{quote.expiryDate}</div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Link
-                          href={`/dashboard/quotes/${quote.id}`}
-                          className="p-2.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-110 glass"
-                          title="View Quote"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        </Link>
-                        <Link
-                          href={`/dashboard/quotes/${quote.id}/edit`}
-                          className="p-2.5 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-110 glass"
-                          title="Edit Quote"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </Link>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <>
+          {/* Mobile cards (< md) */}
+          <div className="md:hidden">
+            <MobileCardList>
+              {filteredQuotes.map((quote) => (
+                <MobileCard key={quote.id}>
+                  <div className="flex items-start justify-between gap-3 min-w-0">
+                    <div className="min-w-0">
+                      <div className="font-black text-gray-900 break-words">{quote.quoteNumber || '—'}</div>
+                      <div className="text-sm text-gray-500 font-medium">{quote.clientName}</div>
+                    </div>
+                    <span className={`inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold border-2 shadow-sm flex-shrink-0 ${getStatusColor(quote.status)}`}>
+                      {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
+                    </span>
+                  </div>
+
+                  <KeyValueGrid>
+                    <KeyValue label="Amount" value={<span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">R {quote.totalAmount.toLocaleString()}</span>} />
+                    <KeyValue label="Expiry" value={quote.expiryDate || '—'} />
+                    <KeyValue label="Issued" value={quote.issueDate || '—'} />
+                    <KeyValue label="Status" value={quote.status ? quote.status.charAt(0).toUpperCase() + quote.status.slice(1) : '—'} />
+                  </KeyValueGrid>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Link
+                      href={`/dashboard/quotes/${quote.id}`}
+                      className="flex-1 min-w-[120px] text-center px-4 py-2.5 glass hover:glass-strong text-gray-700 rounded-xl font-semibold transition-all duration-200 border border-gray-200/50"
+                    >
+                      View
+                    </Link>
+                    <Link
+                      href={`/dashboard/quotes/${quote.id}/edit`}
+                      className="flex-1 min-w-[120px] text-center px-4 py-2.5 glass hover:glass-strong text-blue-700 rounded-xl font-semibold transition-all duration-200 border border-blue-200/50"
+                    >
+                      Edit
+                    </Link>
+                  </div>
+                </MobileCard>
+              ))}
+            </MobileCardList>
           </div>
-        </div>
+
+          {/* Table (>= md) */}
+          <div className="hidden md:block">
+            <ResponsiveTableShell className="animate-scaleIn">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-gray-100/80 to-gray-50/80 border-b-2 border-gray-200/50">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-black text-gray-700 uppercase tracking-widest">Quote #</th>
+                    <th className="px-6 py-4 text-left text-xs font-black text-gray-700 uppercase tracking-widest">Client</th>
+                    <th className="px-6 py-4 text-left text-xs font-black text-gray-700 uppercase tracking-widest">Amount</th>
+                    <th className="px-6 py-4 text-left text-xs font-black text-gray-700 uppercase tracking-widest">Status</th>
+                    <th className="px-6 py-4 text-left text-xs font-black text-gray-700 uppercase tracking-widest">Expiry Date</th>
+                    <th className="px-6 py-4 text-right text-xs font-black text-gray-700 uppercase tracking-widest">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200/50">
+                  {filteredQuotes.map((quote) => (
+                    <tr key={quote.id} className="hover:bg-white/40 transition-all duration-200">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="font-black text-gray-900">{quote.quoteNumber}</div>
+                        <div className="text-sm text-gray-500 font-medium">{quote.issueDate}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-gray-900">{quote.clientName}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">R {quote.totalAmount.toLocaleString()}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold border-2 shadow-sm ${getStatusColor(quote.status)}`}>
+                          {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-gray-900 font-semibold">{quote.expiryDate}</div>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Link
+                            href={`/dashboard/quotes/${quote.id}`}
+                            className="p-2.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-110 glass"
+                            title="View Quote"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </Link>
+                          <Link
+                            href={`/dashboard/quotes/${quote.id}/edit`}
+                            className="p-2.5 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-110 glass"
+                            title="Edit Quote"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </ResponsiveTableShell>
+          </div>
+        </>
       )}
     </DashboardLayout>
   );

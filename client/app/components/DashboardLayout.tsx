@@ -435,10 +435,7 @@ export default function DashboardLayout({
       {/* Main Content - fills viewport when full, resizes when browser is smaller */}
       <main
         className="dashboard-main-scroll flex-1 flex flex-col min-h-0 w-full max-w-full pt-24 lg:ml-72 px-4 sm:px-6 lg:px-10 pb-4 sm:pb-6 lg:pb-10 overflow-x-hidden overflow-y-auto"
-        style={{
-          marginTop: '5rem',
-          overscrollBehavior: 'contain',
-        }}
+        style={{ overscrollBehavior: 'contain' }}
       >
         <div className="w-full max-w-7xl mx-auto flex-1 flex flex-col min-w-0 min-h-0 flex-grow">
           <div className="mb-10 animate-fadeIn max-w-full w-full">

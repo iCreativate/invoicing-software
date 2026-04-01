@@ -991,13 +991,13 @@ export default function EditInvoicePage() {
             {company && (
           <div className="glass p-8 rounded-3xl shadow-xl border border-gray-200/50 animate-scaleIn">
                 <h3 className="text-xl font-bold text-gray-900 mb-6">Company Information</h3>
-                <div className="flex items-start gap-6">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-6 min-w-0">
                   {company.logo && (
                     <div className="w-24 h-24 bg-white rounded-lg flex items-center justify-center overflow-hidden border-2 border-gray-200">
                       <img src={`${API_BASE}${company.logo}`} alt={company.name} className="w-full h-full object-contain" />
                     </div>
                   )}
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <h4 className="text-lg font-bold text-gray-900 mb-2">{company.name}</h4>
                     <div className="space-y-1 text-sm text-gray-600">
                       {company.address && <div>{company.address}</div>}
@@ -1016,7 +1016,7 @@ export default function EditInvoicePage() {
                   </div>
                   <Link
                     href="/dashboard/settings"
-                    className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg font-semibold transition-all duration-200 text-sm"
+                    className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg font-semibold transition-all duration-200 text-sm self-start"
                   >
                     Edit Company Info
                   </Link>
@@ -1044,7 +1044,7 @@ export default function EditInvoicePage() {
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Client <span className="text-red-500">*</span>
                   </label>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2 min-w-0">
                   <select
                     required
                     value={formData.clientId}
@@ -1061,7 +1061,7 @@ export default function EditInvoicePage() {
                     <button
                       type="button"
                       onClick={() => setShowAddClientModal(true)}
-                      className="px-4 py-3 glass border-2 border-gray-200/50 rounded-xl hover:glass-strong hover:border-blue-300 text-gray-700 hover:text-blue-600 transition-all duration-200 font-semibold flex items-center gap-2 whitespace-nowrap"
+                      className="px-4 py-3 glass border-2 border-gray-200/50 rounded-xl hover:glass-strong hover:border-blue-300 text-gray-700 hover:text-blue-600 transition-all duration-200 font-semibold flex items-center justify-center gap-2 whitespace-nowrap sm:w-auto w-full"
                       title="Add New Client"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1289,7 +1289,7 @@ export default function EditInvoicePage() {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <button
                 type="button"
                 onClick={async () => {
@@ -1300,7 +1300,7 @@ export default function EditInvoicePage() {
                   setShowPreview(true);
                 }}
                 disabled={!formData.clientId || !formData.items.some(item => item.description)}
-                className="px-6 py-3 glass text-gray-700 hover:text-blue-600 rounded-2xl font-bold transition-all duration-300 shadow-sm hover:shadow-lg border border-gray-200/50 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full sm:w-auto px-6 py-3 glass text-gray-700 hover:text-blue-600 rounded-2xl font-bold transition-all duration-300 shadow-sm hover:shadow-lg border border-gray-200/50 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1308,10 +1308,10 @@ export default function EditInvoicePage() {
                 </svg>
                 Preview Invoice
               </button>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
               <Link
                 href="/dashboard/invoices"
-            className="px-6 py-3 glass text-gray-700 hover:text-gray-900 rounded-2xl font-bold transition-all duration-300 shadow-sm hover:shadow-lg border border-gray-200/50"
+            className="w-full sm:w-auto text-center px-6 py-3 glass text-gray-700 hover:text-gray-900 rounded-2xl font-bold transition-all duration-300 shadow-sm hover:shadow-lg border border-gray-200/50"
               >
                 Cancel
               </Link>
@@ -1408,7 +1408,7 @@ export default function EditInvoicePage() {
                   }
                 }}
                 disabled={loading || sendingInvoice}
-                className="relative group px-8 py-3 bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 text-white rounded-2xl font-bold transition-all duration-300 shadow-lg hover:shadow-2xl transform hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 overflow-hidden shimmer-effect"
+                className="relative group w-full sm:w-auto px-8 py-3 bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 text-white rounded-2xl font-bold transition-all duration-300 shadow-lg hover:shadow-2xl transform hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 overflow-hidden shimmer-effect"
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity"></span>
                 {sendingInvoice ? (
@@ -1431,7 +1431,7 @@ export default function EditInvoicePage() {
               <button
                 type="submit"
                 disabled={loading || sendingInvoice}
-            className="relative group px-8 py-3 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-2xl font-bold transition-all duration-300 shadow-lg hover:shadow-2xl transform hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 overflow-hidden shimmer-effect"
+            className="relative group w-full sm:w-auto px-8 py-3 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-2xl font-bold transition-all duration-300 shadow-lg hover:shadow-2xl transform hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 overflow-hidden shimmer-effect"
               >
             <span className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity"></span>
                 {loading ? (

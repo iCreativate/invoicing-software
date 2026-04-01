@@ -14,103 +14,6 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const demoAccounts = [
-    {
-      role: 'Admin',
-      email: 'admin@timely.demo',
-      password: 'demo123',
-      description: 'Full access to all features',
-    },
-    {
-      role: 'Accountant',
-      email: 'accountant@timely.demo',
-      password: 'demo123',
-      description: 'Financial management access',
-    },
-    {
-      role: 'Manager',
-      email: 'manager@timely.demo',
-      password: 'demo123',
-      description: 'Team and project management',
-    },
-  ];
-
-  const handleDemoLogin = async (demoEmail: string, demoPassword: string) => {
-    setFormData({ email: demoEmail, password: demoPassword });
-    setError('');
-    setLoading(true);
-
-    try {
-      // First, ensure demo users exist
-      try {
-        const seedResponse = await fetch(`${API_BASE}/api/auth/seed-demo`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        if (!seedResponse.ok) {
-          console.log('Seed endpoint returned non-ok status:', seedResponse.status);
-        }
-      } catch (seedErr: any) {
-        // If seed fails due to network error, backend might not be running
-        if (seedErr.name === 'TypeError' && seedErr.message.includes('fetch')) {
-          throw new Error('Cannot connect to backend server. Please ensure the backend is running on port 5000.');
-        }
-        console.log('Seed attempt failed, continuing with login');
-      }
-
-      // Try to login
-      let response: Response;
-      try {
-        response = await fetch(`${API_BASE}/api/auth/login`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ email: demoEmail, password: demoPassword }),
-        });
-      } catch (fetchError: any) {
-        // Network error - backend is not reachable
-        if (fetchError.name === 'TypeError' && (fetchError.message.includes('fetch') || fetchError.message.includes('Failed to fetch'))) {
-          throw new Error('Cannot connect to backend server. Please ensure the backend is running on port 5000. Run "npm run dev" from the project root directory.');
-        }
-        throw fetchError;
-      }
-
-      if (!response.ok) {
-        try {
-          const errorData = await response.json();
-          const msg = errorData.error?.message || `Server error: ${response.status}`;
-          if (response.status >= 500) {
-            const fallback = 'Server is unavailable. Ensure the backend is running on port 5000 and the database is connected.';
-            throw new Error(msg && msg !== 'Internal Server Error' ? msg : fallback);
-          }
-          throw new Error(msg);
-        } catch (parseError: unknown) {
-          if (parseError instanceof Error) throw parseError;
-          throw new Error(`Server returned error ${response.status}. Please check that the backend and database are running.`);
-        }
-      }
-
-      const data = await response.json();
-
-      if (data.success) {
-        localStorage.setItem('token', data.data.token);
-        localStorage.setItem('user', JSON.stringify(data.data.user));
-        router.push('/dashboard');
-      } else {
-        setError(data.error?.message || 'Demo login failed. Please try again.');
-        setLoading(false);
-      }
-    } catch (err: any) {
-      console.error('Login error:', err);
-      const errorMessage = err.message || 'An unexpected error occurred. Please try again.';
-      setError(errorMessage);
-      setLoading(false);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -238,46 +141,13 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-8">
-          {/* Demo Accounts Section */}
-          <div className="mb-6 pb-6 border-b border-gray-200">
-            <p className="text-sm font-semibold text-gray-700 mb-3 text-center">Try Demo Accounts</p>
-            <div className="space-y-2">
-              {demoAccounts.map((account, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleDemoLogin(account.email, account.password)}
-                  disabled={loading}
-                  className="w-full text-left px-3 sm:px-4 py-3 bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 rounded-lg border border-blue-200 hover:border-blue-300 transition-all duration-200 group disabled:opacity-50 disabled:cursor-not-allowed min-w-0"
-                >
-                  <div className="flex items-center justify-between gap-3 min-w-0">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className="font-bold text-gray-900 text-sm sm:text-base">{account.role}</span>
-                        <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-semibold flex-shrink-0">
-                          Demo
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-600 truncate">{account.email}</div>
-                      <div className="text-xs text-gray-500 mt-0.5 line-clamp-2 sm:line-clamp-none">{account.description}</div>
-                    </div>
-                    <svg className="w-5 h-5 text-blue-600 group-hover:translate-x-1 transition-transform flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="text-center">
-            <p className="text-gray-600">
-              Don't have an account?{' '}
-              <Link href="/register" className="text-blue-600 hover:text-blue-700 font-bold transition-colors">
-                Sign up
-              </Link>
-            </p>
-          </div>
+        <div className="mt-8 text-center">
+          <p className="text-gray-600">
+            Don't have an account?{' '}
+            <Link href="/register" className="text-blue-600 hover:text-blue-700 font-bold transition-colors">
+              Sign up
+            </Link>
+          </p>
         </div>
       </div>
     </div>

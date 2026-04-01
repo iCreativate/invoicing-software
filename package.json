@@ -12,7 +12,6 @@
     "build:client": "cd client && npm run build",
     "build:all": "npm run build:server && npm run build:client",
     "start": "node dist/server.js",
-    "seed:demo": "ts-node src/scripts/seedDemoUsers.ts",
     "test": "jest",
     "lint": "eslint src --ext .ts",
     "type-check": "tsc --noEmit"

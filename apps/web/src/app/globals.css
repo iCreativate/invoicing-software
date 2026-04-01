@@ -1,0 +1,177 @@
+@import "tailwindcss";
+
+:root {
+  /* Requested palette (light) */
+  --background: 210 40% 98%; /* #f8fafc */
+  --foreground: 222 47% 11%; /* #111827 */
+
+  --card: 0 0% 100%; /* white */
+  --card-foreground: 222 47% 11%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+
+  /* Brand */
+  --primary: 217 91% 60%; /* #2563eb */
+  --primary-foreground: 210 40% 98%;
+  --success: 142 71% 45%; /* #22c55e */
+  --success-foreground: 210 40% 98%;
+  --danger: 0 84% 60%; /* #ef4444 */
+  --danger-foreground: 210 40% 98%;
+
+  /* Neutrals */
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 19% 43%; /* #6b7280 */
+  --accent: 210 40% 96%;
+  --accent-foreground: 222 47% 11%;
+
+  /* De-emphasize borders; cards are shadow-based */
+  --border: 210 40% 92%;
+  --input: 210 40% 92%;
+  --ring: 217 91% 60%;
+
+  --radius: 0.875rem; /* 14px */
+
+  /* Elevation (soft shadows) */
+  --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.06);
+  --shadow-md: 0 10px 24px rgba(17, 24, 39, 0.10);
+  --shadow-lg: 0 18px 40px rgba(17, 24, 39, 0.14);
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-danger: hsl(var(--danger));
+  --color-danger-foreground: hsl(var(--danger-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --radius-xl: var(--radius);
+
+  --shadow-soft-sm: var(--shadow-sm);
+  --shadow-soft-md: var(--shadow-md);
+  --shadow-soft-lg: var(--shadow-lg);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans), system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+    "Segoe UI Emoji";
+}
+
+.dark {
+  /* Premium dark (keeps AA contrast) */
+  --background: 222 47% 7%;
+  --foreground: 210 40% 98%;
+
+  --card: 222 47% 9%;
+  --card-foreground: 210 40% 98%;
+
+  --popover: 222 47% 9%;
+  --popover-foreground: 210 40% 98%;
+
+  --secondary: 222 28% 14%;
+  --secondary-foreground: 210 40% 98%;
+
+  --muted: 222 28% 14%;
+  --muted-foreground: 215 20% 70%;
+
+  --accent: 222 28% 14%;
+  --accent-foreground: 210 40% 98%;
+
+  --border: 222 28% 18%;
+  --input: 222 28% 18%;
+  --ring: 217 91% 70%;
+}
+
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+*:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px hsl(var(--ring) / 0.2);
+  border-radius: calc(var(--radius) - 4px);
+}
+
+@media print {
+  @page {
+    margin: 0;
+  }
+
+  /* Preserve colors when printing/saving to PDF (browser must allow background graphics). */
+  html,
+  body,
+  .ti-print-area,
+  .ti-print-area * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Print only the final invoice preview (PDF) */
+  .ti-no-print {
+    display: none !important;
+  }
+  .ti-print-only {
+    display: block !important;
+  }
+  .ti-print-area {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
+  }
+  body {
+    background: white !important;
+    margin: 0 !important;
+  }
+}
+
+@keyframes ti-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
