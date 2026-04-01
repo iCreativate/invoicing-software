@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Building2, User } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { getPublicAppOrigin } from '@/lib/app-url';
 import { routes } from '@/lib/routing/routes';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { Card } from '@/components/ui/Card';
@@ -57,7 +58,7 @@ export function RegisterClient() {
     if (ref) data.referrer_code = ref;
 
     const supabase = createSupabaseBrowserClient();
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const origin = getPublicAppOrigin();
     const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,

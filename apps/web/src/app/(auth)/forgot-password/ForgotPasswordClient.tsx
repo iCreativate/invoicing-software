@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { getPublicAppOrigin } from '@/lib/app-url';
 import { routes } from '@/lib/routing/routes';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { Card } from '@/components/ui/Card';
@@ -20,7 +21,7 @@ export function ForgotPasswordClient({ initialEmail }: { initialEmail: string })
     setSubmitting(true);
     setError(null);
     const supabase = createSupabaseBrowserClient();
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const origin = getPublicAppOrigin();
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${origin}${routes.auth.resetPassword}`,
     });
