@@ -17,6 +17,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "TimelyInvoices — Invoicing & cashflow",
   description: "Quotes, recurring invoices, expenses, and client-friendly payments.",
+  icons: {
+    icon: [{ url: "/icon.png", sizes: "512x512", type: "image/png" }],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+  },
   appleWebApp: { capable: true, title: "TimelyInvoices" },
   formatDetection: { telephone: false },
 };
