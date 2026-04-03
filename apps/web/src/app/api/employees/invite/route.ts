@@ -2,16 +2,7 @@ import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { assertCanManageTeam, getWorkspaceContext } from '@/lib/auth/workspace';
-
-let ResendClient: any = null;
-async function getResend() {
-  if (!process.env.RESEND_API_KEY) return null;
-  if (!ResendClient) {
-    const mod = await import('resend');
-    ResendClient = mod.Resend;
-  }
-  return new ResendClient(process.env.RESEND_API_KEY);
-}
+import { getResend, getResendFromEmail } from '@/lib/integrations/messaging';
 
 export async function POST(request: Request) {
   try {
@@ -99,14 +90,16 @@ export async function POST(request: Request) {
 
     const resend = await getResend();
     if (!resend) {
-      return NextResponse.json(
-        { success: false, error: 'Email not configured (missing RESEND_API_KEY). Employee record created.' },
-        { status: 500 }
-      );
+      return NextResponse.json({
+        success: true,
+        data: { id: String((row as any).id) },
+        emailSent: false,
+        message: 'Employee saved. Invite email was not sent: add RESEND_API_KEY to the server environment.',
+      });
     }
 
     await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'TimelyInvoices <invoices@timelyinvoices.app>',
+      from: getResendFromEmail(),
       to: [email],
       subject: 'You’ve been invited to TimelyInvoices',
       html: `<p>Hi ${displayName},</p><p>${inviteInfo}</p><p><a href="${loginUrl}">Sign in</a> to get started.</p>`,

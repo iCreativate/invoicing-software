@@ -2,28 +2,14 @@ import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import crypto from 'crypto';
-
-// Optional providers (only used if env vars present)
-let ResendClient: any = null;
-let TwilioClient: any = null;
-
-async function getResend() {
-  if (!process.env.RESEND_API_KEY) return null;
-  if (!ResendClient) {
-    const mod = await import('resend');
-    ResendClient = mod.Resend;
-  }
-  return new ResendClient(process.env.RESEND_API_KEY);
-}
-
-async function getTwilio() {
-  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) return null;
-  if (!TwilioClient) {
-    const mod = await import('twilio');
-    TwilioClient = mod.default ?? mod;
-  }
-  return TwilioClient(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-}
+import {
+  ERR_RESEND_MISSING,
+  ERR_WHATSAPP_MISSING,
+  getResend,
+  getResendFromEmail,
+  getTwilio,
+  isWhatsappEnvReady,
+} from '@/lib/integrations/messaging';
 
 export async function POST(request: Request) {
   try {
@@ -52,8 +38,24 @@ export async function POST(request: Request) {
     const ownerId = auth.user?.id ?? null;
     if (!ownerId) return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });
 
+    if (toEmail) {
+      const resend = await getResend();
+      if (!resend) {
+        return NextResponse.json({ success: false, error: ERR_RESEND_MISSING }, { status: 503 });
+      }
+    }
+
+    if (toWhatsapp) {
+      if (!isWhatsappEnvReady()) {
+        return NextResponse.json({ success: false, error: ERR_WHATSAPP_MISSING }, { status: 503 });
+      }
+      const twilio = await getTwilio();
+      if (!twilio) {
+        return NextResponse.json({ success: false, error: ERR_WHATSAPP_MISSING }, { status: 503 });
+      }
+    }
+
     // FREE tier guard (server-side): up to 10 sent invoices per calendar month.
-    // Best-effort until schema.sql (owner_id) is applied.
     try {
       const now = new Date();
       const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0));
@@ -77,7 +79,6 @@ export async function POST(request: Request) {
       // ignore if schema not migrated yet
     }
 
-    // Ensure share id (don't rotate if already exists)
     const { data: existing, error: existingErr } = await supabase
       .from('invoices')
       .select('public_share_id')
@@ -97,12 +98,11 @@ export async function POST(request: Request) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3002';
     const shareUrl = `${appUrl}/invoice/${shareId}`;
 
-    // Email via Resend (if configured)
     if (toEmail) {
       const resend = await getResend();
       if (resend) {
         await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL || 'TimelyInvoices <invoices@timelyinvoices.app>',
+          from: getResendFromEmail(),
           to: [toEmail],
           subject: 'Invoice from TimelyInvoices',
           html: `<p>Your invoice is ready.</p><p><a href="${shareUrl}">View invoice</a></p>`,
@@ -110,7 +110,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // WhatsApp via Twilio (if configured)
     if (toWhatsapp && process.env.TWILIO_WHATSAPP_FROM) {
       const twilio = await getTwilio();
       if (twilio) {
@@ -127,4 +126,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, error: e?.message ?? 'Send failed' }, { status: 500 });
   }
 }
-

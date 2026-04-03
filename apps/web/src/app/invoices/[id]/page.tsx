@@ -186,7 +186,7 @@ export default function InvoiceDetailPage() {
                       <div className="mt-2 whitespace-pre-wrap text-sm">{reminder.message}</div>
                       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div className="text-xs text-muted-foreground">
-                          Sends via Resend (email) or Twilio (WhatsApp) if configured.
+                          Email uses RESEND_API_KEY; WhatsApp uses Twilio env vars (see .env.example).
                         </div>
                         <Button
                           type="button"

@@ -9,6 +9,11 @@
 # and signup email links match Supabase → Authentication → Redirect URLs.
 # Optional: SUPABASE_SERVICE_ROLE_KEY for storage/API routes.
 #
+# Messaging (server-only; add in Netlify → Environment variables):
+#   RESEND_API_KEY — invoice/invite/reminder email (see apps/web/.env.example)
+#   RESEND_FROM_EMAIL — optional verified sender
+#   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM — WhatsApp
+#
 [build]
   base    = "apps/web"
   command = "npm run build"

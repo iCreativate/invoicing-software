@@ -41,7 +41,10 @@ export async function fetchEmployeesList(): Promise<EmployeeListItem[]> {
   }));
 }
 
-export async function inviteEmployee(input: { name?: string; email: string; role: string; permission?: string }) {
+export async function inviteEmployee(input: { name?: string; email: string; role: string; permission?: string }): Promise<{
+  id: string;
+  notice?: string;
+}> {
   const res = await fetch('/api/employees/invite', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -49,6 +52,9 @@ export async function inviteEmployee(input: { name?: string; email: string; role
   });
   const json = await res.json();
   if (!res.ok || !json?.success) throw new Error(json?.error ?? 'Invite failed');
-  return json.data as { id: string };
+  return {
+    id: String(json.data?.id ?? ''),
+    notice: typeof json.message === 'string' ? json.message : undefined,
+  };
 }
 

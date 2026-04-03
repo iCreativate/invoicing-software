@@ -27,6 +27,7 @@ export default function EmployeesPage() {
   const [inviteRole, setInviteRole] = useState('Employee');
   const [invitePermission, setInvitePermission] = useState('member');
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const [inviting, setInviting] = useState(false);
 
   useEffect(() => {
@@ -76,6 +77,11 @@ export default function EmployeesPage() {
         </div>
 
         {error ? <div className="mt-4 rounded-2xl bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
+        {inviteNotice ? (
+          <div className="mt-4 rounded-2xl border border-amber-200/80 bg-amber-50/90 p-3 text-sm text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-100">
+            {inviteNotice}
+          </div>
+        ) : null}
 
         {!loading && !error && filtered.length === 0 ? (
           <div className="mt-6 rounded-2xl border border-dashed border-border p-6 text-sm text-muted-foreground">
@@ -178,7 +184,8 @@ export default function EmployeesPage() {
                   }
                   setInviting(true);
                   try {
-                    await inviteEmployee({
+                    setInviteNotice(null);
+                    const out = await inviteEmployee({
                       name: inviteName.trim() || undefined,
                       email,
                       role: inviteRole,
@@ -191,6 +198,7 @@ export default function EmployeesPage() {
                     setInviteRole('Employee');
                     setInvitePermission('member');
                     setOpen(false);
+                    if (out.notice) setInviteNotice(out.notice);
                   } catch (e: any) {
                     setInviteError(e?.message ?? 'Invite failed.');
                   } finally {

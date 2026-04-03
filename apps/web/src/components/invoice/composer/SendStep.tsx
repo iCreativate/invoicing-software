@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { formatMoney } from '@/lib/format/money';
 import { Badge } from '@/components/ui/badge';
 import { Link as LinkIcon, Mail, MessageCircle, Send } from 'lucide-react';
+import { MESSAGING_ENV_HINT } from '@/lib/integrations/messaging';
 
 export function SendStep({
   currency,
@@ -75,9 +76,7 @@ export function SendStep({
           <Send className="h-4 w-4" />
           {submitting ? 'Sending…' : 'Create & Send'}
         </Button>
-        <div className="mt-2 text-xs text-muted-foreground">
-          Requires `RESEND_API_KEY` for email and Twilio env vars for WhatsApp.
-        </div>
+        <div className="mt-2 text-xs text-muted-foreground">{MESSAGING_ENV_HINT}</div>
       </div>
     </div>
   );
