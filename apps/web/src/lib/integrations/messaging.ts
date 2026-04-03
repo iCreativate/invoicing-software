@@ -41,9 +41,14 @@ export function isWhatsappEnvReady(): boolean {
   );
 }
 
-/** Composer / settings copy (no secrets). */
+/** True when `RESEND_API_KEY` is set (same variable as apps/web/.env.local). */
+export function isResendConfigured(): boolean {
+  return Boolean(process.env.RESEND_API_KEY?.trim());
+}
+
+/** Composer / settings copy when server status is unknown (no secrets). */
 export const MESSAGING_ENV_HINT =
-  'Email needs RESEND_API_KEY on the server (optional RESEND_FROM_EMAIL). WhatsApp needs TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_WHATSAPP_FROM. See .env.example.';
+  'Email uses RESEND_API_KEY from the server environment (apps/web/.env.local or Netlify).';
 
 export const ERR_RESEND_MISSING =
   'Email is not configured. Add RESEND_API_KEY to your environment (Netlify → Environment variables). See apps/web/.env.example.';

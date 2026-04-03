@@ -1,12 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formatMoney } from '@/lib/format/money';
 import { Badge } from '@/components/ui/badge';
 import { Link as LinkIcon, Mail, MessageCircle, Send } from 'lucide-react';
-import { MESSAGING_ENV_HINT } from '@/lib/integrations/messaging';
 
 export function SendStep({
   currency,
@@ -22,15 +21,29 @@ export function SendStep({
   const [email, setEmail] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [shareReady, setShareReady] = useState(false);
+  const [resendReady, setResendReady] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch('/api/messaging/status')
+      .then((r) => r.json())
+      .then((d: { resend?: boolean }) => {
+        if (!cancelled) setResendReady(Boolean(d?.resend));
+      })
+      .catch(() => {
+        if (!cancelled) setResendReady(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="rounded-2xl bg-muted/20 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold">Send invoice</div>
-          <div className="mt-1 text-sm text-muted-foreground">
-            Email + WhatsApp + shareable link.
-          </div>
+          <div className="mt-1 text-sm text-muted-foreground">Email, optional WhatsApp, and a shareable link.</div>
         </div>
         <Badge variant="outline">{formatMoney(total, currency)}</Badge>
       </div>
@@ -76,9 +89,20 @@ export function SendStep({
           <Send className="h-4 w-4" />
           {submitting ? 'Sending…' : 'Create & Send'}
         </Button>
-        <div className="mt-2 text-xs text-muted-foreground">{MESSAGING_ENV_HINT}</div>
+        <div className="mt-2 text-xs text-muted-foreground">
+          {resendReady === null ? (
+            <span>Checking email configuration…</span>
+          ) : resendReady ? (
+            <span className="text-success">Email delivery is configured (RESEND_API_KEY on the server).</span>
+          ) : (
+            <span>
+              To send by email, add <span className="font-mono text-[11px]">RESEND_API_KEY</span> to{' '}
+              <span className="font-mono text-[11px]">apps/web/.env.local</span>, then restart{' '}
+              <span className="font-mono text-[11px]">npm run dev</span> (or set it in Netlify and redeploy).
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
 }
-
