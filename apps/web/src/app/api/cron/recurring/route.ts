@@ -81,7 +81,8 @@ export async function GET(request: Request) {
         owner_id: ownerId,
         client_id: clientId,
         invoice_number: invNo,
-        status: 'sent',
+        // Create as draft; mark as sent only if we actually message the client.
+        status: 'draft',
         issue_date: issueDate,
         due_date: dueDate,
         currency: String(row.currency ?? 'ZAR'),
@@ -94,7 +95,7 @@ export async function GET(request: Request) {
         notes: String(row.title ?? 'Recurring invoice'),
         public_share_id: shareId,
         template_id: 'modern',
-        sent_at: new Date().toISOString(),
+        sent_at: null,
       })
       .select('id')
       .single();
@@ -124,6 +125,8 @@ export async function GET(request: Request) {
     const payUrl = `${appUrl}/invoice/${shareId}`;
     const msg = `Hi ${(client as any)?.name ?? ''}, your invoice ${invNo} is ready. Pay or view: ${payUrl}`;
 
+    let sent = false;
+
     if (row.remind_email && (client as any)?.email && process.env.RESEND_API_KEY) {
       try {
         const { Resend } = await import('resend');
@@ -134,6 +137,7 @@ export async function GET(request: Request) {
           subject: `Invoice ${invNo}`,
           html: `<p>${msg.replaceAll('\n', '<br/>')}</p>`,
         });
+        sent = true;
       } catch {
         // optional
       }
@@ -148,9 +152,14 @@ export async function GET(request: Request) {
           to: `whatsapp:${String(waTo).replace(/^whatsapp:/, '')}`,
           body: msg,
         });
+        sent = true;
       } catch {
         // optional
       }
+    }
+
+    if (sent) {
+      await admin.from('invoices').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', invoiceId);
     }
 
     results.push(`ok ${row.id} -> ${invoiceId}`);

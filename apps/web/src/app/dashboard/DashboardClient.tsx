@@ -121,6 +121,11 @@ export default function DashboardClient({
         cell: ({ row }) => <StatusBadge status={row.original.status} />,
       },
       {
+        accessorKey: 'issue_date',
+        header: 'Issued',
+        cell: ({ row }) => <span className="tabular-nums text-muted-foreground">{row.original.issue_date ?? '—'}</span>,
+      },
+      {
         accessorKey: 'due_date',
         header: 'Due',
         cell: ({ row }) => <span className="tabular-nums text-muted-foreground">{row.original.due_date ?? '—'}</span>,
