@@ -39,8 +39,15 @@ export async function GET(request: Request) {
         client:clients(name)
       `
       )
-      .eq('owner_id', ctx.workspaceOwnerId)
       .order('created_at', { ascending: false });
+
+    // Legacy support: some early rows may have NULL owner_id (solo workspaces only).
+    // We include those only for the actual owner user to avoid leaking data across workspaces.
+    if (ctx.workspaceOwnerId && ctx.actorUserId && ctx.workspaceOwnerId === ctx.actorUserId) {
+      q = q.or(`owner_id.eq.${ctx.workspaceOwnerId},owner_id.is.null`);
+    } else {
+      q = q.eq('owner_id', ctx.workspaceOwnerId);
+    }
 
     if (statusFilter.length) {
       q = q.in('status', statusFilter);
