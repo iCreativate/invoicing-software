@@ -4,6 +4,7 @@ export type InvoiceListItem = {
   id: string;
   invoice_number: string;
   client_name: string | null;
+  client_id?: string;
   status: InvoiceStatus;
   issue_date: string;
   due_date: string;

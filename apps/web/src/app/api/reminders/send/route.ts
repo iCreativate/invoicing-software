@@ -7,11 +7,13 @@ import {
   getTwilio,
   isWhatsappEnvReady,
 } from '@/lib/integrations/messaging';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const channel = String(body.channel ?? '');
+    const invoiceId = body.invoiceId ? String(body.invoiceId) : null;
     const toEmail = body.toEmail ? String(body.toEmail) : null;
     const toWhatsapp = body.toWhatsapp ? String(body.toWhatsapp) : null;
     const message = String(body.message ?? '').trim();
@@ -33,6 +35,11 @@ export async function POST(request: Request) {
         subject: 'Invoice reminder',
         html: `<p>${message.replaceAll('\n', '<br/>')}</p>`,
       });
+      if (invoiceId) {
+        const supabase = await createSupabaseServerClient(request);
+        const { error: logErr } = await supabase.from('reminder_events').insert({ invoice_id: invoiceId, channel: 'email' });
+        void logErr;
+      }
       return NextResponse.json({ success: true });
     }
 
@@ -49,6 +56,12 @@ export async function POST(request: Request) {
       to: `whatsapp:${toWhatsapp}`,
       body: message,
     });
+
+    if (invoiceId) {
+      const supabase = await createSupabaseServerClient(request);
+      const { error: logErr } = await supabase.from('reminder_events').insert({ invoice_id: invoiceId, channel: 'whatsapp' });
+      void logErr;
+    }
 
     return NextResponse.json({ success: true });
   } catch (e: any) {

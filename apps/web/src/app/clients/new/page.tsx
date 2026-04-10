@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { routes } from '@/lib/routing/routes';
 import { createClient } from '@/features/clients/api';
+import { RedirectIfReadOnly } from '@/components/workspace/RedirectIfReadOnly';
 
 const Schema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -56,15 +57,16 @@ export default function NewClientPage() {
   };
 
   return (
-    <AppShell
-      title="New client"
-      actions={
-        <Link href={routes.app.clients}>
-          <Button variant="secondary">Back</Button>
-        </Link>
-      }
-    >
-      <Card className="p-4">
+    <RedirectIfReadOnly href={routes.app.clients}>
+      <AppShell
+        title="New client"
+        actions={
+          <Link href={routes.app.clients}>
+            <Button variant="secondary">Back</Button>
+          </Link>
+        }
+      >
+        <Card className="p-4">
         {submitError ? (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{submitError}</div>
         ) : null}
@@ -117,8 +119,9 @@ export default function NewClientPage() {
 
           <div className="text-xs text-zinc-500 dark:text-zinc-400">This expects a Supabase `clients` table.</div>
         </form>
-      </Card>
-    </AppShell>
+        </Card>
+      </AppShell>
+    </RedirectIfReadOnly>
   );
 }
 

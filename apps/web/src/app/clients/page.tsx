@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { routes } from '@/lib/routing/routes';
 import { fetchClientsList } from '@/features/clients/api';
 import type { ClientListItem } from '@/features/clients/types';
+import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -19,6 +20,9 @@ function initials(name: string) {
 }
 
 export default function ClientsPage() {
+  const { canEdit, status: capStatus } = useWorkspaceCapabilities();
+  const canMutate = capStatus === 'ready' && canEdit;
+
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<ClientListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -56,9 +60,11 @@ export default function ClientsPage() {
     <AppShell
       title="Clients"
       actions={
-        <Link href={`${routes.app.clients}/new`}>
-          <Button>New client</Button>
-        </Link>
+        canMutate ? (
+          <Link href={`${routes.app.clients}/new`}>
+            <Button>New client</Button>
+          </Link>
+        ) : null
       }
     >
       <Card className="p-4">
@@ -82,9 +88,11 @@ export default function ClientsPage() {
           <div className="mt-6 rounded-2xl border border-dashed border-zinc-200 p-6 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
             No clients yet. Create your first client.
             <div className="mt-3">
-              <Link href={`${routes.app.clients}/new`}>
-                <Button>New client</Button>
-              </Link>
+              {canMutate ? (
+                <Link href={`${routes.app.clients}/new`}>
+                  <Button>New client</Button>
+                </Link>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -127,9 +135,11 @@ export default function ClientsPage() {
                             View
                           </Button>
                         </Link>
-                        <Link href={`${routes.app.clients}/${c.id}/edit`}>
-                          <Button className="h-9">Edit</Button>
-                        </Link>
+                        {canMutate ? (
+                          <Link href={`${routes.app.clients}/${c.id}/edit`}>
+                            <Button className="h-9">Edit</Button>
+                          </Link>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

@@ -4,7 +4,12 @@ import type { ClientDetail, ClientInvoiceInsights, ClientListItem } from './type
 
 export async function fetchClientsList(): Promise<ClientListItem[]> {
   const supabase = createSupabaseBrowserClient();
-  const { data, error } = await supabase.from('clients').select('id,name,email').order('name', { ascending: true });
+  const ownerId = await getWorkspaceOwnerIdForClient();
+  const { data, error } = await supabase
+    .from('clients')
+    .select('id,name,email')
+    .eq('owner_id', ownerId)
+    .order('name', { ascending: true });
   if (error) throw error;
   return (data ?? []).map((c: any) => ({
     id: String(c.id),
@@ -15,12 +20,14 @@ export async function fetchClientsList(): Promise<ClientListItem[]> {
 
 export async function searchClients(query: string): Promise<ClientListItem[]> {
   const supabase = createSupabaseBrowserClient();
+  const ownerId = await getWorkspaceOwnerIdForClient();
   const q = query.trim();
   if (!q) return fetchClientsList();
 
   const { data, error } = await supabase
     .from('clients')
     .select('id,name,email')
+    .eq('owner_id', ownerId)
     .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
     .order('name', { ascending: true })
     .limit(20);
@@ -35,9 +42,11 @@ export async function searchClients(query: string): Promise<ClientListItem[]> {
 
 export async function createClient(input: { name: string; email?: string; phone?: string; address?: string }) {
   const supabase = createSupabaseBrowserClient();
+  const ownerId = await getWorkspaceOwnerIdForClient();
   const { data, error } = await supabase
     .from('clients')
     .insert({
+      owner_id: ownerId,
       name: input.name,
       email: input.email ?? null,
       phone: input.phone ?? null,
@@ -51,10 +60,12 @@ export async function createClient(input: { name: string; email?: string; phone?
 
 export async function fetchClientDetail(id: string): Promise<ClientDetail> {
   const supabase = createSupabaseBrowserClient();
+  const ownerId = await getWorkspaceOwnerIdForClient();
   const { data, error } = await supabase
     .from('clients')
     .select('id,name,email,phone,address')
     .eq('id', id)
+    .eq('owner_id', ownerId)
     .single();
   if (error) throw error;
   return {
@@ -68,6 +79,7 @@ export async function fetchClientDetail(id: string): Promise<ClientDetail> {
 
 export async function updateClient(input: { id: string; name: string; email?: string; phone?: string; address?: string }) {
   const supabase = createSupabaseBrowserClient();
+  const ownerId = await getWorkspaceOwnerIdForClient();
   const { error } = await supabase
     .from('clients')
     .update({
@@ -76,7 +88,8 @@ export async function updateClient(input: { id: string; name: string; email?: st
       phone: input.phone ?? null,
       address: input.address ?? null,
     })
-    .eq('id', input.id);
+    .eq('id', input.id)
+    .eq('owner_id', ownerId);
   if (error) throw error;
   return { id: input.id };
 }

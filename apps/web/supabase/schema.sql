@@ -9,6 +9,9 @@ create extension if not exists "uuid-ossp";
 -- Clients
 create table if not exists public.clients (
   id uuid primary key default uuid_generate_v4(),
+  -- Workspace owner user id (same value used by invoices.owner_id).
+  -- Note: kept nullable for legacy rows; backfill via `supabase/backfill-client-owner-id.sql`.
+  owner_id uuid,
   name text not null,
   email text,
   phone text,
@@ -16,6 +19,11 @@ create table if not exists public.clients (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.clients add column if not exists owner_id uuid;
+
+create index if not exists clients_owner_id_idx on public.clients(owner_id);
+create index if not exists clients_name_idx on public.clients(name);
 
 -- Invoices
 create table if not exists public.invoices (
@@ -86,8 +94,35 @@ create table if not exists public.payments (
   created_at timestamptz not null default now()
 );
 
+-- Gateway / integration metadata (PayFast, Stripe, Yoco, etc.)
+alter table public.payments add column if not exists provider text;
+alter table public.payments add column if not exists external_reference text;
+
 create index if not exists payments_invoice_id_idx on public.payments(invoice_id);
 create index if not exists payments_payment_date_idx on public.payments(payment_date desc);
+
+-- Reminder sends (dashboard activity feed)
+create table if not exists public.reminder_events (
+  id uuid primary key default uuid_generate_v4(),
+  invoice_id uuid not null references public.invoices(id) on delete cascade,
+  channel text not null,
+  sent_at timestamptz not null default now()
+);
+
+create index if not exists reminder_events_invoice_id_idx on public.reminder_events(invoice_id);
+create index if not exists reminder_events_sent_at_idx on public.reminder_events(sent_at desc);
+
+-- Invoice timeline (created, sent, viewed, paid, etc.)
+create table if not exists public.invoice_timeline_events (
+  id uuid primary key default uuid_generate_v4(),
+  invoice_id uuid not null references public.invoices(id) on delete cascade,
+  event_type text not null,
+  occurred_at timestamptz not null default now(),
+  meta jsonb not null default '{}'::jsonb
+);
+
+create index if not exists invoice_timeline_invoice_id_idx on public.invoice_timeline_events(invoice_id);
+create index if not exists invoice_timeline_occurred_at_idx on public.invoice_timeline_events(occurred_at desc);
 
 -- Company profile / branding
 -- One row per authenticated user (owner_id). RLS intentionally omitted for dev.
@@ -293,6 +328,12 @@ create index if not exists referral_rewards_owner_id_idx on public.referral_rewa
 -- Team permissions: extend employees
 alter table public.employees add column if not exists permission text not null default 'member';
 -- permission: owner|admin|billing|member|viewer
+
+-- Invoice branding & outbound email bodies (per workspace / company_profiles)
+alter table public.company_profiles add column if not exists invoice_accent_hex text;
+alter table public.company_profiles add column if not exists invoice_header_hex text;
+alter table public.company_profiles add column if not exists email_template_invoice text;
+alter table public.company_profiles add column if not exists email_template_reminder text;
 
 -- ---------------------------------------------------------------------------
 -- After core schema: run these in order (SQL Editor):

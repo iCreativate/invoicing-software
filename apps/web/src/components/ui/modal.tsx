@@ -10,8 +10,9 @@ export const ModalClose = DialogPrimitive.Close;
 export function ModalContent({
   className,
   children,
+  showClose = true,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>) {
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { showClose?: boolean }) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" />
@@ -25,12 +26,14 @@ export function ModalContent({
         {...props}
       >
         {children}
-        <DialogPrimitive.Close
-          className="absolute right-3 top-3 rounded-lg p-2 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-          aria-label="Close"
-        >
-          <X className="h-4 w-4" />
-        </DialogPrimitive.Close>
+        {showClose ? (
+          <DialogPrimitive.Close
+            className="absolute right-3 top-3 rounded-lg p-2 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </DialogPrimitive.Close>
+        ) : null}
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   );

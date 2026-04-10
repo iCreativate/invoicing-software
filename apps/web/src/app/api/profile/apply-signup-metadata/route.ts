@@ -11,9 +11,9 @@ function isPlaceholderCompanyName(name: string): boolean {
   return PLACEHOLDER_NAMES.has(name.trim().toLowerCase());
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
-    const supabase = await createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient(request);
     const {
       data: { user },
     } = await supabase.auth.getUser();

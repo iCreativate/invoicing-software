@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { InvoicePreview } from '@/components/invoice/InvoicePreview';
 import { PayNowButton } from '@/components/payments/PayNowButton';
 import { subscriptionShowsPoweredBy } from '@/lib/company/subscription';
+import { PublicInvoiceViewTracker } from '@/components/invoice/PublicInvoiceViewTracker';
 
 export default async function PublicInvoicePage({
   params,
@@ -87,6 +88,7 @@ export default async function PublicInvoicePage({
 
   return (
     <div className="min-h-dvh bg-[hsl(var(--background))] p-4 sm:p-10">
+      <PublicInvoiceViewTracker shareId={shareId} />
       <div className="mx-auto max-w-4xl motion-safe:animate-[ti-fade-up_0.45s_ease-out_both]">
         <div className="mb-4 flex items-center justify-end">
           <PayNowButton invoiceId={String((invoice as any).id)} />

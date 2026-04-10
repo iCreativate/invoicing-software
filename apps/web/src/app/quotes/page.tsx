@@ -11,8 +11,12 @@ import { formatMoney } from '@/lib/format/money';
 import { fetchQuotesList } from '@/features/quotes/api';
 import type { QuoteListItem } from '@/features/quotes/types';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
 
 export default function QuotesPage() {
+  const { canEdit, status: capStatus } = useWorkspaceCapabilities();
+  const canMutate = capStatus === 'ready' && canEdit;
+
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<QuoteListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -55,9 +59,11 @@ export default function QuotesPage() {
     <AppShell
       title="Quotes"
       actions={
-        <Link href={`${routes.app.quotes}/new`}>
-          <Button>New quote</Button>
-        </Link>
+        canMutate ? (
+          <Link href={`${routes.app.quotes}/new`}>
+            <Button>New quote</Button>
+          </Link>
+        ) : null
       }
     >
       <Card className="p-5">

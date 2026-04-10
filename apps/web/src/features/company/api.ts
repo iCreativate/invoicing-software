@@ -8,10 +8,12 @@ export const subscriptionShowsPoweredBy = subscriptionShowsPoweredByFn;
 const baseCols = 'id,owner_id,company_name,email,phone,address,website,vat_number,logo_url';
 const bankCols = 'bank_name,account_name,account_number,branch_code,account_type';
 const planCols = 'subscription_plan,preferred_locale,base_currency,referral_code,referred_by_code';
+const brandingCols = 'invoice_accent_hex,invoice_header_hex,email_template_invoice,email_template_reminder';
 
 const baseSelect = baseCols;
 const midSelect = `${baseCols},${bankCols}`;
 const fullSelect = `${midSelect},${planCols}`;
+const fullBrandingSelect = `${fullSelect},${brandingCols}`;
 
 function schemaLagError(err: unknown, hints: string[]): boolean {
   const msg = String((err as any)?.message ?? '').toLowerCase();
@@ -39,19 +41,25 @@ function mapRow(row: any): CompanyProfile {
     baseCurrency: row.base_currency != null ? String(row.base_currency) : null,
     referralCode: row.referral_code != null ? String(row.referral_code) : null,
     referredByCode: row.referred_by_code != null ? String(row.referred_by_code) : null,
+    invoiceAccentHex: row.invoice_accent_hex != null ? String(row.invoice_accent_hex) : null,
+    invoiceHeaderHex: row.invoice_header_hex != null ? String(row.invoice_header_hex) : null,
+    emailTemplateInvoice: row.email_template_invoice != null ? String(row.email_template_invoice) : null,
+    emailTemplateReminder: row.email_template_reminder != null ? String(row.email_template_reminder) : null,
   };
 }
 
 async function selectCompanyProfileRow(supabase: ReturnType<typeof createSupabaseBrowserClient>, ownerId: string) {
-  for (const sel of [fullSelect, midSelect, baseSelect]) {
+  for (const sel of [fullBrandingSelect, fullSelect, midSelect, baseSelect]) {
     const res = await supabase.from('company_profiles').select(sel).eq('owner_id', ownerId).maybeSingle();
     if (!res.error) return res.data;
     const lag =
-      sel === fullSelect
-        ? schemaLagError(res.error, ['subscription_plan', 'referral_code', 'preferred_locale', 'base_currency', 'referred_by'])
-        : sel === midSelect
-          ? schemaLagError(res.error, ['bank_name', 'account_name', 'branch_code', 'account_type'])
-          : false;
+      sel === fullBrandingSelect
+        ? schemaLagError(res.error, ['invoice_accent', 'email_template'])
+        : sel === fullSelect
+          ? schemaLagError(res.error, ['subscription_plan', 'referral_code', 'preferred_locale', 'base_currency', 'referred_by'])
+          : sel === midSelect
+            ? schemaLagError(res.error, ['bank_name', 'account_name', 'branch_code', 'account_type'])
+            : false;
     if (!lag) throw res.error;
   }
   return null;
@@ -109,6 +117,10 @@ export async function upsertMyCompanyProfile(input: {
   subscriptionPlan?: string;
   preferredLocale?: string;
   baseCurrency?: string;
+  invoiceAccentHex?: string | null;
+  invoiceHeaderHex?: string | null;
+  emailTemplateInvoice?: string | null;
+  emailTemplateReminder?: string | null;
 }): Promise<CompanyProfile> {
   const supabase = createSupabaseBrowserClient();
   const workspaceOwnerId = await getWorkspaceOwnerIdForClient();
@@ -140,11 +152,22 @@ export async function upsertMyCompanyProfile(input: {
     base_currency: input.baseCurrency ?? undefined,
   };
 
+  const brandingPayload = {
+    ...fullPayload,
+    invoice_accent_hex: input.invoiceAccentHex ?? null,
+    invoice_header_hex: input.invoiceHeaderHex ?? null,
+    email_template_invoice: input.emailTemplateInvoice ?? null,
+    email_template_reminder: input.emailTemplateReminder ?? null,
+  };
+
   const tryUpsert = async (payload: Record<string, unknown>, select: string) => {
     return supabase.from('company_profiles').upsert(payload, { onConflict: 'owner_id' }).select(select).single();
   };
 
-  let { data, error } = await tryUpsert(fullPayload, fullSelect);
+  let { data, error } = await tryUpsert(brandingPayload, fullBrandingSelect);
+  if (error && schemaLagError(error, ['invoice_accent', 'email_template'])) {
+    ({ data, error } = await tryUpsert(fullPayload, fullSelect));
+  }
   if (error && schemaLagError(error, ['subscription_plan', 'referral_code', 'preferred_locale', 'base_currency'])) {
     ({ data, error } = await tryUpsert(bankPayload, midSelect));
   }

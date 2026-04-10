@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { GlobalKeyboardShortcuts } from "@/components/shell/GlobalKeyboardShortcuts";
+import { AppProviders } from "@/components/shell/AppProviders";
 import { AppSerwistProvider } from "@/components/serwist/AppSerwistProvider";
 
 const geistSans = Geist({
@@ -43,8 +44,10 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <AppSerwistProvider>
-          <GlobalKeyboardShortcuts />
-          {children}
+          <AppProviders>
+            <GlobalKeyboardShortcuts />
+            {children}
+          </AppProviders>
         </AppSerwistProvider>
       </body>
     </html>

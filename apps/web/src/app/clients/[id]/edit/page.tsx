@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { routes } from '@/lib/routing/routes';
 import { fetchClientDetail, updateClient } from '@/features/clients/api';
+import { RedirectIfReadOnly } from '@/components/workspace/RedirectIfReadOnly';
 
 const Schema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -89,20 +90,21 @@ export default function ClientEditPage() {
   };
 
   return (
-    <AppShell
-      title="Edit client"
-      actions={
-        <div className="flex items-center gap-2">
-          <Link href={`${routes.app.clients}/${id}`}>
-            <Button variant="secondary">Cancel</Button>
-          </Link>
-          <Button type="submit" form="client-edit-form" disabled={!canSave}>
-            {submitting ? 'Saving…' : 'Save'}
-          </Button>
-        </div>
-      }
-    >
-      <Card className="p-5">
+    <RedirectIfReadOnly href={`${routes.app.clients}/${id}`}>
+      <AppShell
+        title="Edit client"
+        actions={
+          <div className="flex items-center gap-2">
+            <Link href={`${routes.app.clients}/${id}`}>
+              <Button variant="secondary">Cancel</Button>
+            </Link>
+            <Button type="submit" form="client-edit-form" disabled={!canSave}>
+              {submitting ? 'Saving…' : 'Save'}
+            </Button>
+          </div>
+        }
+      >
+        <Card className="p-5">
         {submitError ? <div className="mb-4 rounded-2xl bg-danger/10 p-3 text-sm text-danger">{submitError}</div> : null}
         {ok ? <div className="mb-4 rounded-2xl bg-success/10 p-3 text-sm text-success">{ok}</div> : null}
 
@@ -133,8 +135,9 @@ export default function ClientEditPage() {
             Tip: keep client names consistent so AI pricing suggestions work better.
           </div>
         </form>
-      </Card>
-    </AppShell>
+        </Card>
+      </AppShell>
+    </RedirectIfReadOnly>
   );
 }
 

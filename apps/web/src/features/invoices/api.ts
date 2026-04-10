@@ -27,6 +27,7 @@ export async function fetchInvoicesList(): Promise<InvoiceListItem[]> {
       total_amount,
       paid_amount,
       balance_amount,
+      client_id,
       client:clients(name)
     `
     )
@@ -51,6 +52,7 @@ export async function fetchInvoicesList(): Promise<InvoiceListItem[]> {
       total_amount,
       paid_amount,
       balance_amount,
+      client_id,
       client:clients(name)
     `
         )
@@ -71,6 +73,7 @@ export async function fetchInvoicesList(): Promise<InvoiceListItem[]> {
     paid_amount: Number(row.paid_amount ?? 0),
     balance_amount: Number(row.balance_amount ?? 0),
     client_name: row.client?.name ?? null,
+    client_id: row.client_id ? String(row.client_id) : undefined,
   }));
 }
 

@@ -13,6 +13,7 @@ import type { ClientListItem } from '@/features/clients/types';
 import { createQuote } from '@/features/quotes/api';
 import { todayISO, addDaysISO, makeEmptyItem } from '@/components/invoice/composer/utils';
 import type { InvoiceComposerItem } from '@/components/invoice/composer/types';
+import { RedirectIfReadOnly } from '@/components/workspace/RedirectIfReadOnly';
 
 export default function NewQuotePage() {
   const router = useRouter();
@@ -44,15 +45,16 @@ export default function NewQuotePage() {
   }, []);
 
   return (
-    <AppShell
-      title="New quote"
-      actions={
-        <Link href={routes.app.quotes}>
-          <Button variant="secondary">Back</Button>
-        </Link>
-      }
-    >
-      <Card className="p-5">
+    <RedirectIfReadOnly href={routes.app.quotes}>
+      <AppShell
+        title="New quote"
+        actions={
+          <Link href={routes.app.quotes}>
+            <Button variant="secondary">Back</Button>
+          </Link>
+        }
+      >
+        <Card className="p-5">
         {error ? <div className="mb-4 rounded-2xl bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -182,7 +184,8 @@ export default function NewQuotePage() {
             {saving ? 'Saving…' : 'Create quote'}
           </Button>
         </div>
-      </Card>
-    </AppShell>
+        </Card>
+      </AppShell>
+    </RedirectIfReadOnly>
   );
 }

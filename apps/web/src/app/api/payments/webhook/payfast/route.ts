@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { verifyPayFastSignature } from '@/lib/payments/payfast';
+import { insertPaymentAndReconcile } from '@/lib/payments/recalculateInvoiceFromPayments';
 
 function asStringMap(obj: any): Record<string, string> {
   const out: Record<string, string> = {};
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
     const paymentStatus = String(body.payment_status ?? '').toUpperCase(); // COMPLETE|FAILED|CANCELLED
     const pfAmountGross = Number(body.amount_gross ?? body.amount ?? 0);
 
-    const supabase = await createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient(request);
     const { data: session, error: sessErr } = await supabase
       .from('payment_sessions')
       .select('id,invoice_id,amount,currency,status,provider')
@@ -73,37 +74,16 @@ export async function POST(request: Request) {
         const currency = String((session as any).currency ?? 'ZAR');
         const invoiceId = String((session as any).invoice_id);
 
-        await supabase.from('payments').insert({
-          invoice_id: invoiceId,
+        await insertPaymentAndReconcile(supabase, {
+          invoiceId,
           amount,
           currency,
           method: 'card',
-          status: 'completed',
-          payment_date: new Date().toISOString().slice(0, 10),
+          paymentDate: new Date().toISOString().slice(0, 10),
           notes: `payfast_session:${sessionId}`,
+          provider: 'payfast',
+          externalReference: body.pf_payment_id ? String(body.pf_payment_id) : null,
         });
-
-        // Update invoice aggregates
-        const { data: invoice, error: invErr } = await supabase
-          .from('invoices')
-          .select('id,total_amount,paid_amount')
-          .eq('id', invoiceId)
-          .single();
-        if (!invErr && invoice) {
-          const total = Number((invoice as any).total_amount ?? 0);
-          const paid = Number((invoice as any).paid_amount ?? 0) + amount;
-          const balance = Math.max(0, total - paid);
-          const status = balance <= 0 ? 'paid' : 'partial';
-          await supabase
-            .from('invoices')
-            .update({
-              paid_amount: paid,
-              balance_amount: balance,
-              status,
-              paid_date: balance <= 0 ? new Date().toISOString().slice(0, 10) : null,
-            })
-            .eq('id', invoiceId);
-        }
       }
     }
 

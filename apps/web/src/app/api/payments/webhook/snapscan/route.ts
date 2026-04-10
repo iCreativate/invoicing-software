@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { insertPaymentAndReconcile } from '@/lib/payments/recalculateInvoiceFromPayments';
 
 function secureEq(a: string, b: string) {
   const aa = Buffer.from(a);
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Missing merchantReference' }, { status: 400 });
     }
 
-    const supabase = await createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient(request);
     const { data: session } = await supabase
       .from('payment_sessions')
       .select('id,invoice_id,amount,currency,status')
@@ -74,37 +75,16 @@ export async function POST(request: Request) {
         const amount = Number((session as any).amount ?? 0);
         const currency = String((session as any).currency ?? 'ZAR');
 
-        await supabase.from('payments').insert({
-          invoice_id: invoiceId,
+        await insertPaymentAndReconcile(supabase, {
+          invoiceId,
           amount,
           currency,
           method: 'mobile_money',
-          status: 'completed',
-          payment_date: new Date().toISOString().slice(0, 10),
+          paymentDate: new Date().toISOString().slice(0, 10),
           notes: `snapscan_session:${sessionId}`,
+          provider: 'snapscan',
+          externalReference: payload?.id != null ? String(payload.id) : null,
         });
-
-        const { data: invoice } = await supabase
-          .from('invoices')
-          .select('id,total_amount,paid_amount')
-          .eq('id', invoiceId)
-          .single();
-
-        if (invoice) {
-          const total = Number((invoice as any).total_amount ?? 0);
-          const paid = Number((invoice as any).paid_amount ?? 0) + amount;
-          const balance = Math.max(0, total - paid);
-          const invStatus = balance <= 0 ? 'paid' : 'partial';
-          await supabase
-            .from('invoices')
-            .update({
-              paid_amount: paid,
-              balance_amount: balance,
-              status: invStatus,
-              paid_date: balance <= 0 ? new Date().toISOString().slice(0, 10) : null,
-            })
-            .eq('id', invoiceId);
-        }
       }
     }
 

@@ -11,7 +11,7 @@ function makeInvoiceNumber() {
 export async function POST(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const { id: quoteId } = await ctx.params;
-    const supabase = await createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient(_request);
     const ctxW = await getWorkspaceContext(supabase);
     if (!ctxW) return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });
     assertCanEdit(ctxW);

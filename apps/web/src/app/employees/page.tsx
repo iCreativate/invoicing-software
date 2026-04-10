@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Modal, ModalContent, ModalDescription, ModalHeader, ModalTitle } from '@/components/ui/modal';
 import { fetchEmployeesList, inviteEmployee } from '@/features/employees/api';
 import type { EmployeeListItem } from '@/features/employees/types';
+import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
 
 function statusVariant(s: EmployeeListItem['status']) {
   if (s === 'active') return 'success';
@@ -17,6 +18,9 @@ function statusVariant(s: EmployeeListItem['status']) {
 }
 
 export default function EmployeesPage() {
+  const { canManageTeam, status: capStatus } = useWorkspaceCapabilities();
+  const canInvite = capStatus === 'ready' && canManageTeam;
+
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<EmployeeListItem[]>([]);
@@ -62,7 +66,7 @@ export default function EmployeesPage() {
     <AppShell
       title="Employees"
       actions={
-        <Button onClick={() => setOpen(true)}>Invite employee</Button>
+        canInvite ? <Button onClick={() => setOpen(true)}>Invite employee</Button> : null
       }
     >
       <Card className="p-5">
@@ -117,7 +121,8 @@ export default function EmployeesPage() {
         </div>
 
         <div className="mt-5 rounded-2xl bg-muted/20 p-4 text-sm text-muted-foreground">
-          Permissions: owner/admin manage team; billing can manage payments; viewer is read-only (UI enforcement expanding).
+          Permissions: owner and admin manage the team and invitations. Billing can manage payments (recording, gateways, mark
+          paid). Viewer is read-only in the app (UI enforcement is expanding across screens).
         </div>
       </Card>
 
@@ -158,10 +163,10 @@ export default function EmployeesPage() {
                 value={invitePermission}
                 onChange={(e) => setInvitePermission(e.target.value)}
               >
-                <option value="member">Member — create &amp; edit records</option>
-                <option value="billing">Billing — finance + payments</option>
+                <option value="member">Staff (member) — create &amp; edit records</option>
+                <option value="billing">Staff (billing) — finance + payments</option>
                 <option value="admin">Admin — team + settings</option>
-                <option value="viewer">Viewer — read only</option>
+                <option value="viewer">Staff (viewer) — read only</option>
                 <option value="owner">Owner — full access</option>
               </select>
             </div>

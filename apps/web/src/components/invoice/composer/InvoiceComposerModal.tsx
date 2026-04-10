@@ -39,11 +39,14 @@ export function InvoiceComposerModal({
   onOpenChange,
   onCreated,
   mode = 'modal',
+  editInvoiceId = null,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onCreated?: (invoiceId: string) => void;
   mode?: 'modal' | 'page';
+  /** When set (e.g. edit page), load this invoice from the API instead of a blank draft. */
+  editInvoiceId?: string | null;
 }) {
   const autosaveScope = mode === 'page' ? 'page' : 'modal';
   const makeInvoiceNumber = () => {
@@ -96,6 +99,7 @@ export function InvoiceComposerModal({
 
   useEffect(() => {
     if (!open) return;
+    if (editInvoiceId) return;
     setStep(1);
     setSubmitError(null);
     setSaveOk(null);
@@ -124,7 +128,58 @@ export function InvoiceComposerModal({
       setResumeCandidate(null);
       setResumeCandidateSavedAt(null);
     }
-  }, [open]);
+  }, [open, editInvoiceId]);
+
+  useEffect(() => {
+    if (!open || !editInvoiceId) return;
+    let alive = true;
+    (async () => {
+      setSubmitting(true);
+      setSubmitError(null);
+      try {
+        const res = await fetch(`/api/invoices/${editInvoiceId}`);
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error || 'Failed to load invoice');
+        if (!alive) return;
+        const inv = json.data.invoice;
+        const rawItems = inv.items ?? [];
+        const items =
+          rawItems.length > 0
+            ? rawItems.map((it: any) => ({
+                id: String(it.id),
+                description: String(it.description ?? ''),
+                quantity: Number(it.quantity ?? 1),
+                unitPrice: Number(it.unit_price ?? 0),
+                vatRate: Number(it.tax_rate ?? 15),
+              }))
+            : [makeEmptyItem(15)];
+        setDraft({
+          clientId: String(inv.client_id ?? ''),
+          invoiceNumber: String(inv.invoice_number ?? ''),
+          issueDate: String(inv.issue_date ?? todayISO()),
+          dueDate: String(inv.due_date ?? addDaysISO(30)),
+          currency: String(inv.currency ?? 'ZAR'),
+          template: (String(inv.template_id ?? 'modern') as InvoiceComposerDraft['template']) || 'modern',
+          items,
+          notes: inv.notes ? String(inv.notes) : undefined,
+          ...(inv.public_share_id ? { publicShareId: String(inv.public_share_id) } : {}),
+        } as InvoiceComposerDraft & { publicShareId?: string });
+        setServerInvoiceId(String(inv.id));
+        const appUrl = (process.env.NEXT_PUBLIC_APP_URL as string) || 'http://localhost:3002';
+        setShareUrl(inv.public_share_id ? `${appUrl}/invoice/${inv.public_share_id}` : null);
+        setResumeCandidate(null);
+        setResumeCandidateSavedAt(null);
+        setStep(2);
+      } catch (e: any) {
+        if (alive) setSubmitError(e?.message ?? 'Failed to load invoice');
+      } finally {
+        if (alive) setSubmitting(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [open, editInvoiceId]);
 
   const saveInvoiceToServer = async (opts?: { redirectToInvoice?: boolean }) => {
     setSubmitError(null);
@@ -143,7 +198,7 @@ export function InvoiceComposerModal({
     const shareIdFromDraft =
       (draft as any).publicShareId && String((draft as any).publicShareId).trim().length ? String((draft as any).publicShareId) : null;
 
-    const invoicePayload = {
+    const basePayload = {
       owner_id: ownerId,
       invoice_number: invoiceNumber ?? undefined,
       public_share_id: shareIdFromDraft ?? undefined,
@@ -152,14 +207,18 @@ export function InvoiceComposerModal({
       due_date: draft.dueDate,
       currency: draft.currency,
       template_id: draft.template,
-      status: 'draft',
       vat_rate: 15,
       subtotal_amount: totals.subtotal,
       tax_amount: totals.vat,
       total_amount: totals.total,
+      notes: draft.notes ?? null,
+    };
+
+    const insertPayload = {
+      ...basePayload,
+      status: 'draft' as const,
       paid_amount: 0,
       balance_amount: totals.total,
-      notes: draft.notes ?? null,
     };
 
     const itemsPayload = draft.items.map((it) => ({
@@ -180,7 +239,7 @@ export function InvoiceComposerModal({
         const shareId = shareIdFromDraft ?? crypto.randomUUID();
         const { data: row, error } = await supabase
           .from('invoices')
-          .insert({ ...invoicePayload, invoice_number: savedInvoiceNumber, public_share_id: shareId })
+          .insert({ ...insertPayload, invoice_number: savedInvoiceNumber, public_share_id: shareId })
           .select('id,invoice_number,public_share_id')
           .single();
         if (error) throw error;
@@ -205,9 +264,31 @@ export function InvoiceComposerModal({
         }
         if (!ensuredShareId) ensuredShareId = crypto.randomUUID();
 
+        const { data: cur, error: curErr } = await supabase
+          .from('invoices')
+          .select('paid_amount,status')
+          .eq('id', invoiceId)
+          .eq('owner_id', ownerId)
+          .single();
+        if (curErr) throw curErr;
+        const paid = Number((cur as any).paid_amount ?? 0);
+        const balance = Math.max(0, totals.total - paid);
+        let st = String((cur as any).status ?? 'draft');
+        const today = new Date().toISOString().slice(0, 10);
+        if (balance <= 0 && totals.total >= 0 && paid >= totals.total) st = 'paid';
+        else if (paid > 0 && balance > 0) st = 'partial';
+        else if (balance > 0 && draft.dueDate < today && st !== 'draft' && st !== 'cancelled') st = 'overdue';
+        else if (st === 'overdue' && draft.dueDate >= today && balance > 0) st = 'sent';
+
         const { data: updated, error } = await supabase
           .from('invoices')
-          .update({ ...invoicePayload, public_share_id: ensuredShareId })
+          .update({
+            ...basePayload,
+            public_share_id: ensuredShareId,
+            paid_amount: paid,
+            balance_amount: balance,
+            status: st,
+          })
           .eq('id', invoiceId)
           .eq('owner_id', ownerId)
           .select('invoice_number,public_share_id')

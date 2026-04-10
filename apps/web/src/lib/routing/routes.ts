@@ -15,10 +15,12 @@ export const routes = {
     quotes: '/quotes',
     recurring: '/recurring',
     clients: '/clients',
+    productsServices: '/products-services',
     payments: '/payments',
     expenses: '/expenses',
     reports: '/reports',
     reportsPl: '/reports/pl',
+    timeTracking: '/time-tracking',
     employees: '/employees',
     payroll: '/payroll',
     profile: '/profile',
@@ -28,4 +30,3 @@ export const routes = {
     invoice: (shareId: string) => `/invoice/${shareId}`,
   },
 } as const;
-

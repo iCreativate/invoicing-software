@@ -1,19 +1,20 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import {
-  ensureReferralCode,
-  fetchMyCompanyProfile,
-  fetchMyReferralRewards,
-  upsertMyCompanyProfile,
-  uploadCompanyLogo,
-  type ReferralRewardRow,
-} from '@/features/company/api';
+import { ensureReferralCode, fetchMyReferralRewards, uploadCompanyLogo, type ReferralRewardRow } from '@/features/company/api';
 import { routes } from '@/lib/routing/routes';
+
+function pickerHex(stored: string, fb: string) {
+  const t = stored.trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(t)) return t;
+  if (/^[0-9A-Fa-f]{6}$/.test(t)) return `#${t}`;
+  return fb;
+}
 
 export default function SettingsClient() {
   const [loading, setLoading] = useState(true);
@@ -39,6 +40,13 @@ export default function SettingsClient() {
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [rewards, setRewards] = useState<ReferralRewardRow[]>([]);
   const [origin, setOrigin] = useState('');
+  const [invoiceAccentHex, setInvoiceAccentHex] = useState('#2563eb');
+  const [invoiceHeaderHex, setInvoiceHeaderHex] = useState('#0f172a');
+  const [emailTemplateInvoice, setEmailTemplateInvoice] = useState('');
+  const [emailTemplateReminder, setEmailTemplateReminder] = useState('');
+  const [workspacePermission, setWorkspacePermission] = useState<string>('owner');
+  const [canManageTeam, setCanManageTeam] = useState(true);
+  const [canEditWorkspace, setCanEditWorkspace] = useState(true);
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -50,10 +58,18 @@ export default function SettingsClient() {
       try {
         setLoading(true);
         setError(null);
-        const p = await fetchMyCompanyProfile();
+        const res = await fetch('/api/settings', { credentials: 'include' });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json.success) {
+          throw new Error(json.error ?? 'Failed to load settings.');
+        }
         if (!alive) return;
+        setWorkspacePermission(String(json.data?.workspace?.permission ?? 'owner'));
+        setCanManageTeam(Boolean(json.data?.workspace?.canManageTeam));
+        setCanEditWorkspace(json.data?.workspace?.canEdit !== false);
+        const p = json.data?.company;
         if (p) {
-          setCompanyName(p.companyName);
+          setCompanyName(p.companyName ?? '');
           setEmail(p.email ?? '');
           setPhone(p.phone ?? '');
           setAddress(p.address ?? '');
@@ -69,6 +85,10 @@ export default function SettingsClient() {
           setPreferredLocale(p.preferredLocale ?? 'en');
           setBaseCurrency(p.baseCurrency ?? 'ZAR');
           setReferralCode(p.referralCode ?? null);
+          setInvoiceAccentHex(p.invoiceAccentHex?.trim() || '#2563eb');
+          setInvoiceHeaderHex(p.invoiceHeaderHex?.trim() || '#0f172a');
+          setEmailTemplateInvoice(p.emailTemplateInvoice ?? '');
+          setEmailTemplateReminder(p.emailTemplateReminder ?? '');
         }
         const code = await ensureReferralCode();
         if (alive && code) setReferralCode(code);
@@ -94,8 +114,10 @@ export default function SettingsClient() {
   }, []);
 
   const canSave = useMemo(() => companyName.trim().length > 1, [companyName]);
+  const formDisabled = loading || !canEditWorkspace;
 
   const onUpload = async (file: File) => {
+    if (!canEditWorkspace) return;
     setOk(null);
     setError(null);
     try {
@@ -119,23 +141,36 @@ export default function SettingsClient() {
     }
     setSaving(true);
     try {
-      await upsertMyCompanyProfile({
-        companyName: companyName.trim(),
-        email: email.trim() || undefined,
-        phone: phone.trim() || undefined,
-        address: address.trim() || undefined,
-        website: website.trim() || undefined,
-        vatNumber: vatNumber.trim() || undefined,
-        logoUrl,
-        bankName: bankName.trim() || undefined,
-        accountName: accountName.trim() || undefined,
-        accountNumber: accountNumber.trim() || undefined,
-        branchCode: branchCode.trim() || undefined,
-        accountType: accountType.trim() || undefined,
-        subscriptionPlan: subscriptionPlan || undefined,
-        preferredLocale: preferredLocale || undefined,
-        baseCurrency: baseCurrency || undefined,
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyName: companyName.trim(),
+          email: email.trim() || null,
+          phone: phone.trim() || null,
+          address: address.trim() || null,
+          website: website.trim() || null,
+          vatNumber: vatNumber.trim() || null,
+          logoUrl,
+          bankName: bankName.trim() || null,
+          accountName: accountName.trim() || null,
+          accountNumber: accountNumber.trim() || null,
+          branchCode: branchCode.trim() || null,
+          accountType: accountType.trim() || null,
+          subscriptionPlan,
+          preferredLocale,
+          baseCurrency: baseCurrency.trim() || 'ZAR',
+          invoiceAccentHex: invoiceAccentHex.trim() || null,
+          invoiceHeaderHex: invoiceHeaderHex.trim() || null,
+          emailTemplateInvoice: emailTemplateInvoice.trim() || null,
+          emailTemplateReminder: emailTemplateReminder.trim() || null,
+        }),
       });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) {
+        throw new Error(json.error ?? 'Failed to save settings.');
+      }
       setOk('Saved.');
     } catch (e: any) {
       setError(e?.message ?? 'Failed to save settings.');
@@ -156,7 +191,7 @@ export default function SettingsClient() {
               </div>
             </div>
             <div className="shrink-0">
-              <Button onClick={onSave} disabled={loading || saving || !canSave}>
+              <Button onClick={onSave} disabled={loading || saving || !canSave || !canEditWorkspace}>
                 {saving ? 'Saving…' : 'Save'}
               </Button>
             </div>
@@ -168,6 +203,11 @@ export default function SettingsClient() {
           {ok ? (
             <div className="mt-4 rounded-2xl bg-success/10 p-3 text-sm text-success">{ok}</div>
           ) : null}
+          {!canEditWorkspace ? (
+            <div className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-950 dark:text-amber-100">
+              View-only access: your role cannot change workspace settings.
+            </div>
+          ) : null}
 
           <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_280px]">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -177,28 +217,28 @@ export default function SettingsClient() {
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
                   placeholder="e.g. Acme Studio (Pty) Ltd"
-                  disabled={loading}
+                  disabled={formDisabled}
                 />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Email</label>
-                <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="accounts@…" disabled={loading} />
+                <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="accounts@…" disabled={formDisabled} />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Phone</label>
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+27 …" disabled={loading} />
+                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+27 …" disabled={formDisabled} />
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <label className="text-sm font-medium">Address</label>
-                <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Street, City, ZIP" disabled={loading} />
+                <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Street, City, ZIP" disabled={formDisabled} />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Website</label>
-                <Input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://…" disabled={loading} />
+                <Input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://…" disabled={formDisabled} />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">VAT number</label>
-                <Input value={vatNumber} onChange={(e) => setVatNumber(e.target.value)} placeholder="(optional)" disabled={loading} />
+                <Input value={vatNumber} onChange={(e) => setVatNumber(e.target.value)} placeholder="(optional)" disabled={formDisabled} />
               </div>
             </div>
 
@@ -231,10 +271,10 @@ export default function SettingsClient() {
                       if (f) void onUpload(f);
                       e.currentTarget.value = '';
                     }}
-                    disabled={loading}
+                    disabled={formDisabled}
                   />
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button type="button" variant="secondary" disabled={loading} onClick={() => document.getElementById('logo-upload')?.click()}>
+                    <Button type="button" variant="secondary" disabled={formDisabled} onClick={() => document.getElementById('logo-upload')?.click()}>
                       Upload logo
                     </Button>
                     {logoUrl ? (
@@ -249,7 +289,7 @@ export default function SettingsClient() {
               </div>
               {logoUrl ? (
                 <div className="mt-3">
-                  <Button type="button" variant="secondary" onClick={() => setLogoUrl(null)} disabled={loading}>
+                  <Button type="button" variant="secondary" onClick={() => setLogoUrl(null)} disabled={formDisabled}>
                     Remove logo
                   </Button>
                 </div>
@@ -266,25 +306,136 @@ export default function SettingsClient() {
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Bank name</label>
-                <Input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. FNB" disabled={loading} />
+                <Input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. FNB" disabled={formDisabled} />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Account name</label>
-                <Input value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="e.g. Acme Studio (Pty) Ltd" disabled={loading} />
+                <Input value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="e.g. Acme Studio (Pty) Ltd" disabled={formDisabled} />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Account number</label>
-                <Input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} placeholder="e.g. 1234567890" disabled={loading} />
+                <Input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} placeholder="e.g. 1234567890" disabled={formDisabled} />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Branch code</label>
-                <Input value={branchCode} onChange={(e) => setBranchCode(e.target.value)} placeholder="e.g. 250655" disabled={loading} />
+                <Input value={branchCode} onChange={(e) => setBranchCode(e.target.value)} placeholder="e.g. 250655" disabled={formDisabled} />
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <label className="text-sm font-medium">Account type</label>
-                <Input value={accountType} onChange={(e) => setAccountType(e.target.value)} placeholder="e.g. Cheque" disabled={loading} />
+                <Input value={accountType} onChange={(e) => setAccountType(e.target.value)} placeholder="e.g. Cheque" disabled={formDisabled} />
               </div>
             </div>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="text-sm font-semibold">Invoice branding</div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Accent and header colors for future PDF / shared invoice themes (stored per workspace).
+          </p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Accent color</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  className="h-11 w-14 cursor-pointer rounded-lg border border-input bg-background p-1"
+                  value={pickerHex(invoiceAccentHex, '#2563eb')}
+                  onChange={(e) => setInvoiceAccentHex(e.target.value)}
+                  disabled={formDisabled}
+                />
+                <Input
+                  value={invoiceAccentHex}
+                  onChange={(e) => setInvoiceAccentHex(e.target.value)}
+                  placeholder="#2563eb"
+                  disabled={formDisabled}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Header / text color</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  className="h-11 w-14 cursor-pointer rounded-lg border border-input bg-background p-1"
+                  value={pickerHex(invoiceHeaderHex, '#0f172a')}
+                  onChange={(e) => setInvoiceHeaderHex(e.target.value)}
+                  disabled={formDisabled}
+                />
+                <Input
+                  value={invoiceHeaderHex}
+                  onChange={(e) => setInvoiceHeaderHex(e.target.value)}
+                  placeholder="#0f172a"
+                  disabled={formDisabled}
+                />
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="text-sm font-semibold">Email templates</div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            HTML or plain text. Placeholders:{' '}
+            <code className="text-xs">{'{{invoice_number}}'}</code>,{' '}
+            <code className="text-xs">{'{{share_url}}'}</code>,{' '}
+            <code className="text-xs">{'{{company_name}}'}</code>,{' '}
+            <code className="text-xs">{'{{total_amount}}'}</code>,{' '}
+            <code className="text-xs">{'{{due_date}}'}</code>,{' '}
+            <code className="text-xs">{'{{balance}}'}</code> (reminders:{' '}
+            <code className="text-xs">{'{{client_name}}'}</code>).
+          </p>
+          <div className="mt-4 grid gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Invoice email body</label>
+              <textarea
+                className="min-h-[120px] w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                value={emailTemplateInvoice}
+                onChange={(e) => setEmailTemplateInvoice(e.target.value)}
+                placeholder={`<p>Invoice {{invoice_number}} from {{company_name}} is ready.</p><p><a href="{{share_url}}">View invoice</a></p>`}
+                disabled={formDisabled}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Reminder email body</label>
+              <textarea
+                className="min-h-[120px] w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                value={emailTemplateReminder}
+                onChange={(e) => setEmailTemplateReminder(e.target.value)}
+                placeholder={`<p>Reminder: invoice {{invoice_number}} (balance {{balance}}).</p><p><a href="{{share_url}}">Pay now</a></p>`}
+                disabled={formDisabled}
+              />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="text-sm font-semibold">Roles &amp; permissions</div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Your access level: <span className="font-semibold text-foreground capitalize">{workspacePermission}</span>
+            {canManageTeam ? ' · You can invite and manage team permissions.' : null}
+          </p>
+          <ul className="mt-3 list-inside list-disc space-y-2 text-sm text-muted-foreground">
+            <li>
+              <span className="font-semibold text-foreground">Owner / Admin</span> — manage team, invitations, and full edit
+              access.
+            </li>
+            <li>
+              <span className="font-semibold text-foreground">Billing</span> — record payments, gateways, mark paid; also edits
+              like other editors unless you restrict further later.
+            </li>
+            <li>
+              <span className="font-semibold text-foreground">Staff (member)</span> — create and edit invoices, clients, quotes,
+              etc.
+            </li>
+            <li>
+              <span className="font-semibold text-foreground">Viewer</span> — read-only in the app (UI enforcement is expanding).
+            </li>
+          </ul>
+          <div className="mt-4">
+            <Button asChild variant="secondary">
+              <Link href={routes.app.employees}>Manage team</Link>
+            </Button>
           </div>
         </Card>
 
@@ -300,7 +451,7 @@ export default function SettingsClient() {
                 className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
                 value={subscriptionPlan}
                 onChange={(e) => setSubscriptionPlan(e.target.value)}
-                disabled={loading}
+                disabled={formDisabled}
               >
                 <option value="free">Free</option>
                 <option value="starter">Starter</option>
@@ -314,7 +465,7 @@ export default function SettingsClient() {
                 className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
                 value={preferredLocale}
                 onChange={(e) => setPreferredLocale(e.target.value)}
-                disabled={loading}
+                disabled={formDisabled}
               >
                 <option value="en">English</option>
                 <option value="af">Afrikaans</option>
@@ -327,7 +478,7 @@ export default function SettingsClient() {
                 value={baseCurrency}
                 onChange={(e) => setBaseCurrency(e.target.value.toUpperCase())}
                 placeholder="ZAR"
-                disabled={loading}
+                disabled={formDisabled}
               />
             </div>
           </div>

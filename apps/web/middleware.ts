@@ -8,10 +8,22 @@ function isProtectedPath(pathname: string) {
     pathname.startsWith('/dashboard/') ||
     pathname === '/invoices' ||
     pathname.startsWith('/invoices/') ||
+    pathname === '/quotes' ||
+    pathname.startsWith('/quotes/') ||
     pathname === '/clients' ||
     pathname.startsWith('/clients/') ||
+    pathname === '/products-services' ||
+    pathname.startsWith('/products-services/') ||
     pathname === '/payments' ||
     pathname.startsWith('/payments/') ||
+    pathname === '/expenses' ||
+    pathname.startsWith('/expenses/') ||
+    pathname === '/reports' ||
+    pathname.startsWith('/reports/') ||
+    pathname === '/recurring' ||
+    pathname.startsWith('/recurring/') ||
+    pathname === '/time-tracking' ||
+    pathname.startsWith('/time-tracking/') ||
     pathname === '/employees' ||
     pathname.startsWith('/employees/') ||
     pathname === '/payroll' ||

@@ -12,7 +12,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Missing invoiceId' }, { status: 400 });
     }
 
-    const supabase = await createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient(request);
     const { data: invoice, error: invErr } = await supabase
       .from('invoices')
       .select('id,invoice_number,total_amount,balance_amount,currency,client:clients(email,name)')

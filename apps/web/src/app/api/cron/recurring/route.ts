@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 
 function requireCronSecret(request: Request) {
   if (process.env.VERCEL && request.headers.get('x-vercel-cron') === '1') return true;
   const secret = process.env.CRON_SECRET;
+  // When CRON_SECRET is not configured, only allow verified platform cron.
   if (!secret) return false;
   const reqUrl = new URL(request.url);
   if (reqUrl.searchParams.get('secret') === secret) return true;
@@ -29,6 +31,12 @@ function makeInvoiceNumber() {
 
 export async function GET(request: Request) {
   if (!requireCronSecret(request)) {
+    if (!process.env.CRON_SECRET && !(process.env.VERCEL && request.headers.get('x-vercel-cron') === '1')) {
+      return NextResponse.json(
+        { ok: false, error: 'CRON_SECRET is not configured.' },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -65,7 +73,7 @@ export async function GET(request: Request) {
     const shareId = crypto.randomUUID();
     const invNo = makeInvoiceNumber();
     const issueDate = today;
-    const dueDate = bumpNextRun(issueDate, 'monthly');
+    const dueDate = bumpNextRun(issueDate, String(row.frequency ?? 'monthly'));
 
     const { data: inv, error: invErr } = await admin
       .from('invoices')

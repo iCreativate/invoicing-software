@@ -19,5 +19,9 @@ export type CompanyProfile = {
   baseCurrency: string | null;
   referralCode: string | null;
   referredByCode: string | null;
+  invoiceAccentHex: string | null;
+  invoiceHeaderHex: string | null;
+  emailTemplateInvoice: string | null;
+  emailTemplateReminder: string | null;
 };
 

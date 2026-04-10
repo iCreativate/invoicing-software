@@ -1,335 +1,583 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import {
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  type ColumnDef,
+  type SortingState,
+  useReactTable,
+} from '@tanstack/react-table';
+import {
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from 'recharts';
 import { AppShell } from '@/components/layout/AppShell';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/badge';
-import { StatWidget } from '@/components/dashboard/StatWidget';
+import { Button } from '@/components/ui/Button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatMoney } from '@/lib/format/money';
 import { routes } from '@/lib/routing/routes';
 import { cn } from '@/lib/utils/cn';
-import { ArrowUpRight, FilePlus2, Wallet, AlertTriangle, Receipt } from 'lucide-react';
+import type { DashboardInvoice, DashboardSummary } from '@/lib/dashboard/types';
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  BarChart3,
+  Bell,
+  FilePlus2,
+  FileText,
+  Mail,
+  Sparkles,
+  TrendingUp,
+  UserPlus,
+  Wallet,
+} from 'lucide-react';
 import { StatusBadge } from '@/components/invoice/StatusBadge';
 import { InvoiceComposerLauncher } from '@/components/invoice/composer/InvoiceComposerLauncher';
 import { AskTimelyDrawer } from '@/components/ai/AskTimelyDrawer';
+import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
 
-export type DashboardInvoice = {
-  id: string;
-  invoice_number: string;
-  client_name: string | null;
-  status: 'draft' | 'sent' | 'partial' | 'paid' | 'overdue' | 'cancelled';
-  issue_date: string | null;
-  due_date: string | null;
-  currency: string;
-  total_amount: number;
-  balance_amount: number;
-  paid_amount: number;
-};
+export type { DashboardInvoice };
 
-export type TrendPoint = { date: string; revenue: number; outstanding: number };
+const PIE_COLORS = ['hsl(142 76% 36%)', 'hsl(var(--primary))'];
 
-export type DashboardData = {
-  currency: string;
-  revenueMonth: number;
-  revenueYtd: number;
-  outstanding: number;
-  overdueCount: number;
-  overdueValue: number;
-  recentInvoices: DashboardInvoice[];
-  trend: TrendPoint[];
-};
+function formatActivityTime(iso: string) {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '';
+  const diff = Date.now() - t;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 48) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
 
-function MiniTooltip({
-  active,
-  payload,
+function OverviewCard({
   label,
-  currency,
+  value,
+  sub,
+  className,
 }: {
-  active?: boolean;
-  payload?: any[];
-  label?: string;
-  currency: string;
+  label: string;
+  value: ReactNode;
+  sub?: string;
+  className?: string;
 }) {
-  if (!active || !payload?.length) return null;
-  const rev = payload.find((p) => p.dataKey === 'revenue')?.value ?? 0;
-  const out = payload.find((p) => p.dataKey === 'outstanding')?.value ?? 0;
   return (
-    <div className="rounded-2xl border border-border bg-popover px-3 py-2 text-xs shadow-[var(--shadow-lg)]">
-      <div className="font-semibold">{label}</div>
-      <div className="mt-1 flex items-center justify-between gap-4">
-        <span className="text-muted-foreground">Revenue</span>
-        <span className="font-semibold">{formatMoney(Number(rev), currency)}</span>
-      </div>
-      <div className="mt-1 flex items-center justify-between gap-4">
-        <span className="text-muted-foreground">Outstanding</span>
-        <span className="font-semibold">{formatMoney(Number(out), currency)}</span>
-      </div>
-    </div>
+    <Card className={cn('rounded-xl border-border p-4 shadow-[var(--shadow-sm)] sm:p-5', className)}>
+      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-2 text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">{value}</div>
+      {sub ? <div className="mt-1 text-xs text-muted-foreground">{sub}</div> : null}
+    </Card>
   );
 }
 
 export default function DashboardClient({
   userEmail,
-  data,
+  summary,
 }: {
   userEmail: string | null;
-  data: DashboardData;
+  summary: DashboardSummary;
 }) {
-  const highlight = useMemo(() => {
-    const owed = data.outstanding;
-    if (owed <= 0) return { tone: 'success' as const, copy: 'All caught up.' };
-    return { tone: 'primary' as const, copy: `You are owed ${formatMoney(owed, data.currency)}` };
-  }, [data.currency, data.outstanding]);
+  const router = useRouter();
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'issue_date', desc: true }]);
+  const { currency, overview, revenueByDay, paidVsUnpaid, insights, activity, recentInvoices } = summary;
+  const { canEdit, status: capStatus } = useWorkspaceCapabilities();
+  const canMutate = capStatus === 'ready' && canEdit;
+
+  const columns = useMemo<ColumnDef<DashboardInvoice>[]>(
+    () => [
+      {
+        accessorKey: 'invoice_number',
+        header: 'Invoice',
+        cell: ({ row }) => (
+          <span className="font-semibold text-foreground">{row.original.invoice_number || row.original.id.slice(0, 8)}</span>
+        ),
+      },
+      {
+        accessorKey: 'client_name',
+        header: 'Client',
+        cell: ({ row }) => <span className="text-muted-foreground">{row.original.client_name ?? '—'}</span>,
+      },
+      {
+        accessorKey: 'status',
+        header: 'Status',
+        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      },
+      {
+        accessorKey: 'due_date',
+        header: 'Due',
+        cell: ({ row }) => <span className="tabular-nums text-muted-foreground">{row.original.due_date ?? '—'}</span>,
+      },
+      {
+        id: 'amount',
+        accessorFn: (row) => (row.balance_amount > 0 ? row.balance_amount : row.total_amount),
+        header: 'Amount',
+        cell: ({ row }) => (
+          <span className="font-semibold tabular-nums">
+            {formatMoney(row.original.balance_amount > 0 ? row.original.balance_amount : row.original.total_amount, row.original.currency)}
+          </span>
+        ),
+      },
+    ],
+    []
+  );
+
+  const table = useReactTable({
+    data: recentInvoices,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
+  const isDemoRow = (id: string) => id.startsWith('00000000-0000-0000-0000-');
+
+  const lineData = useMemo(
+    () =>
+      revenueByDay.map((d, i) => ({
+        ...d,
+        tick: i % 10 === 0 ? d.label : '',
+      })),
+    [revenueByDay]
+  );
+
+  const pieTotal = paidVsUnpaid.reduce((s, x) => s + x.value, 0);
+  const hasPieData = pieTotal > 0;
+
+  const mom = insights.collectionMomPercent;
+  const upMom = mom != null && mom >= 0;
 
   return (
     <AppShell
-      title="Dashboard"
+      hideHeader
       actions={
-        <div className="hidden sm:flex items-center gap-2">
-          {userEmail ? <Badge variant="outline">{userEmail}</Badge> : null}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {userEmail ? (
+            <Badge variant="outline" className="hidden font-normal sm:inline-flex">
+              {userEmail}
+            </Badge>
+          ) : null}
           <AskTimelyDrawer />
-          <InvoiceComposerLauncher className="shadow-[var(--shadow-lg)]" />
+          <InvoiceComposerLauncher className="shadow-[var(--shadow-md)]" />
         </div>
       }
     >
-      <div className="grid gap-6">
-        <Card className="p-6 sm:p-7">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <div className="text-xs font-semibold text-muted-foreground">Cash flow</div>
-              <div className="mt-2 text-[34px] leading-[1.05] sm:text-[40px] font-semibold tracking-tight">
-                <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                  {highlight.copy}
-                </span>
-              </div>
-              <div className="mt-2 text-sm text-muted-foreground max-w-xl">
-                Outstanding includes unpaid + overdue balances.
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:w-[360px]">
-              <div
-                className={cn(
-                  'rounded-2xl bg-white/70 p-4 shadow-[var(--shadow-sm)] dark:bg-white/5',
-                  highlight.tone === 'success' && 'bg-success/10'
-                )}
-              >
-                <div className="text-xs font-semibold text-muted-foreground">Outstanding</div>
-                <div
-                  className={cn(
-                    'mt-2 text-xl font-semibold tracking-tight',
-                    highlight.tone === 'success' ? 'text-success' : 'text-primary'
-                  )}
-                >
-                  {formatMoney(data.outstanding, data.currency)}
-                </div>
-              </div>
-              <div className="rounded-2xl bg-white/70 p-4 shadow-[var(--shadow-sm)] dark:bg-white/5">
-                <div className="text-xs font-semibold text-muted-foreground">Overdue</div>
-                <div className="mt-2 text-xl font-semibold tracking-tight text-danger">{data.overdueCount}</div>
-                <div className="mt-1 text-xs text-muted-foreground">{formatMoney(data.overdueValue, data.currency)}</div>
-              </div>
-            </div>
+      <div className="space-y-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Dashboard</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Live metrics from invoices and payments in your workspace.</p>
           </div>
-        </Card>
-
-        <div className="grid gap-4 md:grid-cols-4">
-          <StatWidget
-            label="Revenue (this month)"
-            value={formatMoney(data.revenueMonth, data.currency)}
-            hint="Cash collected"
-            tone="success"
-            icon={<Receipt className="h-4 w-4" />}
-          />
-          <StatWidget
-            label="Revenue (YTD)"
-            value={formatMoney(data.revenueYtd, data.currency)}
-            hint="Year-to-date"
-            tone="success"
-            icon={<ArrowUpRight className="h-4 w-4" />}
-          />
-          <StatWidget
-            label="Outstanding"
-            value={formatMoney(data.outstanding, data.currency)}
-            hint="Unpaid balance"
-            tone={data.outstanding > 0 ? 'primary' : 'success'}
-            icon={<Wallet className="h-4 w-4" />}
-          />
-          <StatWidget
-            label="Overdue"
-            value={`${data.overdueCount}`}
-            hint={formatMoney(data.overdueValue, data.currency)}
-            tone={data.overdueCount > 0 ? 'danger' : 'default'}
-            icon={<AlertTriangle className="h-4 w-4" />}
-          />
+          <div className="flex flex-wrap gap-2 ti-no-print">
+            <Button asChild variant="secondary" className="shadow-[var(--shadow-sm)]">
+              <Link href={routes.app.reports}>
+                <BarChart3 className="h-4 w-4" />
+                Reports
+              </Link>
+            </Button>
+            <InvoiceComposerLauncher label="New invoice" />
+          </div>
         </div>
 
-        <Card className="p-6 sm:p-7">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="text-lg font-semibold">AI cash flow forecast</div>
-              <div className="mt-1 text-sm text-muted-foreground">
-                30 / 60 / 90-day estimate (best effort).
-              </div>
-            </div>
-            <ForecastWidget currency={data.currency} />
+        <section aria-label="Financial overview">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <OverviewCard
+              label="Total revenue (this month)"
+              value={formatMoney(overview.invoicedThisMonth, currency)}
+              sub="Invoiced in the current month"
+            />
+            <OverviewCard
+              label="Outstanding invoices"
+              value={formatMoney(overview.outstandingAmount, currency)}
+              sub={`${overview.outstandingInvoiceCount} open invoice${overview.outstandingInvoiceCount === 1 ? '' : 's'}`}
+            />
+            <OverviewCard
+              label="Overdue amount"
+              value={formatMoney(overview.overdueAmount, currency)}
+              sub={`${overview.overdueInvoiceCount} overdue`}
+              className={overview.overdueAmount > 0 ? 'ring-1 ring-danger/20' : undefined}
+            />
+            <OverviewCard
+              label="Paid this month"
+              value={formatMoney(overview.paidThisMonth, currency)}
+              sub="Cash collected (payments)"
+            />
           </div>
-        </Card>
+        </section>
 
-        <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          <Card className="p-6 sm:p-7">
-            <div className="flex items-center justify-between gap-3">
+        <section className="grid gap-4 lg:grid-cols-2" aria-label="Charts">
+          <Card className="rounded-xl border-border p-4 shadow-[var(--shadow-sm)] sm:p-6">
+            <div className="flex items-start justify-between gap-2">
               <div>
-                <div className="text-lg font-semibold">Cash flow trend</div>
-                <div className="mt-1 text-sm text-muted-foreground">Last 14 days · revenue vs outstanding</div>
-              </div>
-              <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-success" /> Revenue
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-primary" /> Outstanding
-                </span>
+                <h2 className="text-sm font-semibold">Revenue over time</h2>
+                <p className="text-xs text-muted-foreground">Daily cash collected (last 90 days)</p>
               </div>
             </div>
-
-            <div className="mt-5 w-full min-w-0 h-44 sm:h-56">
-              {data.trend?.length ? (
-                <ResponsiveContainer width="100%" height="100%" minHeight={176}>
-                  <AreaChart data={data.trend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="hsl(var(--success))" stopOpacity={0.35} />
-                        <stop offset="100%" stopColor="hsl(var(--success))" stopOpacity={0.02} />
-                      </linearGradient>
-                      <linearGradient id="out" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                        <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} tickMargin={8} axisLine={false} tickLine={false} />
+            <div className="mt-4 h-64 w-full min-w-0">
+              {lineData.some((d) => d.amount > 0) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={lineData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border/60" vertical={false} />
+                    <XAxis dataKey="tick" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
                     <YAxis hide />
-                    <Tooltip content={<MiniTooltip currency={data.currency} />} />
-                    <Area type="monotone" dataKey="revenue" stroke="hsl(var(--success))" fill="url(#rev)" strokeWidth={3} />
-                    <Area type="monotone" dataKey="outstanding" stroke="hsl(var(--primary))" fill="url(#out)" strokeWidth={3} />
-                  </AreaChart>
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        const row = payload[0]?.payload as (typeof lineData)[0];
+                        return (
+                          <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
+                            <div className="font-medium">{row?.label ?? label}</div>
+                            <div className="text-muted-foreground">{formatMoney(Number(payload[0].value), currency)}</div>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="amount"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                  </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full w-full rounded-2xl bg-muted/20 grid place-items-center text-sm text-muted-foreground">
-                  Not enough data yet
+                <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 text-sm text-muted-foreground">
+                  No payment history in this window yet.
                 </div>
               )}
             </div>
           </Card>
 
-          <Card className="p-6 sm:p-7">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-lg font-semibold">Recent invoices</div>
-                <div className="mt-1 text-sm text-muted-foreground">Paid and unpaid</div>
-              </div>
-              <Link href={routes.app.invoices} className="text-sm font-semibold text-primary hover:underline">
-                View all
-              </Link>
+          <Card className="rounded-xl border-border p-4 shadow-[var(--shadow-sm)] sm:p-6">
+            <div>
+              <h2 className="text-sm font-semibold">Paid vs unpaid</h2>
+              <p className="text-xs text-muted-foreground">Lifetime collected vs current outstanding</p>
             </div>
+            <div className="mt-4 h-64 w-full min-w-0">
+              {hasPieData ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={paidVsUnpaid}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={56}
+                      outerRadius={88}
+                      paddingAngle={2}
+                    >
+                      {paidVsUnpaid.map((_, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} stroke="transparent" />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value) => formatMoney(Number(value ?? 0), currency)}
+                      contentStyle={{ borderRadius: 12, border: '1px solid hsl(var(--border))' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 text-sm text-muted-foreground">
+                  No balances to compare yet.
+                </div>
+              )}
+            </div>
+            {hasPieData ? (
+              <div className="mt-2 flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
+                {paidVsUnpaid.map((s, i) => (
+                  <span key={s.key} className="inline-flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                    {s.name}: {formatMoney(s.value, currency)}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </Card>
+        </section>
 
-            <div className="mt-5 space-y-3">
-              {data.recentInvoices.length === 0 ? (
-                <div className="rounded-2xl bg-white/70 p-6 text-sm text-muted-foreground shadow-[var(--shadow-sm)] dark:bg-white/5">
-                  No invoices yet. Create your first invoice.
+        <section className="grid gap-4 lg:grid-cols-2" aria-label="Insights and activity">
+          <Card className="rounded-xl border-border p-4 shadow-[var(--shadow-sm)] sm:p-6">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Smart insights
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">Derived from your latest invoice and payment data.</p>
+            <ul className="mt-4 space-y-3 text-sm">
+              <li className="flex gap-3 rounded-xl border border-border bg-muted/20 p-3 dark:bg-muted/10">
+                {mom != null && Number.isFinite(mom) ? (
+                  <span
+                    className={cn(
+                      'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+                      upMom ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'
+                    )}
+                  >
+                    {upMom ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                  </span>
+                ) : (
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                    <TrendingUp className="h-4 w-4" />
+                  </span>
+                )}
+                <div>
+                  <div className="font-medium text-foreground">Collection pace</div>
+                  <p className="mt-0.5 text-muted-foreground">
+                    {mom != null && Number.isFinite(mom) ? (
+                      <>
+                        You are <span className="font-semibold text-foreground">{upMom ? 'up' : 'down'} {Math.abs(mom).toFixed(1)}%</span>{' '}
+                        in cash collected vs last month.
+                      </>
+                    ) : (
+                      <>Not enough payment history in both months to compare yet.</>
+                    )}
+                  </p>
+                </div>
+              </li>
+              <li className="flex gap-3 rounded-xl border border-border bg-muted/20 p-3 dark:bg-muted/10">
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-danger/15 text-danger">
+                  <Mail className="h-4 w-4" />
+                </span>
+                <div>
+                  <div className="font-medium text-foreground">Overdue exposure</div>
+                  <p className="mt-0.5 text-muted-foreground">
+                    {overview.overdueInvoiceCount > 0 ? (
+                      <>
+                        <span className="font-semibold text-foreground">{overview.overdueInvoiceCount} invoice(s)</span> overdue, worth{' '}
+                        <span className="font-semibold text-foreground">{formatMoney(overview.overdueAmount, currency)}</span>.
+                      </>
+                    ) : (
+                      <>No overdue balances right now.</>
+                    )}
+                  </p>
+                </div>
+              </li>
+              <li className="flex gap-3 rounded-xl border border-border bg-muted/20 p-3 dark:bg-muted/10">
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                  <Wallet className="h-4 w-4" />
+                </span>
+                <div>
+                  <div className="font-medium text-foreground">Top paying client</div>
+                  <p className="mt-0.5 text-muted-foreground">
+                    {insights.topPayingClient ? (
+                      <>
+                        <span className="font-semibold text-foreground">{insights.topPayingClient.name}</span> —{' '}
+                        {formatMoney(insights.topPayingClient.totalPaid, currency)} received (all time).
+                      </>
+                    ) : (
+                      <>Record payments to see who pays you the most.</>
+                    )}
+                  </p>
+                </div>
+              </li>
+            </ul>
+          </Card>
+
+          <Card className="rounded-xl border-border p-4 shadow-[var(--shadow-sm)] sm:p-6">
+            <h2 className="text-sm font-semibold">Recent activity</h2>
+            <p className="text-xs text-muted-foreground">Sends, payments, and reminders from your workspace.</p>
+            <ul className="mt-4 max-h-[340px] space-y-2 overflow-y-auto pr-1">
+              {activity.length === 0 ? (
+                <li className="rounded-xl border border-dashed border-border bg-muted/10 px-3 py-8 text-center text-sm text-muted-foreground">
+                  Activity will appear as you send invoices, record payments, and send reminders.
+                </li>
+              ) : (
+                activity.map((item, idx) => {
+                  const href =
+                    item.invoiceId && !item.invoiceId.startsWith('demo')
+                      ? `${routes.app.invoices}/${item.invoiceId}`
+                      : null;
+                  const inner = (
+                    <>
+                      <span
+                        className={cn(
+                          'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
+                          item.type === 'invoice_sent' && 'bg-primary/12 text-primary',
+                          item.type === 'payment_received' && 'bg-success/12 text-success',
+                          item.type === 'reminder_sent' && 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
+                        )}
+                      >
+                        {item.type === 'invoice_sent' ? (
+                          <FileText className="h-4 w-4" />
+                        ) : item.type === 'payment_received' ? (
+                          <Wallet className="h-4 w-4" />
+                        ) : (
+                          <Bell className="h-4 w-4" />
+                        )}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <span className="font-medium text-foreground">
+                            {item.type === 'invoice_sent' && 'Invoice sent'}
+                            {item.type === 'payment_received' && 'Payment received'}
+                            {item.type === 'reminder_sent' && 'Reminder sent'}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">{formatActivityTime(item.at)}</span>
+                        </div>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {item.invoiceNumber ?? 'Invoice'} · {item.clientName ?? 'Client'}
+                          {item.type === 'payment_received' ? ` · ${formatMoney(item.amount, item.currency)}` : ''}
+                          {item.type === 'reminder_sent' ? ` · ${item.channel}` : ''}
+                        </p>
+                      </div>
+                    </>
+                  );
+                  return (
+                    <li key={`${item.type}-${item.at}-${idx}`}>
+                      {href ? (
+                        <Link
+                          href={href}
+                          className="flex gap-3 rounded-xl border border-transparent px-2 py-2 transition-colors hover:border-border hover:bg-muted/30"
+                        >
+                          {inner}
+                        </Link>
+                      ) : (
+                        <div className="flex gap-3 rounded-xl border border-transparent px-2 py-2">{inner}</div>
+                      )}
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+          </Card>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-[1fr_280px]" aria-label="Invoices and quick actions">
+          <Card className="rounded-xl border-border shadow-[var(--shadow-sm)]">
+            <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+              <div>
+                <h2 className="text-sm font-semibold">Recent invoices</h2>
+                <p className="text-xs text-muted-foreground">Sort columns · open a row</p>
+              </div>
+              <Button asChild variant="ghost" size="sm" className="self-start sm:self-auto">
+                <Link href={routes.app.invoices}>View all</Link>
+              </Button>
+            </div>
+            <div className="overflow-x-auto">
+              {recentInvoices.length === 0 ? (
+                <div className="p-10 text-center text-sm text-muted-foreground">
+                  <p>No invoices yet.</p>
+                  {canMutate ? (
+                    <Button asChild className="mt-4" variant="primary">
+                      <Link href={`${routes.app.invoices}/new`}>Create your first invoice</Link>
+                    </Button>
+                  ) : (
+                    <p className="mt-3 text-xs">Read-only users cannot create invoices.</p>
+                  )}
                 </div>
               ) : (
-                data.recentInvoices.map((inv) => (
-                  <Link
-                    key={inv.id}
-                    href={inv.id.startsWith('00000000-0000-0000-0000-') ? '#' : `${routes.app.invoices}/${inv.id}`}
-                    className="block rounded-2xl bg-white/70 p-4 shadow-[var(--shadow-sm)] transition duration-200 hover:-translate-y-1 hover:shadow-[var(--shadow-md)] dark:bg-white/5"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-foreground">{inv.invoice_number || inv.id.slice(0, 8)}</div>
-                        <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {inv.client_name ?? '—'} · Due {inv.due_date ?? '—'}
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <StatusBadge status={inv.status} />
-                        <div className="text-sm font-semibold">
-                          {formatMoney(inv.balance_amount > 0 ? inv.balance_amount : inv.total_amount, inv.currency)}
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                ))
+                <Table>
+                  <TableHeader>
+                    {table.getHeaderGroups().map((hg) => (
+                      <TableRow key={hg.id} className="hover:bg-transparent">
+                        {hg.headers.map((header) => (
+                          <TableHead
+                            key={header.id}
+                            className={cn(header.column.getCanSort() && 'cursor-pointer select-none')}
+                            onClick={header.column.getToggleSortingHandler()}
+                          >
+                            <span className="inline-flex items-center gap-1">
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                              {{ asc: ' ↑', desc: ' ↓' }[header.column.getIsSorted() as string] ?? null}
+                            </span>
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableHeader>
+                  <TableBody>
+                    {table.getRowModel().rows.map((row) => {
+                      const href = isDemoRow(row.original.id) ? '#' : `${routes.app.invoices}/${row.original.id}`;
+                      return (
+                        <TableRow
+                          key={row.id}
+                          className="cursor-pointer"
+                          role="link"
+                          tabIndex={0}
+                          onClick={() => {
+                            if (href !== '#') router.push(href);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              if (href !== '#') router.push(href);
+                            }
+                          }}
+                        >
+                          {row.getVisibleCells().map((cell) => (
+                            <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                          ))}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               )}
             </div>
           </Card>
-        </div>
+
+          <Card className="h-fit rounded-xl border-border p-4 shadow-[var(--shadow-sm)] sm:p-5">
+            <h2 className="text-sm font-semibold">Quick actions</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Common next steps</p>
+            <div className="mt-4 flex flex-col gap-2">
+              {canMutate ? (
+                <>
+                  <Button asChild variant="secondary" className="justify-start shadow-none">
+                    <Link href={`${routes.app.invoices}/new`}>
+                      <FilePlus2 className="h-4 w-4" />
+                      Create invoice
+                    </Link>
+                  </Button>
+                  <Button asChild variant="secondary" className="justify-start shadow-none">
+                    <Link href={`${routes.app.clients}/new`}>
+                      <UserPlus className="h-4 w-4" />
+                      Add client
+                    </Link>
+                  </Button>
+                </>
+              ) : null}
+              {canMutate ? (
+                <Button asChild variant="secondary" className="justify-start shadow-none">
+                  <Link href={routes.app.invoices}>
+                    <Bell className="h-4 w-4" />
+                    Send reminder
+                  </Link>
+                </Button>
+              ) : null}
+              {capStatus === 'ready' && !canMutate ? (
+                <p className="text-xs text-muted-foreground">Your role is read-only. Quick create and reminders are hidden.</p>
+              ) : null}
+            </div>
+            <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
+              Open an invoice, use <span className="font-medium text-foreground">Smart reminder</span>, then send from there. Overdue work is
+              easiest to find in your invoice list.
+            </p>
+          </Card>
+        </section>
       </div>
 
-      <div className="fixed bottom-5 right-5 z-50 sm:hidden">
+      <div className="fixed bottom-5 right-5 z-50 sm:hidden ti-no-print">
         <InvoiceComposerLauncher label="" icon className="h-14 w-14 rounded-full shadow-[var(--shadow-lg)]" />
       </div>
     </AppShell>
   );
 }
-
-function ForecastWidget({ currency }: { currency: string }) {
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<{ days30: number; days60: number; days90: number } | null>(null);
-
-  const run = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/ai/cashflow-forecast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          summary: {
-            note: 'Provide a rough forecast based on current invoices/payments. If data is missing, make conservative assumptions.',
-          },
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json?.success) throw new Error();
-      setData(json.data);
-    } catch {
-      setData({ days30: 0, days60: 0, days90: 0 });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="flex flex-col items-end gap-2">
-      <button
-        type="button"
-        className="text-sm font-semibold text-primary hover:underline"
-        onClick={run}
-        disabled={loading}
-      >
-        {loading ? 'Forecasting…' : 'Run forecast'}
-      </button>
-      {data ? (
-        <div className="grid grid-cols-3 gap-3 text-right text-sm">
-          <div>
-            <div className="text-xs text-muted-foreground">30d</div>
-            <div className="font-semibold">{formatMoney(Number(data.days30 ?? 0), currency)}</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground">60d</div>
-            <div className="font-semibold">{formatMoney(Number(data.days60 ?? 0), currency)}</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground">90d</div>
-            <div className="font-semibold">{formatMoney(Number(data.days90 ?? 0), currency)}</div>
-          </div>
-        </div>
-      ) : (
-        <div className="text-xs text-muted-foreground">Uses AI when configured.</div>
-      )}
-    </div>
-  );
-}
-

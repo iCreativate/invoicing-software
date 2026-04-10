@@ -19,3 +19,20 @@ export type PaymentListItem = {
   notes: string | null;
 };
 
+/** Row from GET /api/payments (workspace-scoped). */
+export type WorkspacePaymentListRow = PaymentListItem & {
+  invoiceId: string;
+  invoiceNumber: string | null;
+  clientName: string | null;
+  issueDate: string | null;
+  provider: string | null;
+  externalReference: string | null;
+};
+
+export type PaymentsAnalytics = {
+  month: string;
+  monthlyIncome: number;
+  monthlyCurrency: string;
+  avgDaysToFirstPayment: number | null;
+};
+

@@ -13,6 +13,7 @@ import { formatMoney } from '@/lib/format/money';
 import { fetchInvoiceDetail, type InvoiceDetail } from '@/features/invoices/detailApi';
 import { fetchInvoicePayments, recordPayment } from '@/features/payments/api';
 import type { PaymentListItem, PaymentMethod } from '@/features/payments/types';
+import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
 
 const PaymentSchema = z.object({
   amount: z.coerce.number().positive('Amount must be > 0'),
@@ -31,7 +32,7 @@ function todayISO() {
 
 function methodLabel(m: PaymentMethod) {
   const map: Record<PaymentMethod, string> = {
-    bank_transfer: 'Bank transfer',
+    bank_transfer: 'EFT',
     card: 'Card',
     cash: 'Cash',
     cheque: 'Cheque',
@@ -45,6 +46,8 @@ function methodLabel(m: PaymentMethod) {
 export default function InvoicePaymentsPage() {
   const params = useParams();
   const invoiceId = String((params as any).id);
+  const { canRecordPayments, status: capStatus } = useWorkspaceCapabilities();
+  const allowRecord = capStatus === 'ready' && canRecordPayments;
 
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
   const [payments, setPayments] = useState<PaymentListItem[]>([]);
@@ -184,7 +187,13 @@ export default function InvoicePaymentsPage() {
 
         <Card className="p-4">
           <div className="text-sm font-semibold">Record payment</div>
-          <form onSubmit={onSubmit} className="mt-4 space-y-4">
+          {!allowRecord ? (
+            <p className="mt-2 text-sm text-muted-foreground">
+              Recording payments requires editor or billing access. Viewers are read-only; ask an owner or admin to change your
+              role under Team.
+            </p>
+          ) : null}
+          <form onSubmit={onSubmit} className={allowRecord ? 'mt-4 space-y-4' : 'hidden'}>
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="amount">
                 Amount
