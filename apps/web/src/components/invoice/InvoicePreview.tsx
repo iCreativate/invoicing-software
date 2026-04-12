@@ -3,6 +3,8 @@
 import { companyLogoImgSrc } from '@/lib/company/logoUrl';
 import { formatMoney } from '@/lib/format/money';
 import type { InvoiceComposerDraft } from '@/components/invoice/composer/types';
+import { InvoiceQrFooter } from '@/components/invoice/InvoiceQrFooter';
+import { getTimelyInvoicesMarketingUrl } from '@/lib/invoice/platformUrls';
 
 export function InvoicePreview({
   companyName = 'TimelyInvoices',
@@ -11,6 +13,8 @@ export function InvoicePreview({
   draft,
   client,
   showPoweredBy = false,
+  /** Full URL to the public invoice page; if missing, the QR opens the TimelyInvoices marketing site. */
+  invoiceViewUrl = null,
 }: {
   companyName?: string;
   companyLogoPath?: string | null;
@@ -39,7 +43,16 @@ export function InvoicePreview({
   };
   /** Free plan branding on PDFs and public shares. */
   showPoweredBy?: boolean;
+  invoiceViewUrl?: string | null;
 }) {
+  const marketingUrl = getTimelyInvoicesMarketingUrl();
+  const trimmedView = invoiceViewUrl?.trim() ?? '';
+  const qrTargetUrl = trimmedView.length > 0 ? trimmedView : marketingUrl;
+  const qrHeadline =
+    trimmedView.length > 0
+      ? 'Scan to open this invoice on TimelyInvoices (view, pay, or save as PDF).'
+      : 'Scan to open TimelyInvoices — run your invoicing online and export PDFs anytime.';
+
   const subtotal = draft.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
   const vat = draft.items.reduce((s, i) => s + i.quantity * i.unitPrice * (i.vatRate / 100), 0);
   const total = subtotal + vat;
@@ -339,6 +352,10 @@ export function InvoicePreview({
             </div>
           </div>
         ) : null}
+
+        <div className="px-1">
+          <InvoiceQrFooter qrTargetUrl={qrTargetUrl} headline={qrHeadline} />
+        </div>
 
         {showPoweredBy ? (
           <div className="border-t border-zinc-100 px-6 py-4 text-center text-[11px] font-medium tracking-wide text-zinc-400 print:text-zinc-500">

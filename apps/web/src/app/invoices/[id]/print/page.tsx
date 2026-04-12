@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { InvoicePreview } from '@/components/invoice/InvoicePreview';
 import { invoiceApiToPreviewDraft } from '@/features/invoices/previewMap';
 import { fetchMyCompanyProfile, subscriptionShowsPoweredBy } from '@/features/company/api';
+import { buildPublicInvoiceViewUrl } from '@/lib/invoice/platformUrls';
 import { Button } from '@/components/ui/Button';
 import { Printer } from 'lucide-react';
 
@@ -37,7 +38,7 @@ export default function InvoicePrintPage() {
 
   useEffect(() => {
     if (!invoice) return;
-    const t = window.setTimeout(() => window.print(), 400);
+    const t = window.setTimeout(() => window.print(), 1000);
     return () => window.clearTimeout(t);
   }, [invoice]);
 
@@ -56,6 +57,7 @@ export default function InvoicePrintPage() {
   const draft = invoiceApiToPreviewDraft(invoice);
   const client = invoice.client ?? {};
   const poweredBy = subscriptionShowsPoweredBy(company?.subscriptionPlan ?? null);
+  const invoiceViewUrl = buildPublicInvoiceViewUrl(invoice?.public_share_id);
 
   return (
     <div className="min-h-dvh bg-background p-4 print:p-0">
@@ -98,6 +100,7 @@ export default function InvoicePrintPage() {
               vatNumber: (client as any).vat_number ?? (client as any).vatNumber ?? null,
             }}
             showPoweredBy={poweredBy}
+            invoiceViewUrl={invoiceViewUrl}
           />
         </div>
       </div>

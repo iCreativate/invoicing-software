@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { z } from 'zod';
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalDescription } from '@/components/ui/modal';
@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils/cn';
 import type { ClientListItem } from '@/features/clients/types';
 import type { InvoiceComposerDraft, InvoiceComposerItem } from './types';
 import { addDaysISO, calcTotals, makeEmptyItem, todayISO } from './utils';
+import { itemsToPayload, totalsForDraftSync, workingItemsForDraftSync } from './draftItems';
 import { Check, FilePlus2, Sparkles, Send, Printer, Wand2 } from 'lucide-react';
 import { aiSuggestPricing, fetchItemSuggestions, rememberPrice, type ItemSuggestion } from '@/features/invoices/suggestions';
 import { InvoicePreview } from '@/components/invoice/InvoicePreview';
@@ -24,6 +25,8 @@ import { clearDraft, loadDraft, saveDraft } from './autosave';
 import { fetchMyCompanyProfile, subscriptionShowsPoweredBy } from '@/features/company/api';
 import { getWorkspaceOwnerIdForClient } from '@/lib/auth/workspaceClient';
 import { fetchClientDetail } from '@/features/clients/api';
+import { fetchCatalogItems } from '@/features/catalog/api';
+import type { CatalogListItem } from '@/features/catalog/types';
 
 const DraftSchema = z.object({
   clientId: z.string().min(1, 'Select a client'),
@@ -104,16 +107,20 @@ export function InvoiceComposerModal({
   const [companyLogoPath, setCompanyLogoPath] = useState<string | null>(null);
   const [showPoweredBy, setShowPoweredBy] = useState(true);
   const [clientDetails, setClientDetails] = useState<any>(null);
+  const [inventoryCatalog, setInventoryCatalog] = useState<CatalogListItem[]>([]);
 
-  useEffect(() => {
+  const submittingRef = useRef(false);
+  submittingRef.current = submitting;
+
+  useLayoutEffect(() => {
     if (!open) return;
     if (editInvoiceId) return;
-    setStep(1);
     setSubmitError(null);
     setSaveOk(null);
     setErrors({});
     setClientsQuery('');
     setClients([]);
+    setClientsSearched(false);
     setQuickClient({
       name: '',
       email: '',
@@ -125,26 +132,54 @@ export function InvoiceComposerModal({
     });
     setServerInvoiceId(null);
     setShareUrl(null);
-    setDraft((d) => ({
-      ...d,
-      invoiceNumber: d.invoiceNumber && String(d.invoiceNumber).trim().length ? d.invoiceNumber : makeInvoiceNumber(),
-      issueDate: todayISO(),
-      dueDate: addDaysISO(30),
-      currency: d.currency || 'ZAR',
-      template: d.template || 'modern',
-      items: d.items?.length ? d.items : [makeEmptyItem(15)],
-    }));
 
-    // Offer resume (local autosave) instead of auto-loading silently
     const loaded = loadDraft(autosaveScope);
     if (loaded?.draft) {
-      setResumeCandidate(loaded.draft);
+      const d = loaded.draft;
+      const hasClient = Boolean(d.clientId && String(d.clientId).trim().length);
+      if (hasClient) {
+        setDraft({
+          ...d,
+          invoiceNumber:
+            d.invoiceNumber && String(d.invoiceNumber).trim().length ? d.invoiceNumber : makeInvoiceNumber(),
+          items: d.items?.length ? d.items : [makeEmptyItem(15)],
+        });
+        setSavedAt(loaded.savedAt);
+        setServerInvoiceId(loaded.serverInvoiceId ?? null);
+        setResumeCandidate(null);
+        setResumeCandidateSavedAt(null);
+        setStep(2);
+        return;
+      }
+      setResumeCandidate(d);
       setResumeCandidateSavedAt(loaded.savedAt);
-    } else {
-      setResumeCandidate(null);
-      setResumeCandidateSavedAt(null);
+      setStep(1);
+      setDraft({
+        clientId: '',
+        invoiceNumber: makeInvoiceNumber(),
+        issueDate: todayISO(),
+        dueDate: addDaysISO(30),
+        currency: d.currency || 'ZAR',
+        template: d.template || 'modern',
+        items: d.items?.length ? d.items : [makeEmptyItem(15)],
+        notes: d.notes,
+      });
+      return;
     }
-  }, [open, editInvoiceId]);
+
+    setResumeCandidate(null);
+    setResumeCandidateSavedAt(null);
+    setStep(1);
+    setDraft({
+      invoiceNumber: makeInvoiceNumber(),
+      clientId: '',
+      issueDate: todayISO(),
+      dueDate: addDaysISO(30),
+      currency: 'ZAR',
+      template: 'modern',
+      items: [makeEmptyItem(15)],
+    });
+  }, [open, editInvoiceId, autosaveScope]);
 
   useEffect(() => {
     if (!open || !editInvoiceId) return;
@@ -167,6 +202,7 @@ export function InvoiceComposerModal({
                 quantity: Number(it.quantity ?? 1),
                 unitPrice: Number(it.unit_price ?? 0),
                 vatRate: Number(it.tax_rate ?? 15),
+                ...(it.catalog_item_id ? { catalogItemId: String(it.catalog_item_id) } : {}),
               }))
             : [makeEmptyItem(15)];
         setDraft({
@@ -197,12 +233,21 @@ export function InvoiceComposerModal({
     };
   }, [open, editInvoiceId]);
 
-  const saveInvoiceToServer = async (opts?: { redirectToInvoice?: boolean }) => {
-    setSubmitError(null);
-    setSaveOk(null);
-    if (!validateStep1() || !validateItems()) {
-      setStep(1);
-      return null;
+  const saveInvoiceToServer = async (opts?: { redirectToInvoice?: boolean; silentAutosave?: boolean; relaxedItems?: boolean }) => {
+    const silent = Boolean(opts?.silentAutosave);
+    const relaxed = Boolean(opts?.relaxedItems);
+    if (!silent) {
+      setSubmitError(null);
+      setSaveOk(null);
+    }
+    if (!relaxed) {
+      if (!validateStep1() || !validateItems()) {
+        setStep(1);
+        return null;
+      }
+    } else {
+      const parsed = DraftSchema.safeParse(draft);
+      if (!parsed.success) return null;
     }
 
     const ownerId = await getWorkspaceOwnerIdForClient();
@@ -211,6 +256,9 @@ export function InvoiceComposerModal({
     const invoiceNumber = draft.invoiceNumber && String(draft.invoiceNumber).trim().length ? String(draft.invoiceNumber) : null;
     const shareIdFromDraft =
       (draft as any).publicShareId && String((draft as any).publicShareId).trim().length ? String((draft as any).publicShareId) : null;
+
+    const workingItems = relaxed ? workingItemsForDraftSync(draft.items) : draft.items;
+    const amountTotals = relaxed ? totalsForDraftSync(draft.items) : calcTotals(draft.items);
 
     const basePayload = {
       owner_id: ownerId,
@@ -222,9 +270,9 @@ export function InvoiceComposerModal({
       currency: draft.currency,
       template_id: draft.template,
       vat_rate: 15,
-      subtotal_amount: totals.subtotal,
-      tax_amount: totals.vat,
-      total_amount: totals.total,
+      subtotal_amount: amountTotals.subtotal,
+      tax_amount: amountTotals.vat,
+      total_amount: amountTotals.total,
       notes: draft.notes ?? null,
     };
 
@@ -232,18 +280,12 @@ export function InvoiceComposerModal({
       ...basePayload,
       status: 'draft' as const,
       paid_amount: 0,
-      balance_amount: totals.total,
+      balance_amount: amountTotals.total,
     };
 
-    const itemsPayload = draft.items.map((it) => ({
-      description: it.description,
-      quantity: it.quantity,
-      unit_price: it.unitPrice,
-      tax_rate: it.vatRate,
-      line_total: it.quantity * it.unitPrice + (it.quantity * it.unitPrice * (it.vatRate ?? 0)) / 100,
-    }));
+    const itemsPayload = relaxed ? itemsToPayload(workingItems) : itemsToPayload(draft.items);
 
-    setSubmitting(true);
+    if (!silent) setSubmitting(true);
     try {
       let invoiceId = serverInvoiceId;
       let savedInvoiceNumber = invoiceNumber;
@@ -265,6 +307,19 @@ export function InvoiceComposerModal({
         const appUrl = (process.env.NEXT_PUBLIC_APP_URL as string) || 'http://localhost:3002';
         setShareUrl(`${appUrl}/invoice/${dbShareId}`);
       } else {
+        if (silent) {
+          const { data: stRow, error: stErr } = await supabase
+            .from('invoices')
+            .select('status')
+            .eq('id', invoiceId)
+            .eq('owner_id', ownerId)
+            .maybeSingle();
+          if (stErr) throw stErr;
+          if (stRow && String((stRow as any).status) !== 'draft') {
+            return invoiceId;
+          }
+        }
+
         // Ensure share id exists (so we can share before sending)
         let ensuredShareId = shareIdFromDraft;
         if (!ensuredShareId) {
@@ -286,22 +341,26 @@ export function InvoiceComposerModal({
           .single();
         if (curErr) throw curErr;
         const paid = Number((cur as any).paid_amount ?? 0);
-        const balance = Math.max(0, totals.total - paid);
+        const balance = Math.max(0, amountTotals.total - paid);
         let st = String((cur as any).status ?? 'draft');
         const today = new Date().toISOString().slice(0, 10);
-        if (balance <= 0 && totals.total >= 0 && paid >= totals.total) st = 'paid';
-        else if (paid > 0 && balance > 0) st = 'partial';
-        else if (balance > 0 && draft.dueDate < today && st !== 'draft' && st !== 'cancelled') st = 'overdue';
-        else if (st === 'overdue' && draft.dueDate >= today && balance > 0) st = 'sent';
+        if (!silent) {
+          if (balance <= 0 && amountTotals.total >= 0 && paid >= amountTotals.total) st = 'paid';
+          else if (paid > 0 && balance > 0) st = 'partial';
+          else if (balance > 0 && draft.dueDate < today && st !== 'draft' && st !== 'cancelled') st = 'overdue';
+          else if (st === 'overdue' && draft.dueDate >= today && balance > 0) st = 'sent';
+        } else {
+          st = 'draft';
+        }
 
         const { data: updated, error } = await supabase
           .from('invoices')
           .update({
             ...basePayload,
             public_share_id: ensuredShareId,
-            paid_amount: paid,
-            balance_amount: balance,
-            status: st,
+            paid_amount: silent ? 0 : paid,
+            balance_amount: silent ? amountTotals.total : balance,
+            status: silent ? 'draft' : st,
           })
           .eq('id', invoiceId)
           .eq('owner_id', ownerId)
@@ -327,7 +386,7 @@ export function InvoiceComposerModal({
       );
       if (itemsErr) throw itemsErr;
 
-      setSaveOk('Saved.');
+      if (!silent) setSaveOk('Saved.');
       if (opts?.redirectToInvoice) {
         clearDraft(autosaveScope);
         onCreated?.(invoiceId);
@@ -337,7 +396,7 @@ export function InvoiceComposerModal({
 
       return invoiceId;
     } finally {
-      setSubmitting(false);
+      if (!silent) setSubmitting(false);
     }
   };
 
@@ -383,15 +442,53 @@ export function InvoiceComposerModal({
     };
   }, [draft.clientId, open]);
 
-  // Debounced autosave (local only for now)
+  useEffect(() => {
+    if (!open || step !== 2) return;
+    let alive = true;
+    (async () => {
+      try {
+        const { items, tableMissing } = await fetchCatalogItems();
+        if (!alive) return;
+        if (tableMissing) {
+          setInventoryCatalog([]);
+          return;
+        }
+        setInventoryCatalog(items.filter((i) => i.itemType === 'inventory'));
+      } catch {
+        if (alive) setInventoryCatalog([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [open, step]);
+
+  // Debounced local + server id persistence
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(() => {
-      saveDraft(autosaveScope, draft);
+      saveDraft(autosaveScope, draft, serverInvoiceId);
       setSavedAt(Date.now());
     }, 500);
     return () => clearTimeout(t);
-  }, [autosaveScope, draft, open]);
+  }, [autosaveScope, draft, open, serverInvoiceId]);
+
+  const saveInvoiceRef = useRef(saveInvoiceToServer);
+  saveInvoiceRef.current = saveInvoiceToServer;
+
+  /** Persist in-progress work as a real `draft` row so it appears on the invoices list. */
+  useEffect(() => {
+    if (!open || editInvoiceId) return;
+    if (submittingRef.current) return;
+    const parsed = DraftSchema.safeParse(draft);
+    if (!parsed.success) return;
+
+    const t = setTimeout(() => {
+      if (submittingRef.current) return;
+      void saveInvoiceRef.current({ silentAutosave: true, relaxedItems: true }).catch(() => {});
+    }, 2800);
+    return () => clearTimeout(t);
+  }, [draft, open, editInvoiceId]);
 
   const [clientsSearched, setClientsSearched] = useState(false);
 
@@ -428,7 +525,37 @@ export function InvoiceComposerModal({
   const highlightedClientId = null;
 
   const totals = useMemo(() => calcTotals(draft.items), [draft.items]);
-  const selectedClientName = useMemo(() => clients.find((c) => c.id === draft.clientId)?.name ?? '—', [clients, draft.clientId]);
+  const selectedClientName = useMemo(() => {
+    if (clientDetails?.name) return clientDetails.name;
+    return clients.find((c) => c.id === draft.clientId)?.name ?? '—';
+  }, [clientDetails?.name, clients, draft.clientId]);
+
+  /** Step 1: show selected client in the list without forcing a search. */
+  useEffect(() => {
+    if (!open || step !== 1 || editInvoiceId) return;
+    const id = draft.clientId?.trim();
+    if (!id) return;
+    let alive = true;
+    (async () => {
+      try {
+        const d = await fetchClientDetail(id);
+        if (!alive) return;
+        const row: ClientListItem = {
+          id: d.id,
+          name: d.name,
+          email: d.email,
+          companyName: d.companyName,
+        };
+        setClients((prev) => (prev.some((p) => p.id === row.id) ? prev : [row, ...prev]));
+        setClientsSearched(true);
+      } catch {
+        // Client removed or inaccessible
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [open, step, editInvoiceId, draft.clientId]);
 
   const validateStep1 = () => {
     const parsed = DraftSchema.safeParse(draft);
@@ -833,26 +960,47 @@ export function InvoiceComposerModal({
                 ) : filteredClients.length === 0 ? (
                   <div className="p-3 text-sm text-muted-foreground">No matches.</div>
                 ) : (
-                  filteredClients.slice(0, 10).map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => setDraft((d) => ({ ...d, clientId: c.id }))}
-                      className={cn(
-                        'w-full rounded-2xl px-3 py-2 text-left transition hover:bg-white/70 dark:hover:bg-white/10',
-                        draft.clientId === c.id && 'bg-white/80 shadow-[var(--shadow-sm)] dark:bg-white/10'
-                      )}
-                    >
-                      <div className="text-sm font-semibold">{c.name}</div>
-                      {c.companyName ? (
-                        <div className="text-xs text-muted-foreground">{c.companyName}</div>
-                      ) : null}
-                      <div className="text-xs text-muted-foreground">{c.email ?? '—'}</div>
-                    </button>
-                  ))
+                  filteredClients.slice(0, 10).map((c) => {
+                    const selected = draft.clientId === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setDraft((d) => ({ ...d, clientId: c.id }))}
+                        className={cn(
+                          'flex w-full items-start gap-3 rounded-2xl px-3 py-2.5 text-left transition hover:bg-white/70 dark:hover:bg-white/10',
+                          selected && 'bg-white/80 shadow-[var(--shadow-sm)] dark:bg-white/10'
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border-2',
+                            selected
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-muted-foreground/40 bg-background'
+                          )}
+                          aria-hidden
+                        >
+                          {selected ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold">{c.name}</div>
+                          {c.companyName ? (
+                            <div className="text-xs text-muted-foreground">{c.companyName}</div>
+                          ) : null}
+                          <div className="text-xs text-muted-foreground">{c.email ?? '—'}</div>
+                        </span>
+                      </button>
+                    );
+                  })
                 )}
               </div>
               {errors.clientId ? <div className="text-xs text-danger">{errors.clientId}</div> : null}
+              {draft.clientId && clientsSearched ? (
+                <div className="text-xs text-muted-foreground">
+                  The checked client is selected. Search again only if you want to bill someone else.
+                </div>
+              ) : null}
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
@@ -998,6 +1146,19 @@ export function InvoiceComposerModal({
                 </Button>
               </div>
 
+              <div className="flex flex-col gap-2 rounded-2xl border border-border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-muted-foreground">Bill to</div>
+                  <div className="truncate text-sm font-semibold">{clientDetails?.name ?? selectedClientName}</div>
+                  {clientDetails?.email ? (
+                    <div className="truncate text-xs text-muted-foreground">{clientDetails.email}</div>
+                  ) : null}
+                </div>
+                <Button type="button" variant="secondary" className="shrink-0" onClick={() => setStep(1)}>
+                  Change client
+                </Button>
+              </div>
+
               {errors.items ? <div className="text-xs text-danger">{errors.items}</div> : null}
 
               <div className="space-y-3">
@@ -1012,6 +1173,50 @@ export function InvoiceComposerModal({
                     <div className="grid gap-3 md:grid-cols-[1fr_120px_160px_120px] md:items-start">
                       <div className="space-y-2">
                         <label className="text-sm font-medium md:sr-only">Description</label>
+                        {inventoryCatalog.length > 0 ? (
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-muted-foreground" htmlFor={`inv-cat-${it.id}`}>
+                              Inventory catalog
+                            </label>
+                            <select
+                              id={`inv-cat-${it.id}`}
+                              className={cn(
+                                'h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground shadow-[var(--shadow-sm)]',
+                                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:border-ring/40'
+                              )}
+                              value={it.catalogItemId ?? ''}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (!v) {
+                                  updateItem(it.id, { catalogItemId: undefined });
+                                  return;
+                                }
+                                const cat = inventoryCatalog.find((x) => x.id === v);
+                                if (!cat) return;
+                                updateItem(it.id, {
+                                  catalogItemId: v,
+                                  description: cat.name,
+                                  unitPrice: cat.unitPrice,
+                                  vatRate: cat.defaultTaxRate ?? 15,
+                                });
+                              }}
+                            >
+                              <option value="">— Manual line (no stock link) —</option>
+                              {inventoryCatalog.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.name}
+                                  {c.sku ? ` (${c.sku})` : ''}
+                                  {c.stockQuantity != null ? ` · ${c.stockQuantity} on hand` : ''}
+                                </option>
+                              ))}
+                            </select>
+                            {it.catalogItemId ? (
+                              <p className="text-xs text-muted-foreground">
+                                On hand decreases by quantity when the invoice is sent.
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
                         <div className="relative" ref={activeItemId === it.id ? suggestBoxRef : undefined}>
                           <Input
                             value={it.description}
@@ -1244,6 +1449,7 @@ export function InvoiceComposerModal({
                     companyLogoPath={companyLogoPath}
                     companyDetails={companyDetails}
                     showPoweredBy={showPoweredBy}
+                    invoiceViewUrl={shareUrl}
                   />
                 </div>
                 <div className="mt-3 text-xs text-muted-foreground ti-no-print">

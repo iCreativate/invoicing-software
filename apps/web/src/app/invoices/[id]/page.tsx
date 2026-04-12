@@ -15,6 +15,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { suggestSmartReminder } from '@/features/reminders/api';
 import { InvoicePreview } from '@/components/invoice/InvoicePreview';
 import { invoiceApiToPreviewDraft } from '@/features/invoices/previewMap';
+import { buildPublicInvoiceViewUrl } from '@/lib/invoice/platformUrls';
 import { fetchMyCompanyProfile, subscriptionShowsPoweredBy } from '@/features/company/api';
 import type { CompanyProfile } from '@/features/company/types';
 import { CheckCircle2, Circle, Download, Pencil } from 'lucide-react';
@@ -118,6 +119,7 @@ export default function InvoiceDetailPage() {
   }, [invoiceId, load]);
 
   const draft = invoice ? invoiceApiToPreviewDraft(invoice) : null;
+  const invoiceViewUrl = invoice ? buildPublicInvoiceViewUrl(invoice.public_share_id) : null;
   const client = invoice?.client ?? {};
   const poweredBy = subscriptionShowsPoweredBy(company?.subscriptionPlan ?? null);
 
@@ -336,6 +338,7 @@ export default function InvoiceDetailPage() {
                           vatNumber: (client as any).vat_number ?? (client as any).vatNumber ?? null,
                         }}
                         showPoweredBy={poweredBy}
+                        invoiceViewUrl={invoiceViewUrl}
                       />
                     </div>
                   </div>

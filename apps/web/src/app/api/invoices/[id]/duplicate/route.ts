@@ -22,7 +22,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         template_id,
         vat_rate,
         notes,
-        items:invoice_items(description,quantity,unit_price,tax_rate,line_total)
+        items:invoice_items(description,quantity,unit_price,tax_rate,line_total,catalog_item_id)
       `
       )
       .eq('id', id)
@@ -80,6 +80,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       unit_price: Number(it.unit_price ?? 0),
       tax_rate: Number(it.tax_rate ?? 15),
       line_total: Number(it.line_total ?? 0),
+      ...(it.catalog_item_id ? { catalog_item_id: String(it.catalog_item_id) } : {}),
     }));
 
     if (items.length) {

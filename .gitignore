@@ -46,3 +46,6 @@ temp/
 # Supabase CLI local cache
 **/supabase/.temp/
 
+# Tesseract.js downloaded language data (OCR import)
+*.traineddata
+

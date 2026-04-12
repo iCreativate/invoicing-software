@@ -1,5 +1,17 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+/** PostgREST when the table was never created or not exposed (incl. "schema cache" errors). */
+export function isTimelineTableUnavailable(err: unknown): boolean {
+  const m = String((err as { message?: string })?.message ?? err ?? '').toLowerCase();
+  return (
+    m.includes('relation') ||
+    m.includes('does not exist') ||
+    m.includes('schema cache') ||
+    m.includes('could not find') ||
+    m.includes("couldn't find")
+  );
+}
+
 export type InvoiceTimelineEventType = 'created' | 'sent' | 'viewed' | 'paid' | 'updated' | 'reminder_sent';
 
 export type InvoiceTimelineEntry = {
@@ -22,8 +34,7 @@ export async function logInvoiceTimelineEvent(
     meta: meta ?? {},
   });
   if (error) {
-    const m = String(error.message ?? '').toLowerCase();
-    if (m.includes('relation') || m.includes('does not exist') || m.includes('schema cache')) return;
+    if (isTimelineTableUnavailable(error)) return;
     throw error;
   }
 }
@@ -35,8 +46,7 @@ export async function fetchInvoiceTimelineRows(supabase: SupabaseClient, invoice
     .eq('invoice_id', invoiceId)
     .order('occurred_at', { ascending: true });
   if (error) {
-    const m = String(error.message ?? '').toLowerCase();
-    if (m.includes('relation') || m.includes('does not exist')) return [];
+    if (isTimelineTableUnavailable(error)) return [];
     throw error;
   }
   return (data ?? []).map((r: any) => ({

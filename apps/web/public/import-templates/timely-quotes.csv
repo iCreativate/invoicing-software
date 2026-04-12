@@ -1,0 +1,3 @@
+quote_number,client_email,issue_date,valid_until,currency,description,quantity,unit_price,tax_rate
+QT-2026-001,client@example.com,2026-01-10,2026-01-24,ZAR,Proposal line A,1,2000,15
+QT-2026-001,client@example.com,2026-01-10,2026-01-24,ZAR,Optional add-on,2,350,15

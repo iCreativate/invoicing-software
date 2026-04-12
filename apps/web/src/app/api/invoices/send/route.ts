@@ -12,6 +12,7 @@ import {
   isWhatsappEnvReady,
 } from '@/lib/integrations/messaging';
 import { logInvoiceTimelineEvent } from '@/lib/invoices/timelineServer';
+import { maybeDeductInventoryForSentInvoice } from '@/lib/inventory/invoiceInventory';
 
 export async function POST(request: Request) {
   try {
@@ -90,6 +91,12 @@ export async function POST(request: Request) {
       .eq('id', invoiceId)
       .eq('owner_id', ctx.workspaceOwnerId);
     if (updErr) throw updErr;
+
+    try {
+      await maybeDeductInventoryForSentInvoice(supabase, invoiceId, ctx.workspaceOwnerId);
+    } catch {
+      // If inventory columns/catalog are missing, sending still succeeds.
+    }
 
     await logInvoiceTimelineEvent(supabase, invoiceId, 'sent', {});
 

@@ -15,6 +15,8 @@ export type InvoiceComposerItem = {
   quantity: number;
   unitPrice: number;
   vatRate: number; // percent, SA default 15
+  /** When set (inventory catalog item), stock is reduced when the invoice is sent. */
+  catalogItemId?: string | null;
 };
 
 export type InvoiceComposerDraft = {

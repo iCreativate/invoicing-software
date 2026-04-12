@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { logInvoiceTimelineEvent } from '@/lib/invoices/timelineServer';
+import { isTimelineTableUnavailable, logInvoiceTimelineEvent } from '@/lib/invoices/timelineServer';
 
 /** Record a public "view" for the shared invoice (no auth). Throttled to once per hour per invoice. */
 export async function POST(request: Request) {
@@ -32,11 +32,8 @@ export async function POST(request: Request) {
       .limit(1)
       .maybeSingle();
 
-    if (lastErr) {
-      const m = String((lastErr as any).message ?? '').toLowerCase();
-      if (m.includes('relation') || m.includes('does not exist')) {
-        return NextResponse.json({ success: true, data: { skipped: true } });
-      }
+    if (lastErr && isTimelineTableUnavailable(lastErr)) {
+      return NextResponse.json({ success: true, data: { skipped: true } });
     }
 
     if (last?.occurred_at) {

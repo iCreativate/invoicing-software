@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { maybeDeductInventoryForSentInvoice } from '@/lib/inventory/invoiceInventory';
 
 function requireCronSecret(request: Request) {
   if (process.env.VERCEL && request.headers.get('x-vercel-cron') === '1') return true;
@@ -160,6 +161,11 @@ export async function GET(request: Request) {
 
     if (sent) {
       await admin.from('invoices').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', invoiceId);
+      try {
+        await maybeDeductInventoryForSentInvoice(admin, invoiceId, ownerId);
+      } catch {
+        // ignore if inventory columns/catalog missing
+      }
     }
 
     results.push(`ok ${row.id} -> ${invoiceId}`);

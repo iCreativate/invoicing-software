@@ -132,6 +132,33 @@ create table if not exists public.invoice_timeline_events (
 create index if not exists invoice_timeline_invoice_id_idx on public.invoice_timeline_events(invoice_id);
 create index if not exists invoice_timeline_occurred_at_idx on public.invoice_timeline_events(occurred_at desc);
 
+-- Catalog: products, services, and inventory (line-item presets per workspace)
+create table if not exists public.catalog_items (
+  id uuid primary key default uuid_generate_v4(),
+  owner_id uuid not null,
+  item_type text not null check (item_type in ('service', 'product', 'inventory')),
+  name text not null,
+  description text,
+  sku text,
+  unit text,
+  unit_price numeric not null default 0,
+  default_tax_rate numeric,
+  stock_quantity numeric,
+  cost_price numeric,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists catalog_items_owner_id_idx on public.catalog_items(owner_id);
+create index if not exists catalog_items_item_type_idx on public.catalog_items(item_type);
+create index if not exists catalog_items_name_idx on public.catalog_items(name);
+
+-- Link invoice lines to catalog; track when stock was deducted for a sent invoice
+alter table public.invoice_items add column if not exists catalog_item_id uuid references public.catalog_items(id) on delete set null;
+create index if not exists invoice_items_catalog_item_id_idx on public.invoice_items(catalog_item_id);
+
+alter table public.invoices add column if not exists inventory_deducted_at timestamptz;
+
 -- Company profile / branding
 -- One row per authenticated user (owner_id). RLS intentionally omitted for dev.
 create table if not exists public.company_profiles (
@@ -283,11 +310,13 @@ create table if not exists public.expenses (
   receipt_path text,
   ai_category text,
   expense_date date not null default (now()::date),
+  source text not null default 'manual',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table public.expenses add column if not exists owner_id uuid;
+alter table public.expenses add column if not exists source text not null default 'manual';
 
 create index if not exists expenses_owner_id_idx on public.expenses(owner_id);
 create index if not exists expenses_expense_date_idx on public.expenses(expense_date desc);

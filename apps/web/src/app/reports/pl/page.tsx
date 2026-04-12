@@ -47,7 +47,7 @@ export default function ProfitLossPage() {
         setCurrency(cur);
 
         try {
-          const ex = await fetchExpensesList();
+          const { items: ex } = await fetchExpensesList();
           if (!alive) return;
           const t = ex.reduce((s, x) => s + x.amount, 0);
           setExpensesTotal(t);

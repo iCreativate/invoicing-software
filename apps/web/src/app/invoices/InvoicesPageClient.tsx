@@ -32,10 +32,13 @@ import {
   CheckCircle,
   Download,
   Filter,
+  Upload,
 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
+import { clearDraft, loadDraft, INVOICE_AUTOSAVE_SCOPE_PAGE } from '@/components/invoice/composer/autosave';
+import { FileImportDialog } from '@/components/import/FileImportDialog';
 
 const STATUS_OPTIONS: { value: InvoiceStatus; label: string }[] = [
   { value: 'draft', label: 'Draft' },
@@ -62,6 +65,35 @@ export function InvoicesPageClient() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busyId, setBusyId] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+
+  const [pageDraft, setPageDraft] = useState<ReturnType<typeof loadDraft>>(null);
+
+  const refreshPageDraft = useCallback(() => {
+    try {
+      setPageDraft(loadDraft(INVOICE_AUTOSAVE_SCOPE_PAGE));
+    } catch {
+      setPageDraft(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshPageDraft();
+    const onDraftEvent = () => refreshPageDraft();
+    window.addEventListener('ti-invoice-draft-changed', onDraftEvent);
+    window.addEventListener('focus', onDraftEvent);
+    return () => {
+      window.removeEventListener('ti-invoice-draft-changed', onDraftEvent);
+      window.removeEventListener('focus', onDraftEvent);
+    };
+  }, [refreshPageDraft]);
+
+  const draftClientLabel = useMemo(() => {
+    const id = pageDraft?.draft?.clientId?.trim();
+    if (!id) return 'No client selected yet';
+    const c = clients.find((x) => x.id === id);
+    return c?.name ?? 'Saved client — open resume to continue';
+  }, [clients, pageDraft]);
 
   const loadInvoices = useCallback(async () => {
     const params = new URLSearchParams();
@@ -233,24 +265,23 @@ export function InvoicesPageClient() {
     }
   };
 
-  const draftKey = 'ti_invoice_draft_v1:modal';
-  const hasDraft = useMemo(() => {
-    try {
-      return !!localStorage.getItem(draftKey);
-    } catch {
-      return false;
-    }
-  }, [loading]);
+  const hasPageDraft = Boolean(pageDraft?.draft);
 
   return (
     <AppShell
       title="Invoices"
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          {hasDraft && canMutate ? (
+          {hasPageDraft && canMutate ? (
             <Link href={`${routes.app.invoices}/new`} className="text-sm font-semibold text-primary hover:underline">
               Resume draft
             </Link>
+          ) : null}
+          {canMutate ? (
+            <Button type="button" variant="secondary" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4" />
+              Import
+            </Button>
           ) : null}
           <InvoiceComposerLauncher />
         </div>
@@ -258,6 +289,40 @@ export function InvoicesPageClient() {
     >
       <Card className="overflow-hidden p-4 sm:p-5">
         <div className="flex flex-col gap-4">
+          {hasPageDraft && canMutate ? (
+            <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold">Resume unfinished invoice?</div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">{draftClientLabel}</span>
+                    {pageDraft?.savedAt ? (
+                      <>
+                        {' '}
+                        · saved {new Date(pageDraft.savedAt).toLocaleString()}
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      clearDraft(INVOICE_AUTOSAVE_SCOPE_PAGE);
+                      refreshPageDraft();
+                    }}
+                  >
+                    Discard
+                  </Button>
+                  <Link href={`${routes.app.invoices}/new`}>
+                    <Button type="button">Resume</Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="text-sm font-semibold">Invoice management</div>
@@ -541,6 +606,16 @@ export function InvoicesPageClient() {
           ) : null}
         </div>
       </Card>
+
+      <FileImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Import invoices"
+        description="Upload CSV, Excel, PDF, or an image. From PDF/image we OCR text and look for comma-, tab-, or semicolon-separated columns. Each row needs client_email (existing client), invoice_number, issue_date, due_date, line description, quantity, unit_price. Optional: currency, tax_rate, notes."
+        endpoint="/api/invoices/import"
+        templateHref="/import-templates/timely-invoices.csv"
+        onSuccess={() => void loadInvoices()}
+      />
     </AppShell>
   );
 }

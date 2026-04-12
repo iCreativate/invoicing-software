@@ -4,6 +4,7 @@ import { InvoicePreview } from '@/components/invoice/InvoicePreview';
 import { PayNowButton } from '@/components/payments/PayNowButton';
 import { subscriptionShowsPoweredBy } from '@/lib/company/subscription';
 import { PublicInvoiceViewTracker } from '@/components/invoice/PublicInvoiceViewTracker';
+import { buildPublicInvoiceViewUrl } from '@/lib/invoice/platformUrls';
 
 export default async function PublicInvoicePage({
   params,
@@ -69,6 +70,7 @@ export default async function PublicInvoicePage({
   }
 
   const poweredBy = subscriptionShowsPoweredBy((companyRow as any)?.subscription_plan ?? null);
+  const invoiceViewUrl = buildPublicInvoiceViewUrl(shareId);
 
   const draft = {
     clientId: '',
@@ -124,6 +126,7 @@ export default async function PublicInvoicePage({
             vatNumber: (invoice as any).client?.vat_number ?? null,
           }}
           showPoweredBy={poweredBy}
+          invoiceViewUrl={invoiceViewUrl}
         />
       </div>
     </div>

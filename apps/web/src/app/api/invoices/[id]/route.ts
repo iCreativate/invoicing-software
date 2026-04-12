@@ -1,15 +1,12 @@
 import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { getWorkspaceContext } from '@/lib/auth/workspace';
+import { getWorkspaceContext, type WorkspaceContext } from '@/lib/auth/workspace';
 import { calcInvoiceTotals, linesToPayload, type LineInput } from '@/lib/invoices/calcLines';
 import { fetchInvoiceTimelineRows, logInvoiceTimelineEvent, mergeInvoiceTimeline } from '@/lib/invoices/timelineServer';
+import { restoreInventoryForSentInvoice } from '@/lib/inventory/invoiceInventory';
 
-async function loadInvoice(supabase: SupabaseClient, id: string, ownerId: string) {
-  const { data, error } = await supabase
-    .from('invoices')
-    .select(
-      `
+const INVOICE_DETAIL_SELECT = `
       id,
       owner_id,
       client_id,
@@ -32,12 +29,24 @@ async function loadInvoice(supabase: SupabaseClient, id: string, ownerId: string
       created_at,
       updated_at,
       client:clients(id,name,email,phone,address,company_name,website,company_registration,vat_number),
-      items:invoice_items(id,description,quantity,unit_price,tax_rate,line_total)
-    `
-    )
-    .eq('id', id)
-    .eq('owner_id', ownerId)
-    .single();
+      items:invoice_items(id,description,quantity,unit_price,tax_rate,line_total,catalog_item_id)
+    `;
+
+/** Same scope as GET /api/invoices: solo owners may have legacy rows with owner_id IS NULL. */
+function scopeInvoiceByWorkspace<T extends { or: (f: string) => T; eq: (c: string, v: string) => T }>(
+  q: T,
+  ctx: WorkspaceContext
+): T {
+  if (ctx.workspaceOwnerId && ctx.actorUserId && ctx.workspaceOwnerId === ctx.actorUserId) {
+    return q.or(`owner_id.eq.${ctx.workspaceOwnerId},owner_id.is.null`);
+  }
+  return q.eq('owner_id', ctx.workspaceOwnerId);
+}
+
+async function loadInvoice(supabase: SupabaseClient, id: string, ctx: WorkspaceContext) {
+  let q = supabase.from('invoices').select(INVOICE_DETAIL_SELECT).eq('id', id);
+  q = scopeInvoiceByWorkspace(q, ctx);
+  const { data, error } = await q.single();
 
   if (error) return { data: null, error };
   return { data, error: null };
@@ -50,41 +59,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const ctx = await getWorkspaceContext(supabase);
     if (!ctx) return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });
 
-    let { data, error } = await loadInvoice(supabase, id, ctx.workspaceOwnerId);
+    let { data, error } = await loadInvoice(supabase, id, ctx);
     if (error) {
       const msg = String((error as any).message ?? '').toLowerCase();
       if (msg.includes('owner_id') || msg.includes('column')) {
-        const { data: d2, error: e2 } = await supabase
-          .from('invoices')
-          .select(
-            `
-          id,
-          owner_id,
-          client_id,
-          invoice_number,
-          status,
-          issue_date,
-          due_date,
-          currency,
-          template_id,
-          vat_rate,
-          subtotal_amount,
-          tax_amount,
-          total_amount,
-          paid_amount,
-          balance_amount,
-          paid_date,
-          sent_at,
-          notes,
-          public_share_id,
-          created_at,
-          updated_at,
-          client:clients(id,name,email,phone,address,company_name,website,company_registration,vat_number),
-          items:invoice_items(id,description,quantity,unit_price,tax_rate,line_total)
-        `
-          )
-          .eq('id', id)
-          .single();
+        let q2 = supabase.from('invoices').select(INVOICE_DETAIL_SELECT).eq('id', id);
+        q2 = scopeInvoiceByWorkspace(q2, ctx);
+        const { data: d2, error: e2 } = await q2.single();
         data = d2;
         error = e2;
       }
@@ -130,7 +111,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const ctx = await getWorkspaceContext(supabase);
     if (!ctx) return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });
 
-    const { data: existing, error: exErr } = await loadInvoice(supabase, id, ctx.workspaceOwnerId);
+    const { data: existing, error: exErr } = await loadInvoice(supabase, id, ctx);
     if (exErr || !existing) {
       return NextResponse.json({ success: false, error: 'Invoice not found.' }, { status: 404 });
     }
@@ -159,6 +140,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         quantity: Number(it.quantity ?? 1),
         unit_price: Number(it.unit_price ?? 0),
         tax_rate: Number(it.tax_rate ?? 15),
+        catalog_item_id:
+          it.catalog_item_id != null && String(it.catalog_item_id).trim()
+            ? String(it.catalog_item_id).trim()
+            : null,
       }));
       if (items.length === 0) {
         return NextResponse.json({ success: false, error: 'At least one line item required' }, { status: 400 });
@@ -184,7 +169,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       status = 'sent';
     }
 
-    const { error: upErr } = await supabase
+    let upQ = supabase
       .from('invoices')
       .update({
         client_id,
@@ -199,9 +184,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         balance_amount: balance,
         notes,
         status,
+        ...(!(existing as { owner_id?: string | null }).owner_id ? { owner_id: ctx.workspaceOwnerId } : {}),
       })
-      .eq('id', id)
-      .eq('owner_id', ctx.workspaceOwnerId);
+      .eq('id', id);
+    upQ = scopeInvoiceByWorkspace(upQ, ctx);
+
+    const { error: upErr } = await upQ;
 
     if (upErr) throw upErr;
 
@@ -232,7 +220,15 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     const ctx = await getWorkspaceContext(supabase);
     if (!ctx) return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });
 
-    const { error } = await supabase.from('invoices').delete().eq('id', id).eq('owner_id', ctx.workspaceOwnerId);
+    try {
+      await restoreInventoryForSentInvoice(supabase, id, ctx.workspaceOwnerId);
+    } catch {
+      // ignore if columns missing
+    }
+
+    let delQ = supabase.from('invoices').delete().eq('id', id);
+    delQ = scopeInvoiceByWorkspace(delQ, ctx);
+    const { error } = await delQ;
     if (error) throw error;
 
     return NextResponse.json({ success: true, data: { id } });

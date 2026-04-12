@@ -137,6 +137,10 @@ export async function POST(request: Request) {
       quantity: Number(it.quantity ?? 1),
       unit_price: Number(it.unit_price ?? 0),
       tax_rate: Number(it.tax_rate ?? 15),
+      catalog_item_id:
+        it.catalog_item_id != null && String(it.catalog_item_id).trim()
+          ? String(it.catalog_item_id).trim()
+          : null,
     }));
 
     if (!issue_date || !due_date) {

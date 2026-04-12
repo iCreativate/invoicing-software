@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -12,6 +12,8 @@ import { fetchQuotesList } from '@/features/quotes/api';
 import type { QuoteListItem } from '@/features/quotes/types';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
+import { FileImportDialog } from '@/components/import/FileImportDialog';
+import { Upload } from 'lucide-react';
 
 export default function QuotesPage() {
   const { canEdit, status: capStatus } = useWorkspaceCapabilities();
@@ -21,28 +23,24 @@ export default function QuotesPage() {
   const [items, setItems] = useState<QuoteListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
+
+  const loadQuotes = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const list = await fetchQuotesList();
+      setItems(list);
+    } catch (e: unknown) {
+      setError(String((e as { message?: string })?.message ?? 'Failed to load quotes.'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const list = await fetchQuotesList();
-        if (!alive) return;
-        setItems(list);
-      } catch (e: any) {
-        if (!alive) return;
-        setError(String(e?.message ?? 'Failed to load quotes.'));
-      } finally {
-        if (!alive) return;
-        setLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, []);
+    void loadQuotes();
+  }, [loadQuotes]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -60,9 +58,15 @@ export default function QuotesPage() {
       title="Quotes"
       actions={
         canMutate ? (
-          <Link href={`${routes.app.quotes}/new`}>
-            <Button>New quote</Button>
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="secondary" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4" />
+              Import
+            </Button>
+            <Link href={`${routes.app.quotes}/new`}>
+              <Button>New quote</Button>
+            </Link>
+          </div>
         ) : null
       }
     >
@@ -120,6 +124,16 @@ export default function QuotesPage() {
           </div>
         )}
       </Card>
+
+      <FileImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Import quotes"
+        description="Upload CSV, Excel, PDF, or an image. From PDF/image we OCR text and look for comma-, tab-, or semicolon-separated columns. Each row needs client_email (existing client), quote_number, issue_date, valid_until, line description, quantity, unit_price. Optional: currency, tax_rate, notes."
+        endpoint="/api/quotes/import"
+        templateHref="/import-templates/timely-quotes.csv"
+        onSuccess={() => void loadQuotes()}
+      />
     </AppShell>
   );
 }
