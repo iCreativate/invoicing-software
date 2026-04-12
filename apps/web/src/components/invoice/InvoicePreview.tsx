@@ -1,5 +1,6 @@
 'use client';
 
+import { companyLogoImgSrc } from '@/lib/company/logoUrl';
 import { formatMoney } from '@/lib/format/money';
 import type { InvoiceComposerDraft } from '@/components/invoice/composer/types';
 
@@ -65,7 +66,7 @@ export function InvoicePreview({
                 {companyLogoPath ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={`/api/storage/logo?path=${encodeURIComponent(companyLogoPath)}`}
+                    src={companyLogoImgSrc(companyLogoPath) ?? ''}
                     alt="Company logo"
                     className={isCorporate ? 'h-12 w-32 object-contain' : 'h-12 w-32 object-contain'}
                   />

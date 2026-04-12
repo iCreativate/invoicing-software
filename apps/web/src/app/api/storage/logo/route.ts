@@ -1,16 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-
-function isAllowedLogoPath(path: string) {
-  // Only allow our expected structure: <uuid>/logo.<ext>
-  return /^[0-9a-fA-F-]{36}\/logo\.(png|jpg|jpeg|webp|svg)$/i.test(path);
-}
+import { isStorageLogoObjectPath } from '@/lib/company/logoUrl';
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const path = String(searchParams.get('path') ?? '');
-    if (!path || !isAllowedLogoPath(path)) {
+    if (!path || !isStorageLogoObjectPath(path)) {
       return NextResponse.json({ success: false, error: 'Invalid path' }, { status: 400 });
     }
 

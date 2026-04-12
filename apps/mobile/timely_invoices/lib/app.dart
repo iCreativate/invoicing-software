@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -6,6 +8,9 @@ import 'core/theme.dart';
 import 'providers/app_providers.dart';
 import 'ui/screens/login_screen.dart';
 import 'ui/screens/main_shell.dart';
+
+/// Sign out after this much time without user interaction (foreground or background).
+const _kIdleSignOut = Duration(minutes: 5);
 
 class TimelyApp extends ConsumerStatefulWidget {
   const TimelyApp({super.key});
@@ -16,17 +21,61 @@ class TimelyApp extends ConsumerStatefulWidget {
 
 class _TimelyAppState extends ConsumerState<TimelyApp> with WidgetsBindingObserver {
   bool _locked = false;
+  DateTime _lastActivity = DateTime.now();
+  Timer? _idleTimer;
+  StreamSubscription<AuthState>? _authSub;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      if (data.session != null &&
+          (data.event == AuthChangeEvent.signedIn || data.event == AuthChangeEvent.initialSession)) {
+        _lastActivity = DateTime.now();
+      }
+    });
+    _startIdleTimer();
   }
 
   @override
   void dispose() {
+    _idleTimer?.cancel();
+    _authSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _startIdleTimer() {
+    _idleTimer?.cancel();
+    _idleTimer = Timer.periodic(const Duration(seconds: 30), (_) => _checkIdleTimeout());
+  }
+
+  void _bumpActivity() {
+    _lastActivity = DateTime.now();
+  }
+
+  Future<void> _checkIdleTimeout() async {
+    if (!mounted) return;
+    if (Supabase.instance.client.auth.currentSession == null) return;
+    if (DateTime.now().difference(_lastActivity) <= _kIdleSignOut) return;
+    await _signOutDueToIdle();
+  }
+
+  Future<void> _signOutDueToIdle() async {
+    _idleTimer?.cancel();
+    await Supabase.instance.client.auth.signOut();
+    if (mounted) setState(() => _locked = false);
+  }
+
+  Future<void> _onResumeFromBackground() async {
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session != null && DateTime.now().difference(_lastActivity) > _kIdleSignOut) {
+      await _signOutDueToIdle();
+      return;
+    }
+    _startIdleTimer();
+    await _maybeUnlock();
   }
 
   @override
@@ -35,7 +84,7 @@ class _TimelyAppState extends ConsumerState<TimelyApp> with WidgetsBindingObserv
       _maybeArmLock();
     }
     if (state == AppLifecycleState.resumed) {
-      _maybeUnlock();
+      _onResumeFromBackground();
     }
   }
 
@@ -61,9 +110,18 @@ class _TimelyAppState extends ConsumerState<TimelyApp> with WidgetsBindingObserv
       theme: AppTheme.light(),
       home: const _AuthGate(),
       builder: (context, child) {
+        final session = Supabase.instance.client.auth.currentSession;
+        Widget content = child ?? const SizedBox.shrink();
+        if (session != null) {
+          content = Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) => _bumpActivity(),
+            child: content,
+          );
+        }
         return Stack(
           children: [
-            if (child != null) child,
+            content,
             if (_locked)
               GestureDetector(
                 onTap: _maybeUnlock,
@@ -96,10 +154,12 @@ class _AuthGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final client = Supabase.instance.client;
     return StreamBuilder<AuthState>(
-      stream: Supabase.instance.client.auth.onAuthStateChange,
+      stream: client.auth.onAuthStateChange,
+      initialData: AuthState(AuthChangeEvent.initialSession, client.auth.currentSession),
       builder: (context, snapshot) {
-        final session = Supabase.instance.client.auth.currentSession;
+        final session = snapshot.data?.session ?? client.auth.currentSession;
         if (session == null) return const LoginScreen();
         return const MainShell();
       },

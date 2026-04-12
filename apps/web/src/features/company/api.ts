@@ -187,11 +187,25 @@ export async function upsertMyCompanyProfile(input: {
   return mapRow(data);
 }
 
+function logoFileExtension(file: File): string {
+  const raw = (file.name.split('.').pop() || '').toLowerCase();
+  if (/^[a-z0-9]{1,20}$/.test(raw) && raw.length > 0) return raw;
+  const t = file.type.toLowerCase();
+  if (t === 'image/png') return 'png';
+  if (t === 'image/jpeg' || t === 'image/jpg') return 'jpg';
+  if (t === 'image/webp') return 'webp';
+  if (t === 'image/svg+xml') return 'svg';
+  if (t === 'image/gif') return 'gif';
+  if (t === 'image/avif') return 'avif';
+  if (t === 'image/bmp' || t === 'image/x-ms-bmp') return 'bmp';
+  return 'png';
+}
+
 export async function uploadCompanyLogo(file: File): Promise<string> {
   const supabase = createSupabaseBrowserClient();
   const workspaceOwnerId = await getWorkspaceOwnerIdForClient();
 
-  const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+  const ext = logoFileExtension(file);
   const path = `${workspaceOwnerId}/logo.${ext}`;
 
   const { error: upErr } = await supabase.storage.from('logos').upload(path, file, {

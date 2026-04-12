@@ -2,6 +2,8 @@ export const routes = {
   marketing: {
     home: '/',
     pricing: '/pricing',
+    privacy: '/privacy',
+    terms: '/terms',
   },
   auth: {
     login: '/login',

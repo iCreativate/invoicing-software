@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { ensureReferralCode, fetchMyReferralRewards, uploadCompanyLogo, type ReferralRewardRow } from '@/features/company/api';
+import { companyLogoImgSrc } from '@/lib/company/logoUrl';
 import { routes } from '@/lib/routing/routes';
 
 function pickerHex(stored: string, fb: string) {
@@ -252,7 +253,7 @@ export default function SettingsClient() {
                   {logoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={`/api/storage/logo?path=${encodeURIComponent(logoUrl)}`}
+                      src={companyLogoImgSrc(logoUrl) ?? ''}
                       alt="Company logo"
                       className="h-full w-full object-contain"
                     />
