@@ -92,6 +92,10 @@ export default function InvoicePrintPage() {
               email: client.email ?? null,
               phone: client.phone ?? null,
               address: client.address ?? null,
+              companyName: (client as any).company_name ?? (client as any).companyName ?? null,
+              website: (client as any).website ?? null,
+              companyRegistration: (client as any).company_registration ?? (client as any).companyRegistration ?? null,
+              vatNumber: (client as any).vat_number ?? (client as any).vatNumber ?? null,
             }}
             showPoweredBy={poweredBy}
           />

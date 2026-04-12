@@ -53,7 +53,7 @@ export default function ClientsPage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return items;
-    return items.filter((c) => `${c.name} ${c.email ?? ''}`.toLowerCase().includes(q));
+    return items.filter((c) => `${c.name} ${c.email ?? ''} ${c.companyName ?? ''}`.toLowerCase().includes(q));
   }, [items, query]);
 
   return (
@@ -98,38 +98,25 @@ export default function ClientsPage() {
         ) : null}
 
         {filtered.length > 0 ? (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[860px] border-separate border-spacing-0">
-              <thead>
-                <tr className="text-left text-xs font-semibold text-muted-foreground">
-                  <th className="border-b border-border px-3 py-2">Client</th>
-                  <th className="border-b border-border px-3 py-2">Email</th>
-                  <th className="border-b border-border px-3 py-2">Status</th>
-                  <th className="border-b border-border px-3 py-2 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((c) => (
-                  <tr key={c.id} className="text-sm">
-                    <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
-                      <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-2xl bg-primary/10 text-primary grid place-items-center text-xs font-semibold">
-                          {initials(c.name)}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="truncate font-semibold text-foreground">{c.name}</div>
-                          <div className="mt-0.5 text-xs text-muted-foreground">ID: {c.id.slice(0, 8)}</div>
-                        </div>
+          <>
+            <div className="mt-4 space-y-3 md:hidden">
+              {filtered.map((c) => (
+                <Card key={c.id} className="border border-border p-4 shadow-none">
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 shrink-0 rounded-2xl bg-primary/10 text-primary grid place-items-center text-xs font-semibold">
+                      {initials(c.name)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-foreground">{c.name}</div>
+                      {c.companyName ? (
+                        <div className="mt-0.5 text-sm text-muted-foreground">{c.companyName}</div>
+                      ) : null}
+                      <div className="mt-1 text-xs text-muted-foreground/80">ID: {c.id.slice(0, 8)}</div>
+                      <div className="mt-2 text-sm text-muted-foreground">{c.email ?? '—'}</div>
+                      <div className="mt-2">
+                        <Badge variant="success">Active</Badge>
                       </div>
-                    </td>
-                    <td className="border-b border-zinc-100 px-3 py-3 text-muted-foreground dark:border-zinc-900">
-                      {c.email ?? '—'}
-                    </td>
-                    <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
-                      <Badge variant="success">Active</Badge>
-                    </td>
-                    <td className="border-b border-zinc-100 px-3 py-3 text-right dark:border-zinc-900">
-                      <div className="inline-flex items-center gap-2">
+                      <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
                         <Link href={`${routes.app.clients}/${c.id}`}>
                           <Button variant="secondary" className="h-9">
                             View
@@ -141,12 +128,65 @@ export default function ClientsPage() {
                           </Link>
                         ) : null}
                       </div>
-                    </td>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+
+            <div className="mt-4 hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[860px] border-separate border-spacing-0">
+                <thead>
+                  <tr className="text-left text-xs font-semibold text-muted-foreground">
+                    <th className="border-b border-border px-3 py-2">Client</th>
+                    <th className="border-b border-border px-3 py-2">Email</th>
+                    <th className="border-b border-border px-3 py-2">Status</th>
+                    <th className="border-b border-border px-3 py-2 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filtered.map((c) => (
+                    <tr key={c.id} className="text-sm">
+                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                        <div className="flex items-center gap-3">
+                          <div className="h-9 w-9 rounded-2xl bg-primary/10 text-primary grid place-items-center text-xs font-semibold">
+                            {initials(c.name)}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="truncate font-semibold text-foreground">{c.name}</div>
+                            {c.companyName ? (
+                              <div className="mt-0.5 truncate text-xs text-muted-foreground">{c.companyName}</div>
+                            ) : null}
+                            <div className="mt-0.5 text-xs text-muted-foreground/80">ID: {c.id.slice(0, 8)}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="border-b border-zinc-100 px-3 py-3 text-muted-foreground dark:border-zinc-900">
+                        {c.email ?? '—'}
+                      </td>
+                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                        <Badge variant="success">Active</Badge>
+                      </td>
+                      <td className="border-b border-zinc-100 px-3 py-3 text-right dark:border-zinc-900">
+                        <div className="inline-flex items-center gap-2">
+                          <Link href={`${routes.app.clients}/${c.id}`}>
+                            <Button variant="secondary" className="h-9">
+                              View
+                            </Button>
+                          </Link>
+                          {canMutate ? (
+                            <Link href={`${routes.app.clients}/${c.id}/edit`}>
+                              <Button className="h-9">Edit</Button>
+                            </Link>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : null}
       </Card>
     </AppShell>

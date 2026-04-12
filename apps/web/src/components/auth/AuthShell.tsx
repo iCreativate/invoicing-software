@@ -17,7 +17,7 @@ export function AuthShell({ title, subtitle, children }: AuthShellProps) {
         <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent,rgba(0,0,0,0.015))] dark:bg-[linear-gradient(to_bottom,transparent,rgba(255,255,255,0.02))]" />
       </div>
 
-      <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 py-10 sm:py-14">
+      <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[max(2.5rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:pt-[max(3.5rem,env(safe-area-inset-top))] sm:pb-[max(3.5rem,env(safe-area-inset-bottom))]">
         <header className="mb-8 flex flex-col gap-6 sm:mb-10">
           <div className="flex items-center justify-between gap-4">
             <Link href={routes.marketing.home} className="flex items-center gap-2.5 rounded-xl outline-none ring-offset-background transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring/40">

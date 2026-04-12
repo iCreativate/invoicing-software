@@ -24,7 +24,7 @@ export default async function PublicInvoicePage({
       due_date,
       currency,
       template_id,
-      client:clients(name,email,phone,address),
+      client:clients(name,email,phone,address,company_name,website,company_registration,vat_number),
       items:invoice_items(id,description,quantity,unit_price,tax_rate)
     `
     )
@@ -118,6 +118,10 @@ export default async function PublicInvoicePage({
             email: (invoice as any).client?.email ?? null,
             phone: (invoice as any).client?.phone ?? null,
             address: (invoice as any).client?.address ?? null,
+            companyName: (invoice as any).client?.company_name ?? null,
+            website: (invoice as any).client?.website ?? null,
+            companyRegistration: (invoice as any).client?.company_registration ?? null,
+            vatNumber: (invoice as any).client?.vat_number ?? null,
           }}
           showPoweredBy={poweredBy}
         />

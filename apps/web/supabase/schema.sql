@@ -16,11 +16,19 @@ create table if not exists public.clients (
   email text,
   phone text,
   address text,
+  company_name text,
+  website text,
+  company_registration text,
+  vat_number text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table public.clients add column if not exists owner_id uuid;
+alter table public.clients add column if not exists company_name text;
+alter table public.clients add column if not exists website text;
+alter table public.clients add column if not exists company_registration text;
+alter table public.clients add column if not exists vat_number text;
 
 create index if not exists clients_owner_id_idx on public.clients(owner_id);
 create index if not exists clients_name_idx on public.clients(name);

@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { getBrowserUserSafe } from '@/lib/supabase/browserAuth';
 
 export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
@@ -23,10 +24,9 @@ export default function ProfilePage() {
       try {
         setLoading(true);
         setError(null);
-        const supabase = createSupabaseBrowserClient();
-        const { data } = await supabase.auth.getUser();
+        const user = await getBrowserUserSafe();
         if (!alive) return;
-        setEmail(data.user?.email ?? null);
+        setEmail(user?.email ?? null);
       } catch (e: any) {
         if (!alive) return;
         setError(e?.message ?? 'Failed to load profile.');

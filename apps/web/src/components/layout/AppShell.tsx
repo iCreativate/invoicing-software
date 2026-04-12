@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { getBrowserUserSafe } from '@/lib/supabase/browserAuth';
 import { ProfileBootstrap } from '@/components/profile/ProfileBootstrap';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
 import { CommandPalette } from '@/components/shell/CommandPalette';
@@ -226,9 +227,7 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
-    void createSupabaseBrowserClient()
-      .auth.getUser()
-      .then(({ data }) => setUserEmail(data.user?.email ?? null));
+    void getBrowserUserSafe().then((user) => setUserEmail(user?.email ?? null));
   }, []);
 
   const toggleCollapsed = useCallback(() => {
@@ -259,7 +258,7 @@ export function AppShell({
   };
 
   return (
-    <div className="min-h-dvh bg-background text-foreground">
+    <div className="min-h-dvh min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-background text-foreground">
       <ProfileBootstrap />
       <div className="pointer-events-none fixed inset-0 -z-10 bg-[linear-gradient(to_bottom,hsl(var(--background)),hsl(var(--muted)/0.35))]" />
 
@@ -284,7 +283,7 @@ export function AppShell({
       {mobileOpen ? (
         <div className="fixed inset-0 z-50 md:hidden">
           <button type="button" className="absolute inset-0 bg-black/50" aria-label="Close menu" onClick={() => setMobileOpen(false)} />
-          <div className="absolute inset-y-0 left-0 flex w-[min(100%,300px)] flex-col border-r border-border bg-card shadow-xl">
+          <div className="absolute inset-y-0 left-0 flex w-[min(100%,min(300px,calc(100vw-env(safe-area-inset-left)-env(safe-area-inset-right))))] max-w-[100vw] flex-col border-r border-border bg-card pb-[env(safe-area-inset-bottom)] shadow-xl">
             <div className="flex items-center justify-between border-b border-border px-3 py-3">
               <span className="text-sm font-semibold">Menu</span>
               <Button type="button" variant="ghost" size="sm" className="h-9 px-2" onClick={() => setMobileOpen(false)}>
@@ -305,8 +304,8 @@ export function AppShell({
       ) : null}
 
       <div className={cn('flex min-h-dvh flex-col', collapsed ? 'md:pl-[76px]' : 'md:pl-[260px]')}>
-        <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-xl ti-no-print">
-          <div className="flex h-14 w-full items-center gap-2 px-3 sm:px-4 lg:px-6">
+        <header className="sticky top-0 z-30 border-b border-border bg-background/80 pt-[env(safe-area-inset-top)] backdrop-blur-xl ti-no-print">
+          <div className="flex h-14 w-full min-w-0 items-center gap-2 px-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] sm:px-4 lg:px-6">
             <div className="flex shrink-0 items-center gap-1 md:hidden">
               <Button
                 type="button"
@@ -418,12 +417,7 @@ export function AppShell({
         </header>
 
         {caps.status === 'ready' && !caps.canEdit ? (
-          <div
-            className={cn(
-              'border-b border-amber-500/25 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-950 dark:text-amber-100',
-              collapsed ? 'md:pl-[76px]' : 'md:pl-[260px]'
-            )}
-          >
+          <div className="border-b border-amber-500/25 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-950 dark:text-amber-100">
             Read-only access: you can view data but not create or change records. Owner or admin can adjust your role under
             Team.
           </div>
@@ -431,7 +425,7 @@ export function AppShell({
 
         <main
           className={cn(
-            'flex-1 px-4 py-6 sm:px-5 lg:px-8',
+            'min-w-0 flex-1 px-[max(1rem,env(safe-area-inset-left))] py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pr-[max(1rem,env(safe-area-inset-right))] sm:px-5 lg:px-8',
             fullWidth ? 'mx-auto w-full max-w-[1600px]' : 'mx-auto w-full max-w-6xl'
           )}
         >

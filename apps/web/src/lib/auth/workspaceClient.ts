@@ -1,13 +1,14 @@
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { getBrowserUserSafe } from '@/lib/supabase/browserAuth';
 
 /** Matches server `getWorkspaceContext` for list queries in the browser. */
 export async function getWorkspaceOwnerIdForClient(): Promise<string> {
-  const supabase = createSupabaseBrowserClient();
-  const { data: auth } = await supabase.auth.getUser();
-  const uid = auth.user?.id;
+  const user = await getBrowserUserSafe();
+  const uid = user?.id;
   if (!uid) throw new Error('Not signed in.');
 
-  const email = auth.user?.email ?? '';
+  const supabase = createSupabaseBrowserClient();
+  const email = user.email ?? '';
   const { data: emp, error } = await supabase.from('employees').select('owner_id').eq('email', email).maybeSingle();
 
   if (error) {

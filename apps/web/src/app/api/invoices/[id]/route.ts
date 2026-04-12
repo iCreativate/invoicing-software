@@ -31,7 +31,7 @@ async function loadInvoice(supabase: SupabaseClient, id: string, ownerId: string
       public_share_id,
       created_at,
       updated_at,
-      client:clients(id,name,email,phone,address),
+      client:clients(id,name,email,phone,address,company_name,website,company_registration,vat_number),
       items:invoice_items(id,description,quantity,unit_price,tax_rate,line_total)
     `
     )
@@ -79,7 +79,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
           public_share_id,
           created_at,
           updated_at,
-          client:clients(id,name,email,phone,address),
+          client:clients(id,name,email,phone,address,company_name,website,company_registration,vat_number),
           items:invoice_items(id,description,quantity,unit_price,tax_rate,line_total)
         `
           )

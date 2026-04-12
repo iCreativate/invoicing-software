@@ -19,8 +19,8 @@ export const metadata: Metadata = {
   title: "TimelyInvoices — Invoicing & cashflow",
   description: "Quotes, recurring invoices, expenses, and client-friendly payments.",
   icons: {
-    icon: [{ url: "/icon.png", sizes: "512x512", type: "image/png" }],
-    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+    icon: [{ url: "/icon.svg", type: "image/svg+xml", sizes: "512x512" }],
+    apple: [{ url: "/apple-icon.svg", type: "image/svg+xml", sizes: "180x180" }],
   },
   appleWebApp: { capable: true, title: "TimelyInvoices" },
   formatDetection: { telephone: false },
@@ -30,6 +30,7 @@ export const viewport: Viewport = {
   themeColor: [{ media: "(prefers-color-scheme: light)", color: "#2563eb" }],
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

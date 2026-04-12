@@ -270,12 +270,12 @@ export function InvoicesPageClient() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/20 p-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-muted/20 p-3 sm:flex-row sm:flex-wrap sm:items-end">
             <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground sm:mr-2">
               <Filter className="h-3.5 w-3.5" />
               Filters
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex min-w-0 flex-wrap gap-2">
               {STATUS_OPTIONS.map((o) => (
                 <button
                   key={o.value}
@@ -292,14 +292,24 @@ export function InvoicesPageClient() {
                 </button>
               ))}
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9 w-[150px]" />
-              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-9 w-[150px]" />
+            <div className="flex min-w-0 w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="h-9 min-w-0 w-full sm:w-[150px]"
+              />
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="h-9 min-w-0 w-full sm:w-[150px]"
+              />
             </div>
             <select
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
-              className="h-9 min-w-[180px] rounded-lg border border-border bg-background px-2 text-sm"
+              className="h-9 w-full min-w-0 rounded-lg border border-border bg-background px-2 text-sm sm:min-w-[180px] sm:w-auto"
             >
               <option value="">All clients</option>
               {clients.map((c) => (

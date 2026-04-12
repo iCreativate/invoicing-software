@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { Command } from 'cmdk';
-import { Modal, ModalContent } from '@/components/ui/modal';
+import { Modal, ModalContent, ModalTitle } from '@/components/ui/modal';
 import { routes } from '@/lib/routing/routes';
 import {
   LayoutDashboard,
@@ -90,8 +90,8 @@ export function CommandPalette() {
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          'hidden md:flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2 text-left text-sm text-muted-foreground',
-          'hover:bg-muted/60 hover:text-foreground transition-colors min-w-[200px] lg:min-w-[260px]'
+          'hidden md:flex max-w-full min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2 text-left text-sm text-muted-foreground',
+          'hover:bg-muted/60 hover:text-foreground transition-colors md:min-w-[200px] lg:min-w-[260px]'
         )}
       >
         <span className="text-xs">Search or jump to…</span>
@@ -103,12 +103,13 @@ export function CommandPalette() {
         <ModalContent
           showClose={false}
           className={cn(
-            'top-[18%] max-w-xl -translate-y-0 -translate-x-1/2 p-0 overflow-hidden',
+            'top-[max(12dvh,env(safe-area-inset-top))] max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem))] w-[calc(100%-2rem)] max-w-xl -translate-y-0 -translate-x-1/2 overflow-hidden p-0 sm:top-[18%]',
             'rounded-xl border-border shadow-2xl'
           )}
           onPointerDownOutside={() => setOpen(false)}
           onEscapeKeyDown={() => setOpen(false)}
         >
+          <ModalTitle className="sr-only">Command palette</ModalTitle>
           <Command className="rounded-xl bg-popover [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-muted-foreground">
             <div className="border-b border-border px-3 py-2">
               <Command.Input

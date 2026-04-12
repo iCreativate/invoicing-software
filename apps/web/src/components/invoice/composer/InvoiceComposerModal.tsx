@@ -61,7 +61,15 @@ export function InvoiceComposerModal({
   const [loadingClients, setLoadingClients] = useState(false);
   const [clientsError, setClientsError] = useState<string | null>(null);
 
-  const [quickClient, setQuickClient] = useState({ name: '', email: '', phone: '' });
+  const [quickClient, setQuickClient] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    companyName: '',
+    website: '',
+    companyRegistration: '',
+    vatNumber: '',
+  });
 
   const [draft, setDraft] = useState<InvoiceComposerDraft>({
     invoiceNumber: null,
@@ -106,7 +114,15 @@ export function InvoiceComposerModal({
     setErrors({});
     setClientsQuery('');
     setClients([]);
-    setQuickClient({ name: '', email: '', phone: '' });
+    setQuickClient({
+      name: '',
+      email: '',
+      phone: '',
+      companyName: '',
+      website: '',
+      companyRegistration: '',
+      vatNumber: '',
+    });
     setServerInvoiceId(null);
     setShareUrl(null);
     setDraft((d) => ({
@@ -189,10 +205,8 @@ export function InvoiceComposerModal({
       return null;
     }
 
-    const supabase = createSupabaseBrowserClient();
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user?.id) throw new Error('Not signed in.');
     const ownerId = await getWorkspaceOwnerIdForClient();
+    const supabase = createSupabaseBrowserClient();
 
     const invoiceNumber = draft.invoiceNumber && String(draft.invoiceNumber).trim().length ? String(draft.invoiceNumber) : null;
     const shareIdFromDraft =
@@ -510,11 +524,23 @@ export function InvoiceComposerModal({
         name: quickClient.name.trim(),
         email: quickClient.email.trim() || undefined,
         phone: quickClient.phone.trim() || undefined,
+        companyName: quickClient.companyName.trim() || undefined,
+        website: quickClient.website.trim() || undefined,
+        companyRegistration: quickClient.companyRegistration.trim() || undefined,
+        vatNumber: quickClient.vatNumber.trim() || undefined,
       });
       const list = await fetchClientsList();
       setClients(list);
       setDraft((d) => ({ ...d, clientId: created.id }));
-      setQuickClient({ name: '', email: '', phone: '' });
+      setQuickClient({
+        name: '',
+        email: '',
+        phone: '',
+        companyName: '',
+        website: '',
+        companyRegistration: '',
+        vatNumber: '',
+      });
       setErrors((e) => {
         const { quickClientName, ...rest } = e;
         return rest;
@@ -571,6 +597,10 @@ export function InvoiceComposerModal({
           name: String(d.client.name ?? ''),
           email: d.client.email ? String(d.client.email) : '',
           phone: d.client.phone ? String(d.client.phone) : '',
+          companyName: '',
+          website: '',
+          companyRegistration: '',
+          vatNumber: '',
         });
       }
       setStep(1);
@@ -814,6 +844,9 @@ export function InvoiceComposerModal({
                       )}
                     >
                       <div className="text-sm font-semibold">{c.name}</div>
+                      {c.companyName ? (
+                        <div className="text-xs text-muted-foreground">{c.companyName}</div>
+                      ) : null}
                       <div className="text-xs text-muted-foreground">{c.email ?? '—'}</div>
                     </button>
                   ))
@@ -870,7 +903,7 @@ export function InvoiceComposerModal({
                   <Input
                     value={quickClient.name}
                     onChange={(e) => setQuickClient((c) => ({ ...c, name: e.target.value }))}
-                    placeholder="Client name"
+                    placeholder="Name (required)"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
@@ -899,6 +932,31 @@ export function InvoiceComposerModal({
                         void createQuickClient();
                       }
                     }}
+                  />
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <Input
+                    value={quickClient.companyName}
+                    onChange={(e) => setQuickClient((c) => ({ ...c, companyName: e.target.value }))}
+                    placeholder="Company name (optional)"
+                  />
+                  <Input
+                    value={quickClient.website}
+                    onChange={(e) => setQuickClient((c) => ({ ...c, website: e.target.value }))}
+                    placeholder="Website (optional)"
+                    type="url"
+                  />
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <Input
+                    value={quickClient.companyRegistration}
+                    onChange={(e) => setQuickClient((c) => ({ ...c, companyRegistration: e.target.value }))}
+                    placeholder="Reg / CK (optional)"
+                  />
+                  <Input
+                    value={quickClient.vatNumber}
+                    onChange={(e) => setQuickClient((c) => ({ ...c, vatNumber: e.target.value }))}
+                    placeholder="VAT no. (optional)"
                   />
                 </div>
                 {errors.quickClientName ? <div className="mt-2 text-xs text-danger">{errors.quickClientName}</div> : null}
@@ -1177,6 +1235,10 @@ export function InvoiceComposerModal({
                       email: clientDetails?.email ?? null,
                       phone: clientDetails?.phone ?? null,
                       address: clientDetails?.address ?? null,
+                      companyName: clientDetails?.companyName ?? null,
+                      website: clientDetails?.website ?? null,
+                      companyRegistration: clientDetails?.companyRegistration ?? null,
+                      vatNumber: clientDetails?.vatNumber ?? null,
                     }}
                     companyName={companyName}
                     companyLogoPath={companyLogoPath}

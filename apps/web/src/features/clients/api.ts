@@ -7,7 +7,7 @@ export async function fetchClientsList(): Promise<ClientListItem[]> {
   const ownerId = await getWorkspaceOwnerIdForClient();
   const { data, error } = await supabase
     .from('clients')
-    .select('id,name,email')
+    .select('id,name,email,company_name')
     .eq('owner_id', ownerId)
     .order('name', { ascending: true });
   if (error) throw error;
@@ -15,6 +15,7 @@ export async function fetchClientsList(): Promise<ClientListItem[]> {
     id: String(c.id),
     name: String(c.name ?? ''),
     email: c.email ? String(c.email) : null,
+    companyName: c.company_name ? String(c.company_name) : null,
   }));
 }
 
@@ -26,9 +27,9 @@ export async function searchClients(query: string): Promise<ClientListItem[]> {
 
   const { data, error } = await supabase
     .from('clients')
-    .select('id,name,email')
+    .select('id,name,email,company_name')
     .eq('owner_id', ownerId)
-    .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
+    .or(`name.ilike.%${q}%,email.ilike.%${q}%,company_name.ilike.%${q}%`)
     .order('name', { ascending: true })
     .limit(20);
 
@@ -37,10 +38,20 @@ export async function searchClients(query: string): Promise<ClientListItem[]> {
     id: String(c.id),
     name: String(c.name ?? ''),
     email: c.email ? String(c.email) : null,
+    companyName: c.company_name ? String(c.company_name) : null,
   }));
 }
 
-export async function createClient(input: { name: string; email?: string; phone?: string; address?: string }) {
+export async function createClient(input: {
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  companyName?: string;
+  website?: string;
+  companyRegistration?: string;
+  vatNumber?: string;
+}) {
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
   const { data, error } = await supabase
@@ -51,6 +62,10 @@ export async function createClient(input: { name: string; email?: string; phone?
       email: input.email ?? null,
       phone: input.phone ?? null,
       address: input.address ?? null,
+      company_name: input.companyName ?? null,
+      website: input.website ?? null,
+      company_registration: input.companyRegistration ?? null,
+      vat_number: input.vatNumber ?? null,
     })
     .select('id')
     .single();
@@ -63,7 +78,7 @@ export async function fetchClientDetail(id: string): Promise<ClientDetail> {
   const ownerId = await getWorkspaceOwnerIdForClient();
   const { data, error } = await supabase
     .from('clients')
-    .select('id,name,email,phone,address')
+    .select('id,name,email,phone,address,company_name,website,company_registration,vat_number')
     .eq('id', id)
     .eq('owner_id', ownerId)
     .single();
@@ -74,10 +89,24 @@ export async function fetchClientDetail(id: string): Promise<ClientDetail> {
     email: (data as any).email ? String((data as any).email) : null,
     phone: (data as any).phone ? String((data as any).phone) : null,
     address: (data as any).address ? String((data as any).address) : null,
+    companyName: (data as any).company_name ? String((data as any).company_name) : null,
+    website: (data as any).website ? String((data as any).website) : null,
+    companyRegistration: (data as any).company_registration ? String((data as any).company_registration) : null,
+    vatNumber: (data as any).vat_number ? String((data as any).vat_number) : null,
   };
 }
 
-export async function updateClient(input: { id: string; name: string; email?: string; phone?: string; address?: string }) {
+export async function updateClient(input: {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  companyName?: string;
+  website?: string;
+  companyRegistration?: string;
+  vatNumber?: string;
+}) {
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
   const { error } = await supabase
@@ -87,6 +116,10 @@ export async function updateClient(input: { id: string; name: string; email?: st
       email: input.email ?? null,
       phone: input.phone ?? null,
       address: input.address ?? null,
+      company_name: input.companyName ?? null,
+      website: input.website ?? null,
+      company_registration: input.companyRegistration ?? null,
+      vat_number: input.vatNumber ?? null,
     })
     .eq('id', input.id)
     .eq('owner_id', ownerId);

@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { getBrowserUserSafe } from '@/lib/supabase/browserAuth';
 
 export type WorkspaceCapabilitiesState = {
   status: 'idle' | 'loading' | 'ready';
@@ -34,9 +35,8 @@ export function WorkspaceCapabilitiesProvider({ children }: { children: ReactNod
   });
 
   const refresh = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) {
+    const user = await getBrowserUserSafe();
+    if (!user) {
       setState({ ...defaultOpen, status: 'ready' });
       return;
     }

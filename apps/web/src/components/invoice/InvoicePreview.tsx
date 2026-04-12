@@ -26,7 +26,16 @@ export function InvoicePreview({
     accountType?: string | null;
   } | null;
   draft: InvoiceComposerDraft;
-  client: { name: string; email?: string | null; phone?: string | null; address?: string | null };
+  client: {
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    companyName?: string | null;
+    website?: string | null;
+    companyRegistration?: string | null;
+    vatNumber?: string | null;
+  };
   /** Free plan branding on PDFs and public shares. */
   showPoweredBy?: boolean;
 }) {
@@ -110,10 +119,27 @@ export function InvoicePreview({
           <div>
             <div className="text-xs font-semibold text-zinc-600">{isCorporate ? 'Invoice To:' : 'Bill to'}</div>
             <div className={isCorporate ? 'mt-3 rounded-xl bg-zinc-50 p-4' : ''}>
-              <div className="text-sm font-semibold">{client.name}</div>
+              {client.companyName ? (
+                <>
+                  <div className="text-sm font-semibold">{client.companyName}</div>
+                  <div className="mt-1 text-xs font-medium text-zinc-700">{client.name}</div>
+                </>
+              ) : (
+                <div className="text-sm font-semibold">{client.name}</div>
+              )}
               <div className="mt-2 space-y-1 text-xs text-zinc-600">
                 {client.phone ? <div>P: {client.phone}</div> : null}
                 {client.email ? <div>E: {client.email}</div> : null}
+                {client.website ? (
+                  <div>
+                    W:{' '}
+                    <span className="break-all">
+                      {client.website.replace(/^https?:\/\//i, '')}
+                    </span>
+                  </div>
+                ) : null}
+                {client.companyRegistration ? <div>Reg: {client.companyRegistration}</div> : null}
+                {client.vatNumber ? <div>VAT: {client.vatNumber}</div> : null}
                 {client.address ? <div className="whitespace-pre-wrap">{client.address}</div> : null}
               </div>
             </div>

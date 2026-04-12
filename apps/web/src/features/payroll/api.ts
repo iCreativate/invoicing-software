@@ -1,4 +1,5 @@
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { getBrowserUserSafe } from '@/lib/supabase/browserAuth';
 import type { PayrollRunListItem, PayrollRunStatus } from './types';
 
 function coerceStatus(v: unknown): PayrollRunStatus {
@@ -7,10 +8,10 @@ function coerceStatus(v: unknown): PayrollRunStatus {
 }
 
 export async function fetchPayrollRuns(): Promise<PayrollRunListItem[]> {
-  const supabase = createSupabaseBrowserClient();
-  const { data: auth } = await supabase.auth.getUser();
-  const ownerId = auth.user?.id ?? null;
+  const user = await getBrowserUserSafe();
+  const ownerId = user?.id ?? null;
   if (!ownerId) throw new Error('Not signed in.');
+  const supabase = createSupabaseBrowserClient();
 
   const { data, error } = await supabase
     .from('payroll_runs')
@@ -37,10 +38,10 @@ export async function createPayrollRun(input: {
   totalAmount: number;
   currency: string;
 }) {
-  const supabase = createSupabaseBrowserClient();
-  const { data: auth } = await supabase.auth.getUser();
-  const ownerId = auth.user?.id ?? null;
+  const user = await getBrowserUserSafe();
+  const ownerId = user?.id ?? null;
   if (!ownerId) throw new Error('Not signed in.');
+  const supabase = createSupabaseBrowserClient();
 
   const { data, error } = await supabase
     .from('payroll_runs')

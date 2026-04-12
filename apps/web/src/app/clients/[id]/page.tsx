@@ -68,6 +68,12 @@ export default function ClientViewPage() {
             </div>
           ) : client ? (
             <div className="grid gap-4 sm:grid-cols-2">
+              {client.companyName ? (
+                <div className="rounded-2xl bg-muted/20 p-4 sm:col-span-2">
+                  <div className="text-xs font-semibold text-muted-foreground">Company</div>
+                  <div className="mt-2 text-sm font-semibold">{client.companyName}</div>
+                </div>
+              ) : null}
               <div className="rounded-2xl bg-muted/20 p-4">
                 <div className="text-xs font-semibold text-muted-foreground">Email</div>
                 <div className="mt-2 text-sm font-semibold">{client.email ?? '—'}</div>
@@ -76,6 +82,31 @@ export default function ClientViewPage() {
                 <div className="text-xs font-semibold text-muted-foreground">Phone</div>
                 <div className="mt-2 text-sm font-semibold">{client.phone ?? '—'}</div>
               </div>
+              {client.website ? (
+                <div className="rounded-2xl bg-muted/20 p-4 sm:col-span-2">
+                  <div className="text-xs font-semibold text-muted-foreground">Website</div>
+                  <a
+                    href={client.website.startsWith('http') ? client.website : `https://${client.website}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 block text-sm font-semibold text-primary underline-offset-4 hover:underline"
+                  >
+                    {client.website}
+                  </a>
+                </div>
+              ) : null}
+              {client.companyRegistration ? (
+                <div className="rounded-2xl bg-muted/20 p-4">
+                  <div className="text-xs font-semibold text-muted-foreground">Registration / CK</div>
+                  <div className="mt-2 text-sm font-semibold">{client.companyRegistration}</div>
+                </div>
+              ) : null}
+              {client.vatNumber ? (
+                <div className="rounded-2xl bg-muted/20 p-4">
+                  <div className="text-xs font-semibold text-muted-foreground">VAT number</div>
+                  <div className="mt-2 text-sm font-semibold">{client.vatNumber}</div>
+                </div>
+              ) : null}
               <div className="rounded-2xl bg-muted/20 p-4 sm:col-span-2">
                 <div className="text-xs font-semibold text-muted-foreground">Address</div>
                 <div className="mt-2 text-sm font-semibold whitespace-pre-wrap">{client.address ?? '—'}</div>
