@@ -30,6 +30,7 @@ export default function SettingsClient() {
   const [website, setWebsite] = useState('');
   const [vatNumber, setVatNumber] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoPreviewFailed, setLogoPreviewFailed] = useState(false);
   const [bankName, setBankName] = useState('');
   const [accountName, setAccountName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
@@ -113,6 +114,10 @@ export default function SettingsClient() {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    setLogoPreviewFailed(false);
+  }, [logoUrl]);
 
   const canSave = useMemo(() => companyName.trim().length > 1, [companyName]);
   const formDisabled = loading || !canEditWorkspace;
@@ -251,12 +256,20 @@ export default function SettingsClient() {
               <div className="mt-4 flex items-center gap-3">
                 <div className="h-16 w-16 overflow-hidden rounded-2xl bg-white/70 ring-1 ring-black/5 grid place-items-center dark:bg-white/10 dark:ring-white/10">
                   {logoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={companyLogoImgSrc(logoUrl) ?? ''}
-                      alt="Company logo"
-                      className="h-full w-full object-contain"
-                    />
+                    logoPreviewFailed ? (
+                      <div className="px-1 text-center text-[10px] leading-tight font-medium text-muted-foreground">
+                        Preview unavailable (try PNG or JPG)
+                      </div>
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={companyLogoImgSrc(logoUrl) ?? ''}
+                        alt="Company logo"
+                        className="h-full w-full object-contain"
+                        onLoad={() => setLogoPreviewFailed(false)}
+                        onError={() => setLogoPreviewFailed(true)}
+                      />
+                    )
                   ) : (
                     <div className="text-xs font-semibold text-muted-foreground">No logo</div>
                   )}

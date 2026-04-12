@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { isStorageLogoObjectPath } from '@/lib/company/logoUrl';
+import { guessLogoContentType, isStorageLogoObjectPath } from '@/lib/company/logoUrl';
 
 export async function GET(request: Request) {
   try {
@@ -20,17 +20,24 @@ export async function GET(request: Request) {
     }
 
     const supabase = createClient(url, serviceKey, { auth: { persistSession: false } });
-    const { data, error } = await supabase.storage.from('logos').createSignedUrl(path, 60 * 10);
+    // Stream bytes through our origin so <img src> works reliably (302 redirects to signed URLs often break previews).
+    const { data: blob, error } = await supabase.storage.from('logos').download(path);
     if (error) throw error;
-    if (!data?.signedUrl) throw new Error('Failed to sign URL');
+    if (!blob) throw new Error('Empty response from storage');
 
-    const res = NextResponse.redirect(data.signedUrl, 302);
-    // Prevent stale logos when users re-upload to the same path.
-    res.headers.set('Cache-Control', 'no-store, max-age=0');
-    res.headers.set('Pragma', 'no-cache');
-    return res;
+    const buf = await blob.arrayBuffer();
+    const contentType = blob.type || guessLogoContentType(path);
+
+    return new NextResponse(buf, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Cache-Control': 'private, no-store, max-age=0',
+        Pragma: 'no-cache',
+      },
+    });
   } catch (e: any) {
-    return NextResponse.json({ success: false, error: e?.message ?? 'Failed to sign URL' }, { status: 500 });
+    return NextResponse.json({ success: false, error: e?.message ?? 'Failed to load logo' }, { status: 500 });
   }
 }
 
