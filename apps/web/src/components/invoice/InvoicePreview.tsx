@@ -55,6 +55,7 @@ export function InvoicePreview({
         : 'bg-zinc-50 text-zinc-900';
 
   const invoiceNo = (draft as any).invoiceNumber ? String((draft as any).invoiceNumber) : '—';
+  const logoSrc = companyLogoPath ? companyLogoImgSrc(companyLogoPath) : null;
 
   return (
     <div className="rounded-2xl bg-white text-zinc-900 shadow-[var(--shadow-md)] overflow-hidden">
@@ -63,15 +64,15 @@ export function InvoicePreview({
           <div className="flex items-start justify-between gap-6">
             <div>
               <div className="flex items-center gap-3">
-                {companyLogoPath ? (
+                {logoSrc ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={companyLogoImgSrc(companyLogoPath) ?? ''}
+                    src={logoSrc}
                     alt="Company logo"
                     className={isCorporate ? 'h-12 w-32 object-contain' : 'h-12 w-32 object-contain'}
                   />
                 ) : null}
-                {!companyLogoPath ? <div className="text-sm font-semibold">{companyName}</div> : null}
+                {!logoSrc ? <div className="text-sm font-semibold">{companyName}</div> : null}
               </div>
               {!isCorporate ? (
                 <div className={template === 'bold' || template === 'elegant' ? 'mt-1 text-xs text-white/80' : 'mt-1 text-xs text-zinc-600'}>

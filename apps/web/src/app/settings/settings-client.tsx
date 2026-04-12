@@ -119,6 +119,8 @@ export default function SettingsClient() {
     setLogoPreviewFailed(false);
   }, [logoUrl]);
 
+  const logoSrc = useMemo(() => (logoUrl ? companyLogoImgSrc(logoUrl) : null), [logoUrl]);
+
   const canSave = useMemo(() => companyName.trim().length > 1, [companyName]);
   const formDisabled = loading || !canEditWorkspace;
 
@@ -256,14 +258,18 @@ export default function SettingsClient() {
               <div className="mt-4 flex items-center gap-3">
                 <div className="h-16 w-16 overflow-hidden rounded-2xl bg-white/70 ring-1 ring-black/5 grid place-items-center dark:bg-white/10 dark:ring-white/10">
                   {logoUrl ? (
-                    logoPreviewFailed ? (
+                    !logoSrc ? (
+                      <div className="px-1 text-center text-[10px] leading-tight font-medium text-muted-foreground">
+                        Invalid logo path — re-upload and save
+                      </div>
+                    ) : logoPreviewFailed ? (
                       <div className="px-1 text-center text-[10px] leading-tight font-medium text-muted-foreground">
                         Preview unavailable (try PNG or JPG)
                       </div>
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={companyLogoImgSrc(logoUrl) ?? ''}
+                        src={logoSrc}
                         alt="Company logo"
                         className="h-full w-full object-contain"
                         onLoad={() => setLogoPreviewFailed(false)}

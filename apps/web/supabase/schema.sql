@@ -347,7 +347,7 @@ alter table public.company_profiles add column if not exists email_template_remi
 -- After core schema: run these in order (SQL Editor):
 --   1. This file (schema.sql) — tables + ALTER owner_id + indexes
 --   2. supabase/storage-receipts.sql — bucket `receipts` + RLS policies
---   3. supabase/backfill-owner-id.sql — only if you have null owner_id rows
--- Logos bucket: create `logos` (private) in Dashboard or mirror storage-receipts.sql pattern.
+--   3. supabase/storage-logos.sql — bucket `logos` + RLS for company logo uploads
+--   4. supabase/backfill-owner-id.sql — only if you have null owner_id rows
 -- ---------------------------------------------------------------------------
 

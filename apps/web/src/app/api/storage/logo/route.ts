@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { guessLogoContentType, isStorageLogoObjectPath } from '@/lib/company/logoUrl';
+import { guessLogoContentType, isStorageLogoObjectPath, resolveLogosObjectKey } from '@/lib/company/logoUrl';
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const path = String(searchParams.get('path') ?? '');
+    const raw = String(searchParams.get('path') ?? '');
+    const path = resolveLogosObjectKey(raw) ?? raw.trim().replace(/^\/+/, '');
     if (!path || !isStorageLogoObjectPath(path)) {
       return NextResponse.json({ success: false, error: 'Invalid path' }, { status: 400 });
     }
