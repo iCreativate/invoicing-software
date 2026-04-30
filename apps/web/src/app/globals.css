@@ -38,6 +38,41 @@
   --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.06);
   --shadow-md: 0 10px 24px rgba(17, 24, 39, 0.10);
   --shadow-lg: 0 18px 40px rgba(17, 24, 39, 0.14);
+
+  /* -----------------------------------------------------------------------
+     TimelyInvoices premium design system tokens (global)
+     Used by landing (scoped via .ti-landing) and can expand site-wide.
+  ----------------------------------------------------------------------- */
+  /* Colors */
+  --ti-bg: #F8F4EF;
+  --ti-surface: #FFFFFF;
+  --ti-surface-muted: #F1ECE5;
+  --ti-text: #172026;
+  --ti-text-2: #5F6B73;
+  --ti-accent: #0F766E;
+  --ti-accent-deep: #0B1F33;
+  --ti-success: #16A34A;
+  --ti-warning: #F59E0B;
+  --ti-danger: #DC2626;
+  --ti-border: rgba(23, 32, 38, 0.10);
+
+  /* Layout */
+  --ti-container: 1240px;
+  --ti-section-py-mobile: 48px;
+  --ti-section-py-tablet: 64px;
+  --ti-section-py-desktop: 96px;
+
+  /* Shape + elevation */
+  --ti-radius: 18px;
+  --ti-radius-sm: 14px;
+  --ti-shadow: 0 1px 2px rgba(23, 32, 38, 0.05), 0 18px 42px rgba(23, 32, 38, 0.08);
+  --ti-shadow-lift: 0 1px 2px rgba(23, 32, 38, 0.06), 0 26px 54px rgba(23, 32, 38, 0.12);
+  --ti-shadow-soft: 0 10px 28px rgba(23, 32, 38, 0.08);
+}
+
+.ti-landing {
+  background: var(--ti-bg);
+  color: var(--ti-text);
 }
 
 @theme inline {
