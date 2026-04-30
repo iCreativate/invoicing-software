@@ -27,6 +27,7 @@ import { getWorkspaceOwnerIdForClient } from '@/lib/auth/workspaceClient';
 import { fetchClientDetail } from '@/features/clients/api';
 import { fetchCatalogItems } from '@/features/catalog/api';
 import type { CatalogListItem } from '@/features/catalog/types';
+import { buildPublicInvoiceViewUrl } from '@/lib/invoice/platformUrls';
 
 const DraftSchema = z.object({
   clientId: z.string().min(1, 'Select a client'),
@@ -217,8 +218,7 @@ export function InvoiceComposerModal({
           ...(inv.public_share_id ? { publicShareId: String(inv.public_share_id) } : {}),
         } as InvoiceComposerDraft & { publicShareId?: string });
         setServerInvoiceId(String(inv.id));
-        const appUrl = (process.env.NEXT_PUBLIC_APP_URL as string) || 'http://localhost:3002';
-        setShareUrl(inv.public_share_id ? `${appUrl}/invoice/${inv.public_share_id}` : null);
+        setShareUrl(inv.public_share_id ? buildPublicInvoiceViewUrl(String(inv.public_share_id)) : null);
         setResumeCandidate(null);
         setResumeCandidateSavedAt(null);
         setStep(2);
@@ -304,8 +304,7 @@ export function InvoiceComposerModal({
         const dbInvNo = (row as any)?.invoice_number ? String((row as any).invoice_number) : savedInvoiceNumber;
         const dbShareId = (row as any)?.public_share_id ? String((row as any).public_share_id) : shareId;
         setDraft((d: any) => ({ ...d, invoiceNumber: dbInvNo ?? savedInvoiceNumber ?? null, publicShareId: dbShareId }));
-        const appUrl = (process.env.NEXT_PUBLIC_APP_URL as string) || 'http://localhost:3002';
-        setShareUrl(`${appUrl}/invoice/${dbShareId}`);
+        setShareUrl(buildPublicInvoiceViewUrl(String(dbShareId)));
       } else {
         if (silent) {
           const { data: stRow, error: stErr } = await supabase
@@ -372,8 +371,7 @@ export function InvoiceComposerModal({
         }
         const gotShareId = (updated as any)?.public_share_id ? String((updated as any).public_share_id) : ensuredShareId;
         if (!(draft as any).publicShareId) setDraft((d: any) => ({ ...d, publicShareId: gotShareId }));
-        const appUrl = (process.env.NEXT_PUBLIC_APP_URL as string) || 'http://localhost:3002';
-        setShareUrl(`${appUrl}/invoice/${gotShareId}`);
+        setShareUrl(buildPublicInvoiceViewUrl(String(gotShareId)));
         const { error: delErr } = await supabase.from('invoice_items').delete().eq('invoice_id', invoiceId);
         if (delErr) throw delErr;
       }

@@ -4,6 +4,14 @@ export function getAppPublicBaseUrl(): string {
   return raw.replace(/\/$/, '');
 }
 
+/** Prefer the current browser origin when available (prevents misconfigured env from breaking QR codes). */
+export function getClientPublicBaseUrl(): string {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin.replace(/\/$/, '');
+  }
+  return getAppPublicBaseUrl();
+}
+
 /** Public marketing / home URL for the TimelyInvoices product. */
 export function getTimelyInvoicesMarketingUrl(): string {
   const raw = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_MARKETING_URL ? process.env.NEXT_PUBLIC_MARKETING_URL : 'https://timelyinvoices.app';
@@ -13,5 +21,5 @@ export function getTimelyInvoicesMarketingUrl(): string {
 /** Client-facing URL for this invoice when a share id exists. */
 export function buildPublicInvoiceViewUrl(publicShareId: string | null | undefined): string | null {
   if (!publicShareId || !String(publicShareId).trim()) return null;
-  return `${getAppPublicBaseUrl()}/invoice/${String(publicShareId).trim()}`;
+  return `${getClientPublicBaseUrl()}/invoice/${String(publicShareId).trim()}`;
 }
