@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
+import { PageBody, PageMain } from '@/components/layout/PageLayout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -20,6 +21,7 @@ import {
 import type { CatalogItemType, CatalogListItem } from '@/features/catalog/types';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
 import { Package, Pencil, Plus, Trash2 } from 'lucide-react';
+import { notifyError, notifySuccess } from '@/lib/notify';
 
 type FilterKey = 'all' | CatalogItemType;
 
@@ -205,8 +207,11 @@ export default function ProductsServicesClient() {
       }
       setModalOpen(false);
       await load();
+      notifySuccess(editingId ? 'Item updated.' : 'Item created.');
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : 'Save failed.');
+      const msg = err instanceof Error ? err.message : 'Save failed.';
+      setFormError(msg);
+      notifyError(msg);
     } finally {
       setSaving(false);
     }
@@ -217,8 +222,11 @@ export default function ProductsServicesClient() {
     try {
       await deleteCatalogItem(id);
       await load();
+      notifySuccess('Item deleted.');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Delete failed.');
+      const msg = err instanceof Error ? err.message : 'Delete failed.';
+      setError(msg);
+      notifyError(msg);
     }
   };
 
@@ -250,7 +258,7 @@ export default function ProductsServicesClient() {
         )
       }
     >
-      <div className="mx-auto max-w-5xl space-y-6">
+      <PageBody maxWidthClassName="max-w-5xl">
         {tableMissing ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
             <p className="font-semibold">Database table required</p>
@@ -267,6 +275,7 @@ export default function ProductsServicesClient() {
           </div>
         ) : null}
 
+        <PageMain>
         <Card className="p-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -412,15 +421,16 @@ export default function ProductsServicesClient() {
             </>
           ) : null}
         </Card>
+        </PageMain>
 
-        <div className="rounded-xl border border-border bg-card px-4 py-4 sm:px-6">
+        <aside className="rounded-xl border border-border bg-card px-4 py-4 sm:px-6" aria-label="Catalog help">
           <p className="text-sm text-muted-foreground">
             On invoices, choose an inventory row under line items to link the line; when you send the invoice, on-hand
             quantity decreases by the line quantity. Services and products are for pricing reference unless linked the
             same way later.
           </p>
-        </div>
-      </div>
+        </aside>
+      </PageBody>
 
       <Modal open={modalOpen} onOpenChange={setModalOpen}>
         <ModalContent className="max-w-lg">

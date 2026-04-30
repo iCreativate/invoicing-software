@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
+import { PageActions, PageBody } from '@/components/layout/PageLayout';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -22,6 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown';
+import { notifyError, notifySuccess } from '@/lib/notify';
 import {
   MoreHorizontal,
   Eye,
@@ -224,9 +226,10 @@ export function InvoicesPageClient() {
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error ?? 'Bulk remind failed');
-      alert(`Sent ${json.data.sent} reminder(s).${json.data.errors?.length ? ` Skipped: ${json.data.errors.join('; ')}` : ''}`);
+      const detail = json.data.errors?.length ? ` Skipped: ${json.data.errors.join('; ')}` : '';
+      notifySuccess(`Sent ${json.data.sent} reminder(s).${detail}`);
     } catch (e: any) {
-      alert(e?.message ?? 'Bulk remind failed');
+      notifyError(e?.message ?? 'Bulk remind failed');
     } finally {
       setBulkBusy(false);
     }
@@ -236,7 +239,10 @@ export function InvoicesPageClient() {
     setBusyId(inv.id);
     try {
       if (action === 'delete') {
-        if (!confirm(`Delete invoice ${inv.invoice_number || inv.id.slice(0, 8)}?`)) return;
+        if (!confirm(`Delete invoice ${inv.invoice_number || inv.id.slice(0, 8)}?`)) {
+          setBusyId(null);
+          return;
+        }
         const res = await fetch(`/api/invoices/${inv.id}`, { method: 'DELETE' });
         const json = await res.json();
         if (!res.ok || !json.success) throw new Error(json.error ?? 'Delete failed');
@@ -246,20 +252,23 @@ export function InvoicesPageClient() {
           n.delete(inv.id);
           return n;
         });
+        notifySuccess('Invoice deleted.');
       } else if (action === 'duplicate') {
         const res = await fetch(`/api/invoices/${inv.id}/duplicate`, { method: 'POST' });
         const json = await res.json();
         if (!res.ok || !json.success) throw new Error(json.error ?? 'Duplicate failed');
         await loadInvoices();
+        notifySuccess('Opening duplicate for editing…');
         window.location.href = `${routes.app.invoices}/${json.data.id}/edit`;
       } else if (action === 'paid') {
         const res = await fetch(`/api/invoices/${inv.id}/mark-paid`, { method: 'POST' });
         const json = await res.json();
         if (!res.ok || !json.success) throw new Error(json.error ?? 'Mark paid failed');
         await loadInvoices();
+        notifySuccess('Marked as paid.');
       }
     } catch (e: any) {
-      alert(e?.message ?? 'Action failed');
+      notifyError(e?.message ?? 'Action failed');
     } finally {
       setBusyId(null);
     }
@@ -287,6 +296,7 @@ export function InvoicesPageClient() {
         </div>
       }
     >
+      <PageBody maxWidthClassName="max-w-6xl">
       <Card className="overflow-hidden p-4 sm:p-5">
         <div className="flex flex-col gap-4">
           {hasPageDraft && canMutate ? (
@@ -384,35 +394,6 @@ export function InvoicesPageClient() {
               ))}
             </select>
           </div>
-
-          {selected.size > 0 ? (
-            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2 text-sm">
-              <span className="font-medium">{selected.size} selected</span>
-              {canMutate ? (
-                <Button type="button" size="sm" variant="secondary" disabled={bulkBusy} onClick={() => void runBulkRemind()}>
-                  <Bell className="h-3.5 w-3.5" />
-                  Send reminders
-                </Button>
-              ) : null}
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={() => exportCsv(filtered.filter((i) => selected.has(i.id)))}
-              >
-                Export CSV (selected)
-              </Button>
-              <Button type="button" size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-                Clear
-              </Button>
-            </div>
-          ) : (
-            <div className="flex justify-end">
-              <Button type="button" size="sm" variant="secondary" onClick={() => exportCsv(filtered)}>
-                Export CSV (filtered)
-              </Button>
-            </div>
-          )}
 
           {error ? <div className="rounded-xl border border-danger/30 bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
 
@@ -604,6 +585,35 @@ export function InvoicesPageClient() {
               </div>
             </>
           ) : null}
+
+          <PageActions>
+            {selected.size > 0 ? (
+              <div className="flex w-full flex-wrap items-center gap-2 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2 text-sm sm:w-auto">
+                <span className="font-medium">{selected.size} selected</span>
+                {canMutate ? (
+                  <Button type="button" size="sm" variant="secondary" disabled={bulkBusy} onClick={() => void runBulkRemind()}>
+                    <Bell className="h-3.5 w-3.5" />
+                    Send reminders
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => exportCsv(filtered.filter((i) => selected.has(i.id)))}
+                >
+                  Export CSV (selected)
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+                  Clear
+                </Button>
+              </div>
+            ) : (
+              <Button type="button" size="sm" variant="secondary" onClick={() => exportCsv(filtered)}>
+                Export CSV (filtered)
+              </Button>
+            )}
+          </PageActions>
         </div>
       </Card>
 
@@ -616,6 +626,7 @@ export function InvoicesPageClient() {
         templateHref="/import-templates/timely-invoices.csv"
         onSuccess={() => void loadInvoices()}
       />
+      </PageBody>
     </AppShell>
   );
 }

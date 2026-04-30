@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
+import { PageBody, PageMain } from '@/components/layout/PageLayout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -70,6 +71,8 @@ export default function QuotesPage() {
         ) : null
       }
     >
+      <PageBody maxWidthClassName="max-w-6xl">
+      <PageMain>
       <Card className="p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -124,6 +127,7 @@ export default function QuotesPage() {
           </div>
         )}
       </Card>
+      </PageMain>
 
       <FileImportDialog
         open={importOpen}
@@ -134,6 +138,7 @@ export default function QuotesPage() {
         templateHref="/import-templates/timely-quotes.csv"
         onSuccess={() => void loadQuotes()}
       />
+      </PageBody>
     </AppShell>
   );
 }

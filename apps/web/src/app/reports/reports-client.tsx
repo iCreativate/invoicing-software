@@ -21,6 +21,7 @@ import { formatMoney } from '@/lib/format/money';
 import { fetchReports, openReportPrintDialog, reportsToCsv } from '@/features/reports/api';
 import type { ReportsPayload } from '@/features/reports/types';
 import { FileSpreadsheet, FileText, PieChart } from 'lucide-react';
+import { notifySuccess } from '@/lib/notify';
 
 function startOfMonth(d: Date) {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
@@ -131,6 +132,7 @@ export default function ReportsClient() {
     a.download = `report-${data.range.from}-${data.range.to}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    notifySuccess('CSV downloaded.');
   };
 
   const onExportPdf = () => {

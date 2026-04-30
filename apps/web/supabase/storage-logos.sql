@@ -1,6 +1,6 @@
 -- Run in Supabase SQL Editor. Creates private bucket `logos` + RLS for uploads.
 -- Object keys must match the app: `{workspace_owner_uuid}/logo.{ext}`
--- Next.js serves images via /api/storage/logo using the service role (read).
+-- Next.js serves images via /api/storage/logo using the caller’s session (read).
 -- Without this bucket, logo uploads from Settings will fail.
 
 insert into storage.buckets (id, name, public)

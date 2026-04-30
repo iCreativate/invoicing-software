@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
+import { PageBody, PageFootnote, PageMain, PageSummary } from '@/components/layout/PageLayout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -27,6 +28,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
 import { Plus, Pencil, Receipt, Trash2, Filter, Upload, Eye } from 'lucide-react';
 import { FileImportDialog } from '@/components/import/FileImportDialog';
+import { notifyError, notifySuccess } from '@/lib/notify';
 
 type PeriodFilter = 'all' | 'month' | 'quarter' | 'year';
 
@@ -205,8 +207,11 @@ export default function ExpensesPageClient() {
       }
       setModalOpen(false);
       await reload();
+      notifySuccess(editingId ? 'Expense updated.' : 'Expense saved.');
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : 'Save failed.');
+      const msg = err instanceof Error ? err.message : 'Save failed.';
+      setFormError(msg);
+      notifyError(msg);
     } finally {
       setSaving(false);
     }
@@ -217,8 +222,11 @@ export default function ExpensesPageClient() {
     try {
       await deleteExpense(id);
       await reload();
+      notifySuccess('Expense deleted.');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Delete failed.');
+      const msg = err instanceof Error ? err.message : 'Delete failed.';
+      setError(msg);
+      notifyError(msg);
     }
   };
 
@@ -247,7 +255,7 @@ export default function ExpensesPageClient() {
         ) : null
       }
     >
-      <div className="mx-auto max-w-6xl space-y-6">
+      <PageBody>
         {tableMissing ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
             <p className="font-semibold">Database table required</p>
@@ -265,6 +273,7 @@ export default function ExpensesPageClient() {
           </div>
         ) : null}
 
+        <PageSummary>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from(totalsByCurrency.entries()).map(([cur, sum]) => (
             <Card key={cur} className="border-border p-4 shadow-none">
@@ -280,7 +289,9 @@ export default function ExpensesPageClient() {
             </Card>
           ) : null}
         </div>
+        </PageSummary>
 
+        <PageMain>
         <Card className="p-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="flex flex-wrap items-center gap-2">
@@ -478,11 +489,12 @@ export default function ExpensesPageClient() {
             <div className="mt-6 text-center text-sm text-muted-foreground">No expenses match these filters.</div>
           ) : null}
         </Card>
+        </PageMain>
 
-        <p className="text-center text-xs text-muted-foreground">
+        <PageFootnote>
           Categories align with AI suggestions (when configured). Totals reflect the filtered list below.
-        </p>
-      </div>
+        </PageFootnote>
+      </PageBody>
 
       <Modal open={modalOpen} onOpenChange={setModalOpen}>
         <ModalContent className="max-w-md">
@@ -612,11 +624,12 @@ export default function ExpensesPageClient() {
                     const path = await uploadExpenseReceipt(f);
                     setForm((prev) => ({ ...prev, receiptPath: path }));
                   } catch (err: unknown) {
-                    setFormError(
+                    const msg =
                       err instanceof Error
                         ? err.message
-                        : 'Upload failed. Ensure a private Storage bucket named `receipts` exists in Supabase.'
-                    );
+                        : 'Upload failed. Ensure a private Storage bucket named `receipts` exists in Supabase.';
+                    setFormError(msg);
+                    notifyError(msg);
                   } finally {
                     setReceiptUploading(false);
                   }

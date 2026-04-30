@@ -10,6 +10,8 @@ import { Modal, ModalContent, ModalDescription, ModalHeader, ModalTitle } from '
 import { fetchEmployeesList, inviteEmployee } from '@/features/employees/api';
 import type { EmployeeListItem } from '@/features/employees/types';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { notifyError, notifySuccess } from '@/lib/notify';
 
 function statusVariant(s: EmployeeListItem['status']) {
   if (s === 'active') return 'success';
@@ -105,17 +107,37 @@ export default function EmployeesPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((e) => (
-                <tr key={e.id} className="text-sm">
-                  <td className="border-b border-zinc-100 px-3 py-3 font-semibold dark:border-zinc-900">{e.name}</td>
-                  <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">{e.role}</td>
-                  <td className="border-b border-zinc-100 px-3 py-3 text-muted-foreground dark:border-zinc-900">{e.email}</td>
-                  <td className="border-b border-zinc-100 px-3 py-3 capitalize dark:border-zinc-900">{e.permission}</td>
-                  <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
-                    <Badge variant={statusVariant(e.status)}>{e.status}</Badge>
-                  </td>
-                </tr>
-              ))}
+              {loading
+                ? Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i} className="text-sm">
+                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                        <Skeleton className="h-5 w-36" />
+                      </td>
+                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                        <Skeleton className="h-5 w-24" />
+                      </td>
+                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                        <Skeleton className="h-5 w-44" />
+                      </td>
+                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                        <Skeleton className="h-5 w-20" />
+                      </td>
+                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                        <Skeleton className="h-6 w-16 rounded-full" />
+                      </td>
+                    </tr>
+                  ))
+                : filtered.map((e) => (
+                    <tr key={e.id} className="text-sm">
+                      <td className="border-b border-zinc-100 px-3 py-3 font-semibold dark:border-zinc-900">{e.name}</td>
+                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">{e.role}</td>
+                      <td className="border-b border-zinc-100 px-3 py-3 text-muted-foreground dark:border-zinc-900">{e.email}</td>
+                      <td className="border-b border-zinc-100 px-3 py-3 capitalize dark:border-zinc-900">{e.permission}</td>
+                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                        <Badge variant={statusVariant(e.status)}>{e.status}</Badge>
+                      </td>
+                    </tr>
+                  ))}
             </tbody>
           </table>
         </div>
@@ -203,9 +225,12 @@ export default function EmployeesPage() {
                     setInviteRole('Employee');
                     setInvitePermission('member');
                     setOpen(false);
+                    notifySuccess('Invitation sent.');
                     if (out.notice) setInviteNotice(out.notice);
                   } catch (e: any) {
-                    setInviteError(e?.message ?? 'Invite failed.');
+                    const msg = e?.message ?? 'Invite failed.';
+                    setInviteError(msg);
+                    notifyError(msg);
                   } finally {
                     setInviting(false);
                   }

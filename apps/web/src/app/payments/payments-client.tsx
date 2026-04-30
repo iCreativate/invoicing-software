@@ -17,6 +17,7 @@ import {
 } from '@/features/payments/api';
 import type { PaymentMethod, WorkspacePaymentListRow } from '@/features/payments/types';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
+import { notifyError, notifySuccess } from '@/lib/notify';
 
 function methodLabel(m: string) {
   if (m === 'bank_transfer') return 'EFT';
@@ -136,7 +137,9 @@ export default function PaymentsClient() {
         if (bal > 0) setManualAmount(String(bal));
       }
     } catch (e: any) {
-      setManualError(e?.message ?? 'Could not load invoices.');
+      const msg = e?.message ?? 'Could not load invoices.';
+      setManualError(msg);
+      notifyError(msg);
     } finally {
       setLoadingInvoices(false);
     }
@@ -175,8 +178,11 @@ export default function PaymentsClient() {
       setManualAmount('');
       setManualNotes('');
       await load();
+      notifySuccess('Payment recorded.');
     } catch (err: any) {
-      setManualError(err?.message ?? 'Failed to save payment.');
+      const msg = err?.message ?? 'Failed to save payment.';
+      setManualError(msg);
+      notifyError(msg);
     } finally {
       setManualSubmitting(false);
     }

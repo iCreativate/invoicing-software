@@ -11,6 +11,7 @@ import { routes } from '@/lib/routing/routes';
 import { fetchClientsList } from '@/features/clients/api';
 import type { ClientListItem } from '@/features/clients/types';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -97,7 +98,59 @@ export default function ClientsPage() {
           </div>
         ) : null}
 
-        {filtered.length > 0 ? (
+        {loading && !error ? (
+          <>
+            <div className="mt-4 space-y-3 md:hidden">
+              {[1, 2, 3].map((i) => (
+                <Card key={i} className="border border-border p-4 shadow-none">
+                  <div className="flex items-start gap-3">
+                    <Skeleton className="h-10 w-10 shrink-0 rounded-2xl" />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <Skeleton className="h-5 w-48" />
+                      <Skeleton className="h-4 w-full max-w-xs" />
+                      <Skeleton className="h-9 w-24" />
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+            <div className="mt-4 hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[860px] border-separate border-spacing-0">
+                <thead>
+                  <tr className="text-left text-xs font-semibold text-muted-foreground">
+                    <th className="border-b border-border px-3 py-2">Client</th>
+                    <th className="border-b border-border px-3 py-2">Email</th>
+                    <th className="border-b border-border px-3 py-2">Status</th>
+                    <th className="border-b border-border px-3 py-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <tr key={i} className="text-sm">
+                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="h-9 w-9 rounded-2xl" />
+                          <Skeleton className="h-5 w-40" />
+                        </div>
+                      </td>
+                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                        <Skeleton className="h-5 w-36" />
+                      </td>
+                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                        <Skeleton className="h-6 w-14 rounded-full" />
+                      </td>
+                      <td className="border-b border-zinc-100 px-3 py-3 text-right dark:border-zinc-900">
+                        <Skeleton className="ml-auto h-9 w-24" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : null}
+
+        {!loading && !error && filtered.length > 0 ? (
           <>
             <div className="mt-4 space-y-3 md:hidden">
               {filtered.map((c) => (

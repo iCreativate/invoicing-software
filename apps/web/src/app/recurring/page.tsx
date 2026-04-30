@@ -13,6 +13,7 @@ import { todayISO } from '@/components/invoice/composer/utils';
 import { formatMoney } from '@/lib/format/money';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { routes } from '@/lib/routing/routes';
+import { notifyError, notifySuccess } from '@/lib/notify';
 
 export default function RecurringPage() {
   const [loading, setLoading] = useState(true);
@@ -117,8 +118,13 @@ export default function RecurringPage() {
                         type="button"
                         variant="secondary"
                         onClick={async () => {
-                          await setRecurringActive(r.id, !r.active);
-                          await reload();
+                          try {
+                            await setRecurringActive(r.id, !r.active);
+                            await reload();
+                            notifySuccess(r.active ? 'Schedule paused.' : 'Schedule resumed.');
+                          } catch (e: unknown) {
+                            notifyError(e instanceof Error ? e.message : 'Could not update schedule.');
+                          }
                         }}
                       >
                         {r.active ? 'Pause' : 'Resume'}
@@ -218,8 +224,11 @@ export default function RecurringPage() {
                     whatsappPhone: whatsappPhone || null,
                   });
                   await reload();
+                  notifySuccess('Recurring schedule created.');
                 } catch (e: any) {
-                  setError(e?.message ?? 'Save failed');
+                  const msg = e?.message ?? 'Save failed';
+                  setError(msg);
+                  notifyError(msg);
                 } finally {
                   setSaving(false);
                 }

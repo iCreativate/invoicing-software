@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { ensureReferralCode, fetchMyReferralRewards, uploadCompanyLogo, type ReferralRewardRow } from '@/features/company/api';
 import { companyLogoImgSrc } from '@/lib/company/logoUrl';
 import { routes } from '@/lib/routing/routes';
+import { notifyError, notifySuccess } from '@/lib/notify';
 
 function pickerHex(stored: string, fb: string) {
   const t = stored.trim();
@@ -132,11 +133,12 @@ export default function SettingsClient() {
       const path = await uploadCompanyLogo(file);
       setLogoUrl(path);
       setOk('Logo uploaded.');
+      notifySuccess('Logo uploaded.');
     } catch (e: any) {
-      setError(
-        e?.message ??
-          'Failed to upload logo. Ensure a Supabase Storage bucket named "logos" exists.'
-      );
+      const msg =
+        e?.message ?? 'Failed to upload logo. Ensure a Supabase Storage bucket named "logos" exists.';
+      setError(msg);
+      notifyError(msg);
     }
   };
 
@@ -180,8 +182,11 @@ export default function SettingsClient() {
         throw new Error(json.error ?? 'Failed to save settings.');
       }
       setOk('Saved.');
+      notifySuccess('Settings saved.');
     } catch (e: any) {
-      setError(e?.message ?? 'Failed to save settings.');
+      const msg = e?.message ?? 'Failed to save settings.';
+      setError(msg);
+      notifyError(msg);
     } finally {
       setSaving(false);
     }

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalDescription } from '@/components/ui/modal';
 import { Button } from '@/components/ui/Button';
+import { notifyError, notifySuccess } from '@/lib/notify';
 
 type Props = {
   open: boolean;
@@ -49,10 +50,14 @@ export function FileImportDialog({ open, onOpenChange, title, description, endpo
           'Nothing was saved — check column names (see example CSV) and date/amount formats. If you are on Expenses, switch the period filter to “All time” to see older rows.'
         );
       }
-      setMessage(parts.join('\n') || 'Import completed.');
+      const summary = parts.join('\n') || 'Import completed.';
+      setMessage(summary);
+      notifySuccess(parts[0] ?? 'Import completed.');
       onSuccess?.();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Import failed.');
+      const msg = e instanceof Error ? e.message : 'Import failed.';
+      setError(msg);
+      notifyError(msg);
     } finally {
       setBusy(false);
     }

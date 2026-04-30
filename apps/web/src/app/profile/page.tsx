@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getBrowserUserSafe } from '@/lib/supabase/browserAuth';
+import { notifyError, notifySuccess } from '@/lib/notify';
 
 export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
@@ -59,10 +60,13 @@ export default function ProfilePage() {
       const { error: updErr } = await supabase.auth.updateUser({ password: p1 });
       if (updErr) throw updErr;
       setOk('Password updated.');
+      notifySuccess('Password updated.');
       setNewPassword('');
       setConfirmPassword('');
     } catch (e: any) {
-      setError(e?.message ?? 'Failed to update password.');
+      const msg = e?.message ?? 'Failed to update password.';
+      setError(msg);
+      notifyError(msg);
     } finally {
       setSaving(false);
     }

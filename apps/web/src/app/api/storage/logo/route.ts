@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { guessLogoContentType, isStorageLogoObjectPath, resolveLogosObjectKey } from '@/lib/company/logoUrl';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getWorkspaceContext } from '@/lib/auth/workspace';
 
 export async function GET(request: Request) {
   try {
@@ -11,16 +12,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: false, error: 'Invalid path' }, { status: 400 });
     }
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !serviceKey) {
-      return NextResponse.json(
-        { success: false, error: 'Missing env: SUPABASE_SERVICE_ROLE_KEY' },
-        { status: 500 }
-      );
+    // Use the caller's session (no service role key required). Storage policies enforce access.
+    const supabase = await createSupabaseServerClient(request);
+    const ctx = await getWorkspaceContext(supabase);
+    if (!ctx) {
+      return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });
     }
 
-    const supabase = createClient(url, serviceKey, { auth: { persistSession: false } });
     // Stream bytes through our origin so <img src> works reliably (302 redirects to signed URLs often break previews).
     const { data: blob, error } = await supabase.storage.from('logos').download(path);
     if (error) throw error;
