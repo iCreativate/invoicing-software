@@ -4,6 +4,7 @@ import { InvoicePreview } from '@/components/invoice/InvoicePreview';
 import { PayNowButton } from '@/components/payments/PayNowButton';
 import { subscriptionShowsPoweredBy } from '@/lib/company/subscription';
 import { PublicInvoiceViewTracker } from '@/components/invoice/PublicInvoiceViewTracker';
+import { headers } from 'next/headers';
 import { buildPublicInvoiceViewUrl } from '@/lib/invoice/platformUrls';
 
 export default async function PublicInvoicePage({
@@ -70,7 +71,13 @@ export default async function PublicInvoicePage({
   }
 
   const poweredBy = subscriptionShowsPoweredBy((companyRow as any)?.subscription_plan ?? null);
-  const invoiceViewUrl = buildPublicInvoiceViewUrl(shareId);
+  // Prefer the request origin so QR codes always point at the current domain (fixes misconfigured NEXT_PUBLIC_APP_URL).
+  const h = await headers();
+  const host = h.get('x-forwarded-host') ?? h.get('host');
+  const proto = h.get('x-forwarded-proto') ?? 'https';
+  const origin = host ? `${proto}://${host}` : null;
+  const invoiceViewUrl =
+    origin != null ? new URL(`/invoice/${shareId}`, origin).toString() : buildPublicInvoiceViewUrl(shareId);
 
   const draft = {
     clientId: '',
