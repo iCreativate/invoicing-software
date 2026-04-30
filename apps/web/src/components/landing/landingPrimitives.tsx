@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils/cn';
 
 export function Container({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <div className={cn('mx-auto w-full px-4 sm:px-6 lg:px-8', className)} style={{ maxWidth: 'var(--ti-container)' }}>
+    <div className={cn('mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8', className)}>
       {children}
     </div>
   );
@@ -24,7 +24,7 @@ export function Section({
   return (
     <section
       id={id}
-      className={cn('py-[var(--ti-section-py-mobile)] sm:py-[var(--ti-section-py-tablet)] lg:py-[var(--ti-section-py-desktop)]', className)}
+      className={cn('py-16 sm:py-20 lg:py-24', className)}
     >
       {children}
     </section>
