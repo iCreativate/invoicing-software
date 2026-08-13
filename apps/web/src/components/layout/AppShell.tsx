@@ -56,7 +56,7 @@ function NavLink({
         <span className="flex min-w-0 flex-1 items-center gap-2">
           <span className="truncate">{item.label}</span>
           {ai ? (
-            <span className="rounded-badge bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-primary">
+            <span className="rounded-badge bg-white/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#f6f4f0]">
               AI
             </span>
           ) : null}
@@ -190,7 +190,7 @@ function SidebarNav({
           )}
           title={showLabels ? undefined : userName}
         >
-          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10 text-[11px] font-semibold text-[#f6f4f0]">
             {(userEmailLabel ?? 'U').charAt(0).toUpperCase()}
           </div>
           {showLabels ? (

@@ -14,7 +14,7 @@ export const themeTokens = {
     border: 'rgba(16, 20, 24, 0.1)',
     brand: '#1A3A4A',
     brandAccent: '#1A3A4A',
-    sidebar: '#F6F4F0',
+    sidebar: '#0F1418',
     success: '#1B7F4E',
     warning: '#B45309',
     danger: '#C0392B',

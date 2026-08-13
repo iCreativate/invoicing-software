@@ -35,7 +35,7 @@
   --ti-warning: #b45309;
   --ti-danger: var(--tl-danger);
   --ti-border: var(--tl-line);
-  --ti-sidebar: var(--tl-surface);
+  --ti-sidebar: var(--tl-bg-deep);
   --ti-container: 1440px;
   --ti-radius: 6px;
   --ti-radius-sm: 4px;
@@ -112,17 +112,17 @@
   --color-slate-900: #101418;
   --color-slate-950: #0f1418;
 
-  --color-sidebar: #ffffff;
-  --color-sidebar-hover: rgba(26, 58, 74, 0.06);
-  --color-sidebar-active: rgba(26, 58, 74, 0.1);
-  --color-sidebar-border: rgb(16 20 24 / 0.1);
-  --color-sidebar-text: #5a6169;
-  --color-sidebar-text-active: #101418;
-  --color-sidebar-muted: #8b9199;
-  --color-sidebar-foreground: #5a6169;
-  --color-sidebar-accent: rgba(26, 58, 74, 0.1);
-  --color-sidebar-accent-foreground: #101418;
-  --color-sidebar-ring: #1a3a4a;
+  --color-sidebar: #0f1418;
+  --color-sidebar-hover: rgb(255 255 255 / 0.06);
+  --color-sidebar-active: rgb(255 255 255 / 0.1);
+  --color-sidebar-border: rgb(255 255 255 / 0.1);
+  --color-sidebar-text: rgb(246 244 240 / 0.62);
+  --color-sidebar-text-active: #f6f4f0;
+  --color-sidebar-muted: rgb(246 244 240 / 0.42);
+  --color-sidebar-foreground: rgb(246 244 240 / 0.62);
+  --color-sidebar-accent: rgb(255 255 255 / 0.1);
+  --color-sidebar-accent-foreground: #f6f4f0;
+  --color-sidebar-ring: #f6f4f0;
 
   --radius-sm: 4px;
   --radius-md: 6px;
@@ -454,7 +454,7 @@
   }
   .nav-section,
   .sidebar-section {
-    @apply px-2.5 pt-4 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-slate-400;
+    @apply px-2.5 pt-4 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted;
   }
 
   /* ---- Inputs ---- */
