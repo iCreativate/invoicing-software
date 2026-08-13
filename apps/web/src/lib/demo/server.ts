@@ -25,11 +25,12 @@ export function hasSupabaseAuthCookie(
   return false;
 }
 
-export async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+export async function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T> {
+  const pending = Promise.resolve(promise);
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      promise,
+      pending,
       new Promise<T>((_, reject) => {
         timer = setTimeout(() => reject(new Error(`timeout after ${ms}ms`)), ms);
       }),
@@ -37,7 +38,7 @@ export async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T
   } finally {
     if (timer) clearTimeout(timer);
     // If we timed out first, swallow a late rejection so it is not an unhandledRejection.
-    void promise.catch(() => undefined);
+    void pending.catch(() => undefined);
   }
 }
 
@@ -62,7 +63,7 @@ export function isMissingRelationError(err: unknown): boolean {
   return m.includes('schema cache') || m.includes('pgrst205') || m.includes('does not exist') || m.includes('42p01');
 }
 
-export async function withTimeoutRetry<T>(run: () => Promise<T>, ms: number, retries = 1): Promise<T> {
+export async function withTimeoutRetry<T>(run: () => PromiseLike<T>, ms: number, retries = 1): Promise<T> {
   let last: unknown;
   for (let i = 0; i <= retries; i += 1) {
     try {
