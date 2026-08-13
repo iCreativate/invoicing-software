@@ -103,6 +103,7 @@ export function InvoiceComposerModal({
 
   const [aiInput, setAiInput] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiOk, setAiOk] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState<string>('TimelyInvoices');
   const [companyDetails, setCompanyDetails] = useState<any>(null);
   const [companyLogoPath, setCompanyLogoPath] = useState<string | null>(null);
@@ -118,6 +119,7 @@ export function InvoiceComposerModal({
     if (editInvoiceId) return;
     setSubmitError(null);
     setSaveOk(null);
+    setAiOk(null);
     setErrors({});
     setClientsQuery('');
     setClients([]);
@@ -691,46 +693,94 @@ export function InvoiceComposerModal({
     if (!input) return;
     setAiLoading(true);
     setSubmitError(null);
+    setAiOk(null);
     try {
       const res = await fetch('/api/ai/invoice-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input }),
+        body: JSON.stringify({
+          input,
+          clients: clients.slice(0, 40).map((c) => ({ id: c.id, name: c.name, email: c.email })),
+        }),
       });
       const json = await res.json();
-      if (!res.ok || !json?.success) throw new Error(json?.error ?? 'AI failed');
+      if (!res.ok || !json?.success) throw new Error(json?.error ?? 'Couldn’t draft the invoice.');
       const d = json.data;
-      // Merge into draft (keep dates if already edited)
-      setDraft((prev) => ({
-        ...prev,
-        currency: String(d.currency ?? prev.currency ?? 'ZAR'),
-        issueDate: String(d.issueDate ?? prev.issueDate),
-        dueDate: String(d.dueDate ?? prev.dueDate),
-        items: Array.isArray(d.items)
-          ? d.items.map((it: any) => ({
+      const items: InvoiceComposerItem[] = Array.isArray(d.items)
+        ? d.items
+            .map((it: { description?: string; quantity?: number; unitPrice?: number; vatRate?: number }) => ({
               id: crypto.randomUUID(),
-              description: String(it.description ?? ''),
+              description: String(it.description ?? '').trim(),
               quantity: Number(it.quantity ?? 1),
               unitPrice: Number(it.unitPrice ?? 0),
               vatRate: Number(it.vatRate ?? 15),
             }))
-          : prev.items,
+            .filter((it: InvoiceComposerItem) => it.description.length > 0)
+        : [];
+      if (!items.length) throw new Error('No line items found in that description.');
+
+      const suggestedName = String(d?.client?.name ?? '').trim();
+      const suggestedEmail = d?.client?.email ? String(d.client.email).trim() : '';
+      const suggestedPhone = d?.client?.phone ? String(d.client.phone).trim() : '';
+      const suggestedId = d?.client?.id ? String(d.client.id) : '';
+
+      let matched: ClientListItem | null =
+        suggestedId && clients.some((c) => c.id === suggestedId)
+          ? (clients.find((c) => c.id === suggestedId) ?? null)
+          : null;
+
+      if (!matched && suggestedName) {
+        try {
+          const found = await searchClients(suggestedName);
+          const q = suggestedName.toLowerCase();
+          const e = suggestedEmail.toLowerCase();
+          matched =
+            found.find((c) => e && (c.email ?? '').toLowerCase() === e) ??
+            found.find((c) => c.name.toLowerCase() === q || (c.companyName ?? '').toLowerCase() === q) ??
+            null;
+          if (found.length) setClients(found);
+        } catch {
+          // keep unmatched — user can add the client
+        }
+      }
+
+      setDraft((prev) => ({
+        ...prev,
+        clientId: matched?.id ?? prev.clientId,
+        currency: String(d.currency ?? prev.currency ?? 'ZAR'),
+        issueDate: String(d.issueDate ?? prev.issueDate),
+        dueDate: String(d.dueDate ?? prev.dueDate),
+        notes: d.notes ? String(d.notes) : prev.notes,
+        items,
       }));
-      // If client was suggested, prefill quick add area and move user to step 1 to confirm
-      if (d?.client?.name) {
+
+      const n = items.length;
+      const itemLabel = n === 1 ? '1 line item' : `${n} line items`;
+
+      if (matched) {
+        setAiOk(`Drafted ${itemLabel} for ${matched.name}. Review quantities and VAT.`);
+        setStep(2);
+      } else if (draft.clientId) {
+        setAiOk(`Drafted ${itemLabel}. Review quantities and VAT.`);
+        setStep(2);
+      } else if (suggestedName) {
         setQuickClient({
-          name: String(d.client.name ?? ''),
-          email: d.client.email ? String(d.client.email) : '',
-          phone: d.client.phone ? String(d.client.phone) : '',
+          name: suggestedName,
+          email: suggestedEmail,
+          phone: suggestedPhone,
           companyName: '',
           website: '',
           companyRegistration: '',
           vatNumber: '',
         });
+        setAiOk(`Drafted ${itemLabel}. Add or select ${suggestedName} to continue.`);
+        setStep(1);
+      } else {
+        setAiOk(`Drafted ${itemLabel}. Pick a client to continue.`);
+        setStep(1);
       }
-      setStep(1);
-    } catch (e: any) {
-      setSubmitError(e?.message ?? 'AI failed');
+    } catch (e: unknown) {
+      setSubmitError(e instanceof Error ? e.message : 'Couldn’t draft the invoice.');
     } finally {
       setAiLoading(false);
     }
@@ -799,38 +849,55 @@ export function InvoiceComposerModal({
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <Card className="p-5">
-          {/* AI quick generator (kept minimal and optional) */}
-          <div className="mb-5 rounded-2xl bg-blue-600/10 p-4 ti-no-print">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-sm font-semibold">Smart invoice generator</div>
-                <div className="mt-1 text-sm text-muted-foreground">
+          <div className="mb-5 rounded-lg border border-[#e5e7eb] bg-[#f6f4f0] p-4 ti-no-print">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#1a3a4a] text-white">
+                <Sparkles className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold text-[#101418]">Smart invoice generator</div>
+                <div className="mt-0.5 text-sm text-[#5a6169]">
                   Describe the work and we’ll draft the invoice (items + VAT).
                 </div>
               </div>
-              <div className="shrink-0">
-                <Button type="button" variant="secondary" onClick={runAiGenerate} disabled={aiLoading || !aiInput.trim()}>
-                  <Wand2 className="h-4 w-4" />
-                  {aiLoading ? 'Generating…' : 'Generate'}
-                </Button>
+            </div>
+            <label htmlFor="smart-invoice-prompt" className="sr-only">
+              Describe the work
+            </label>
+            <textarea
+              id="smart-invoice-prompt"
+              value={aiInput}
+              onChange={(e) => setAiInput(e.target.value)}
+              placeholder="e.g. Website design for Acme: 8 hours at R950/hr + hosting retainer…"
+              rows={3}
+              disabled={aiLoading}
+              aria-busy={aiLoading}
+              className={cn(
+                'input mt-3 min-h-[5.5rem] resize-y py-2.5 leading-5',
+                aiLoading && 'opacity-70'
+              )}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  void runAiGenerate();
+                }
+              }}
+            />
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-xs text-[#8b9199]">
+                VAT 15% unless you say otherwise. ⌘ Enter to generate.
               </div>
+              <Button
+                type="button"
+                onClick={() => void runAiGenerate()}
+                disabled={aiLoading || !aiInput.trim()}
+                className="shrink-0"
+              >
+                <Wand2 className="h-4 w-4" />
+                {aiLoading ? 'Generating…' : 'Generate'}
+              </Button>
             </div>
-            <div className="mt-3">
-              <Input
-                value={aiInput}
-                onChange={(e) => setAiInput(e.target.value)}
-                placeholder="e.g. Website design for Acme: 8 hours at R950/hr + hosting retainer…"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    void runAiGenerate();
-                  }
-                }}
-              />
-            </div>
-            <div className="mt-2 text-xs text-muted-foreground">
-              Requires `ANTHROPIC_API_KEY` configured on the server.
-            </div>
+            {aiOk ? <div className="mt-2 text-xs font-medium text-[#1b7f4e]">{aiOk}</div> : null}
           </div>
 
           {step === 1 ? (
@@ -1564,15 +1631,15 @@ export function InvoiceComposerModal({
             </div>
           </div>
 
-          <div className="mt-5 rounded-2xl bg-blue-600/10 p-4">
+          <div className="mt-5 rounded-lg border border-[#e5e7eb] bg-[#f6f4f0] p-4">
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 rounded-xl bg-blue-600/15 p-2 text-blue-700 dark:text-blue-300">
+              <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#1a3a4a]/10 text-[#1a3a4a]">
                 <Sparkles className="h-4 w-4" />
               </div>
-              <div>
-                <div className="text-sm font-semibold">Smart invoice (AI)</div>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold">Smart invoice</div>
                 <div className="mt-1 text-sm text-muted-foreground">
-                  Coming next: describe your work and we’ll generate the invoice.
+                  {aiOk ?? 'Describe the work on the left and we’ll draft line items + VAT.'}
                 </div>
               </div>
             </div>

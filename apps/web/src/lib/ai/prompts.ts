@@ -2,20 +2,16 @@ export const systemPrompt = `You are TimelyInvoices AI.
 Be concise and return structured data when asked.
 Assume South Africa VAT defaults to 15% unless specified otherwise.`;
 
-export const invoiceGeneratorPrompt = `Generate a professional invoice draft from the user's description.
-Return ONLY valid JSON with this shape:
-{
-  "client": { "name": string, "email"?: string, "phone"?: string },
-  "currency": "ZAR",
-  "issueDate": "YYYY-MM-DD",
-  "dueDate": "YYYY-MM-DD",
-  "items": [{ "description": string, "quantity": number, "unitPrice": number, "vatRate": number }],
-  "notes"?: string
-}
+export const invoiceGeneratorPrompt = `Generate a professional South African invoice draft from the user's description.
 Rules:
-- Use vatRate 15 by default.
-- Use sensible quantities and unit prices when missing.
-- Keep descriptions short and invoice-ready.`;
+- Currency ZAR unless the user specifies otherwise.
+- vatRate 15 unless the user specifies zero-rated / exempt / another rate.
+- Split distinct work into separate line items (e.g. hours vs retainer vs hosting).
+- Infer quantity and unitPrice when the user gives hours, packages, or retainers.
+- Keep descriptions short and invoice-ready (no marketing copy).
+- If the user names a client, put it on client.name. Match client.id only from the known-clients list.
+- issueDate is today unless the user gives a date. dueDate is 30 days later unless specified.
+- notes only if the user mentioned payment terms, PO numbers, or similar.`;
 
 export const pricingSuggestPrompt = `Suggest unit price and VAT rate for an invoice line item based on history.
 Return ONLY valid JSON: { "unitPrice": number, "vatRate": number, "confidence": "low"|"medium"|"high", "reason": string }`;
