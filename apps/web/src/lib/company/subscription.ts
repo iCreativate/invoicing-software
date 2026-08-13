@@ -1,4 +1,2 @@
-export function subscriptionShowsPoweredBy(plan: string | null | undefined): boolean {
-  const p = (plan ?? 'free').toLowerCase();
-  return p === 'free';
-}
+/** @deprecated Prefer `@/lib/billing/entitlements` — kept for existing imports. */
+export { subscriptionShowsPoweredBy } from '@/lib/billing/entitlements';

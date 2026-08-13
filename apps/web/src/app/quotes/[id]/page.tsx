@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { routes } from '@/lib/routing/routes';
 import { formatMoney } from '@/lib/format/money';
-import { convertQuoteOnServer, fetchQuoteDetail } from '@/features/quotes/api';
+import { convertQuoteOnServer, ensureQuoteShareLink, fetchQuoteDetail } from '@/features/quotes/api';
 import type { QuoteDetail } from '@/features/quotes/types';
 import { Skeleton } from '@/components/ui/Skeleton';
 
@@ -20,6 +20,8 @@ export default function QuoteDetailPage() {
   const [quote, setQuote] = useState<QuoteDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -30,6 +32,9 @@ export default function QuoteDetailPage() {
         const q = await fetchQuoteDetail(id);
         if (!alive) return;
         setQuote(q);
+        if (q?.publicShareId && typeof window !== 'undefined') {
+          setShareUrl(`${window.location.origin}/quote/${q.publicShareId}`);
+        }
       } catch (e: any) {
         if (!alive) return;
         setError(e?.message ?? 'Failed to load quote.');
@@ -52,23 +57,46 @@ export default function QuoteDetailPage() {
             <Button variant="secondary">Back</Button>
           </Link>
           {quote && quote.status !== 'converted' ? (
-            <Button
-              disabled={converting}
-              onClick={async () => {
-                setConverting(true);
-                setError(null);
-                try {
-                  const { invoiceId } = await convertQuoteOnServer(id);
-                  router.push(`${routes.app.invoices}/${invoiceId}`);
-                } catch (e: any) {
-                  setError(e?.message ?? 'Convert failed.');
-                } finally {
-                  setConverting(false);
-                }
-              }}
-            >
-              {converting ? 'Converting…' : 'Convert to invoice'}
-            </Button>
+            <>
+              <Button
+                variant="secondary"
+                disabled={sharing}
+                onClick={async () => {
+                  setSharing(true);
+                  setError(null);
+                  try {
+                    const { shareUrl: url } = await ensureQuoteShareLink(id);
+                    setShareUrl(url);
+                    await navigator.clipboard.writeText(url);
+                    const refreshed = await fetchQuoteDetail(id);
+                    setQuote(refreshed);
+                  } catch (e: any) {
+                    setError(e?.message ?? 'Could not create share link.');
+                  } finally {
+                    setSharing(false);
+                  }
+                }}
+              >
+                {sharing ? 'Preparing…' : shareUrl ? 'Copy share link' : 'Share quote'}
+              </Button>
+              <Button
+                disabled={converting}
+                onClick={async () => {
+                  setConverting(true);
+                  setError(null);
+                  try {
+                    const { invoiceId } = await convertQuoteOnServer(id);
+                    router.push(`${routes.app.invoices}/${invoiceId}`);
+                  } catch (e: any) {
+                    setError(e?.message ?? 'Convert failed.');
+                  } finally {
+                    setConverting(false);
+                  }
+                }}
+              >
+                {converting ? 'Converting…' : 'Convert to invoice'}
+              </Button>
+            </>
           ) : quote?.convertedInvoiceId ? (
             <Link href={`${routes.app.invoices}/${quote.convertedInvoiceId}`}>
               <Button variant="secondary">Open invoice</Button>
@@ -77,7 +105,7 @@ export default function QuoteDetailPage() {
         </div>
       }
     >
-      <Card className="p-5">
+      <Card className="flex min-h-0 w-full flex-1 flex-col overflow-auto p-5">
         {error ? <div className="mb-4 rounded-2xl bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
         {loading ? (
           <div className="space-y-3">
@@ -87,10 +115,17 @@ export default function QuoteDetailPage() {
         ) : quote ? (
           <div className="grid gap-4">
             <div className="flex flex-wrap gap-3 text-sm">
-              <span className="rounded-full bg-muted px-3 py-1 font-medium capitalize">{quote.status}</span>
+              <span className="rounded-md bg-muted px-3 py-1 font-medium capitalize">{quote.status}</span>
               <span className="text-muted-foreground">Issued {quote.issueDate}</span>
               <span className="text-muted-foreground">Valid {quote.validUntil}</span>
+              {quote.acceptedAt ? <span className="text-success">Accepted {quote.acceptedAt.slice(0, 10)}</span> : null}
+              {quote.declinedAt ? <span className="text-danger">Declined {quote.declinedAt.slice(0, 10)}</span> : null}
             </div>
+            {shareUrl ? (
+              <div className="rounded-md border border-border bg-muted/30 p-3 text-xs break-all text-muted-foreground">
+                Public link: {shareUrl}
+              </div>
+            ) : null}
             {quote.notes ? <div className="rounded-2xl bg-muted/20 p-3 text-sm">{quote.notes}</div> : null}
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px] text-sm">

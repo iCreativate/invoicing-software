@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getBrowserUserSafe } from '@/lib/supabase/browserAuth';
+import { isDemoUiActive } from '@/lib/demo/accounts';
 import { notifyError, notifySuccess } from '@/lib/notify';
 
 export default function ProfilePage() {
@@ -25,6 +26,11 @@ export default function ProfilePage() {
       try {
         setLoading(true);
         setError(null);
+        if (isDemoUiActive()) {
+          if (!alive) return;
+          setEmail('demo@timelyinvoices.app');
+          return;
+        }
         const user = await getBrowserUserSafe();
         if (!alive) return;
         setEmail(user?.email ?? null);
@@ -42,6 +48,10 @@ export default function ProfilePage() {
   }, []);
 
   const updatePassword = async () => {
+    if (isDemoUiActive()) {
+      setError('Sample mode is view-only. Connect a live Supabase project to change passwords.');
+      return;
+    }
     setOk(null);
     setError(null);
     const p1 = newPassword.trim();
@@ -74,8 +84,8 @@ export default function ProfilePage() {
 
   return (
     <AppShell title="Profile">
-      <div className="grid gap-4">
-        <Card className="p-5">
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
+        <Card className="flex min-h-0 flex-1 flex-col overflow-auto p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="text-sm font-semibold">Account</div>
@@ -83,20 +93,20 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {error ? <div className="mt-4 rounded-2xl bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
-          {ok ? <div className="mt-4 rounded-2xl bg-success/10 p-3 text-sm text-success">{ok}</div> : null}
+          {error ? <div className="mt-4 rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
+          {ok ? <div className="mt-4 rounded-[var(--ti-radius)] border border-success/25 bg-success/10 p-3 text-sm text-success">{ok}</div> : null}
 
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl bg-muted/20 p-4">
-              <div className="text-sm font-semibold">Email</div>
+            <div className="ti-surface rounded-[var(--ti-radius)] bg-muted/40 p-4">
+              <div className="text-sm font-semibold tracking-tight">Email</div>
               <div className="mt-2 text-sm text-muted-foreground">
                 {loading ? 'Loading…' : email ? email : '—'}
               </div>
               <div className="mt-2 text-xs text-muted-foreground">Email changes can be added next.</div>
             </div>
 
-            <div className="rounded-2xl bg-muted/20 p-4">
-              <div className="text-sm font-semibold">Change password</div>
+            <div className="ti-surface rounded-[var(--ti-radius)] bg-muted/40 p-4">
+              <div className="text-sm font-semibold tracking-tight">Change password</div>
               <div className="mt-3 grid gap-3">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">New password</label>

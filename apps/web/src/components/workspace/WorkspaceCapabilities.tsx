@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { isDemoUiActive } from '@/lib/demo/accounts';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getBrowserUserSafe } from '@/lib/supabase/browserAuth';
 
@@ -35,6 +36,10 @@ export function WorkspaceCapabilitiesProvider({ children }: { children: ReactNod
   });
 
   const refresh = useCallback(async () => {
+    if (isDemoUiActive()) {
+      setState({ ...defaultOpen, status: 'ready' });
+      return;
+    }
     const user = await getBrowserUserSafe();
     if (!user) {
       setState({ ...defaultOpen, status: 'ready' });
@@ -84,13 +89,30 @@ export function WorkspaceCapabilitiesProvider({ children }: { children: ReactNod
   }, []);
 
   useEffect(() => {
+    if (isDemoUiActive()) {
+      setState({ ...defaultOpen, status: 'ready' });
+      return;
+    }
+
     void refresh();
-    const supabase = createSupabaseBrowserClient();
-    const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      void refresh();
-    });
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+    void (async () => {
+      const user = await getBrowserUserSafe();
+      if (cancelled || !user) return;
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const { data: sub } = supabase.auth.onAuthStateChange(() => {
+          void refresh();
+        });
+        unsubscribe = () => sub.subscription.unsubscribe();
+      } catch {
+        // Supabase unreachable — stay on open defaults after refresh() settles.
+      }
+    })();
     return () => {
-      sub.subscription.unsubscribe();
+      cancelled = true;
+      unsubscribe?.();
     };
   }, [refresh]);
 

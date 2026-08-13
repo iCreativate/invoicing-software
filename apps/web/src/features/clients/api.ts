@@ -1,8 +1,11 @@
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getWorkspaceOwnerIdForClient } from '@/lib/auth/workspaceClient';
+import { isDemoUiActive } from '@/lib/demo/accounts';
+import { demoClientDetail, demoClientInsights, demoClientsList, demoInvoicesList, demoReadOnlyError } from '@/lib/demo/fixtures';
 import type { ClientDetail, ClientInvoiceInsights, ClientListItem } from './types';
 
 export async function fetchClientsList(): Promise<ClientListItem[]> {
+  if (isDemoUiActive()) return demoClientsList();
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
   const { data, error } = await supabase
@@ -20,6 +23,16 @@ export async function fetchClientsList(): Promise<ClientListItem[]> {
 }
 
 export async function searchClients(query: string): Promise<ClientListItem[]> {
+  if (isDemoUiActive()) {
+    const q = query.trim().toLowerCase();
+    if (!q) return demoClientsList();
+    return demoClientsList().filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.email ?? '').toLowerCase().includes(q) ||
+        (c.companyName ?? '').toLowerCase().includes(q)
+    );
+  }
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
   const q = query.trim();
@@ -52,6 +65,7 @@ export async function createClient(input: {
   companyRegistration?: string;
   vatNumber?: string;
 }) {
+  if (isDemoUiActive()) throw demoReadOnlyError();
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
   const { data, error } = await supabase
@@ -74,6 +88,11 @@ export async function createClient(input: {
 }
 
 export async function fetchClientDetail(id: string): Promise<ClientDetail> {
+  if (isDemoUiActive()) {
+    const d = demoClientDetail(id);
+    if (!d) throw new Error('Client not found.');
+    return d;
+  }
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
   const { data, error } = await supabase
@@ -107,6 +126,7 @@ export async function updateClient(input: {
   companyRegistration?: string;
   vatNumber?: string;
 }) {
+  if (isDemoUiActive()) throw demoReadOnlyError();
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
   const { error } = await supabase
@@ -128,6 +148,7 @@ export async function updateClient(input: {
 }
 
 export async function fetchClientInvoiceInsights(clientId: string): Promise<ClientInvoiceInsights> {
+  if (isDemoUiActive()) return demoClientInsights(clientId);
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
 
@@ -182,3 +203,36 @@ export async function fetchClientInvoiceInsights(clientId: string): Promise<Clie
   };
 }
 
+/** Raw invoice rows for Timely Payment Score™. */
+export async function fetchClientInvoicesForScore(clientId: string) {
+  if (isDemoUiActive()) {
+    return demoInvoicesList()
+      .filter((i) => i.client_id === clientId)
+      .map((r) => ({
+        status: r.status,
+        issue_date: r.issue_date,
+        due_date: r.due_date,
+        paid_date: r.paid_amount > 0 ? r.issue_date : null,
+        total_amount: r.total_amount,
+        balance_amount: r.balance_amount,
+        paid_amount: r.paid_amount,
+      }));
+  }
+  const supabase = createSupabaseBrowserClient();
+  const ownerId = await getWorkspaceOwnerIdForClient();
+  const { data: rows, error } = await supabase
+    .from('invoices')
+    .select('status,issue_date,due_date,paid_date,total_amount,balance_amount,paid_amount')
+    .eq('client_id', clientId)
+    .eq('owner_id', ownerId);
+  if (error) throw error;
+  return (rows ?? []).map((r: any) => ({
+    status: String(r.status ?? ''),
+    issue_date: r.issue_date ? String(r.issue_date) : null,
+    due_date: r.due_date ? String(r.due_date) : null,
+    paid_date: r.paid_date ? String(r.paid_date) : null,
+    total_amount: Number(r.total_amount ?? 0),
+    balance_amount: Number(r.balance_amount ?? 0),
+    paid_amount: Number(r.paid_amount ?? 0),
+  }));
+}

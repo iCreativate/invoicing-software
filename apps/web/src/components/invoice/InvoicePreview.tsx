@@ -64,7 +64,7 @@ export function InvoicePreview({
     : template === 'bold'
       ? 'bg-zinc-900 text-white'
       : template === 'elegant'
-        ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white'
+        ? 'bg-gradient-to-r from-[var(--ti-brand,#1A3A4A)] to-[var(--ti-brand-accent,#2F6F7E)] text-white'
         : 'bg-zinc-50 text-zinc-900';
 
   const invoiceNo = (draft as any).invoiceNumber ? String((draft as any).invoiceNumber) : '—';
@@ -96,7 +96,7 @@ export function InvoicePreview({
 
             {isCorporate ? (
               <div className="text-right">
-                <div className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-8 py-3 text-xl font-semibold tracking-wide text-white">
+                <div className="inline-flex items-center justify-center rounded-xl bg-[var(--ti-brand,#1A3A4A)] px-8 py-3 text-xl font-semibold tracking-wide text-white">
                   INVOICE
                 </div>
                 <div className="mt-3 space-y-1 text-xs text-zinc-600">

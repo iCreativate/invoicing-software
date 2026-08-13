@@ -204,8 +204,8 @@ export default function PaymentsClient() {
         </div>
       }
     >
-      <div className="grid gap-4">
-        <div className="grid gap-4 lg:grid-cols-3">
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
+        <div className="grid shrink-0 gap-4 lg:grid-cols-3">
           <Card className="p-5">
             <div className="text-xs font-semibold text-muted-foreground">Monthly income (UTC)</div>
             <div className="mt-2 text-xl font-semibold tabular-nums">
@@ -246,8 +246,8 @@ export default function PaymentsClient() {
           </Card>
         </div>
 
-        <Card className="p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-5">
+          <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <div className="text-sm font-semibold">All payments</div>
               <div className="mt-1 text-sm text-muted-foreground">
@@ -259,7 +259,7 @@ export default function PaymentsClient() {
                 Filter list by month
                 <input
                   type="month"
-                  className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground"
+                  className="h-9 w-full rounded-[var(--ti-radius-sm)] border border-border bg-card px-3 text-sm text-foreground shadow-[var(--ti-shadow)]"
                   value={listMonth}
                   onChange={(e) => setListMonth(e.target.value)}
                 />
@@ -275,13 +275,13 @@ export default function PaymentsClient() {
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl bg-muted/20 p-4">
-              <div className="text-xs font-semibold text-muted-foreground">Completed (filtered view)</div>
-              <div className="mt-2 text-xl font-semibold tabular-nums">{formatMoney(totals.sum, totals.currency)}</div>
+            <div className="ti-surface rounded-[var(--ti-radius)] bg-muted/40 p-4">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Completed (filtered view)</div>
+              <div className="ti-num mt-2 text-xl font-semibold">{formatMoney(totals.sum, totals.currency)}</div>
               <div className="mt-1 text-xs text-muted-foreground">{totals.count} payment(s)</div>
             </div>
-            <div className="rounded-2xl bg-muted/20 p-4 sm:col-span-2">
-              <div className="text-xs font-semibold text-muted-foreground">Reconciliation</div>
+            <div className="ti-surface rounded-[var(--ti-radius)] bg-muted/40 p-4 sm:col-span-2">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Reconciliation</div>
               <div className="mt-2 text-sm text-muted-foreground">
                 Payments are stored on <span className="font-semibold text-foreground">payments</span> and invoice{' '}
                 <span className="font-semibold text-foreground">paid_amount</span>,{' '}
@@ -292,10 +292,10 @@ export default function PaymentsClient() {
             </div>
           </div>
 
-          {error ? <div className="mt-4 rounded-2xl bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
+          {error ? <div className="mt-4 rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
 
           {!loading && !error && filtered.length === 0 ? (
-            <div className="mt-6 rounded-2xl border border-dashed border-zinc-200 p-6 text-sm text-muted-foreground dark:border-zinc-800">
+            <div className="mt-6 rounded-[var(--ti-radius)] border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">
               No payments in this view. Record a payment or widen the month filter.
               <div className="mt-3 flex flex-wrap gap-2">
                 {allowRecord ? (
@@ -311,7 +311,7 @@ export default function PaymentsClient() {
           ) : null}
 
           {filtered.length > 0 ? (
-            <div className="mt-4 overflow-x-auto">
+            <div className="mt-4 min-h-0 flex-1 overflow-auto">
               <table className="w-full min-w-[960px] border-separate border-spacing-0">
                 <thead>
                   <tr className="text-left text-xs font-semibold text-muted-foreground">
@@ -328,22 +328,22 @@ export default function PaymentsClient() {
                 <tbody>
                   {filtered.map((p) => (
                     <tr key={p.id} className="text-sm">
-                      <td className="border-b border-zinc-100 px-3 py-3 tabular-nums dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5 tabular-nums">
                         {p.payment_date || '—'}
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5">
                         {p.clientName ?? '—'}
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-3 font-semibold dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5 font-semibold">
                         <Link className="hover:underline" href={`${routes.app.invoices}/${p.invoiceId}`}>
                           {p.invoiceNumber ?? 'View invoice'}
                         </Link>
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">{methodLabel(p.method)}</td>
-                      <td className="border-b border-zinc-100 px-3 py-3 text-muted-foreground dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5">{methodLabel(p.method)}</td>
+                      <td className="border-b border-border px-3 py-2.5 text-muted-foreground">
                         {providerLabel(p.provider)}
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5">
                         <Badge
                           variant={
                             p.status === 'completed' ? 'success' : p.status === 'failed' ? 'danger' : 'outline'
@@ -352,10 +352,10 @@ export default function PaymentsClient() {
                           {p.status}
                         </Badge>
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-3 text-right tabular-nums font-semibold dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5 text-right tabular-nums font-semibold">
                         {formatMoney(p.amount, p.currency)}
                       </td>
-                      <td className="max-w-[200px] truncate border-b border-zinc-100 px-3 py-3 text-muted-foreground dark:border-zinc-900">
+                      <td className="max-w-[200px] truncate border-b border-border px-3 py-2.5 text-muted-foreground">
                         {p.notes ?? '—'}
                       </td>
                     </tr>
@@ -376,7 +376,7 @@ export default function PaymentsClient() {
             <label className="grid gap-1 text-sm">
               <span className="font-medium">Invoice</span>
               <select
-                className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm"
+                className="h-9 w-full rounded-[var(--ti-radius-sm)] border border-border bg-card px-3 text-sm shadow-[var(--ti-shadow)]"
                 value={manualInvoiceId}
                 onChange={(e) => onInvoiceChange(e.target.value)}
                 disabled={loadingInvoices}
@@ -408,7 +408,7 @@ export default function PaymentsClient() {
             <label className="grid gap-1 text-sm">
               <span className="font-medium">Method</span>
               <select
-                className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm"
+                className="h-9 w-full rounded-[var(--ti-radius-sm)] border border-border bg-card px-3 text-sm shadow-[var(--ti-shadow)]"
                 value={manualMethod}
                 onChange={(e) => setManualMethod(e.target.value as PaymentMethod)}
               >

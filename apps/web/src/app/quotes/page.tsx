@@ -71,10 +71,10 @@ export default function QuotesPage() {
         ) : null
       }
     >
-      <PageBody maxWidthClassName="max-w-6xl">
-      <PageMain>
-      <Card className="p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <PageBody>
+      <PageMain className="flex min-h-0 flex-1 flex-col">
+      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-5">
+        <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-sm font-semibold">Proposals</div>
             <div className="mt-1 text-sm text-muted-foreground">Convert accepted quotes to invoices in one click.</div>
@@ -84,7 +84,7 @@ export default function QuotesPage() {
           </div>
         </div>
 
-        {error ? <div className="mt-4 rounded-2xl bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
+        {error ? <div className="mt-4 rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
 
         {loading ? (
           <div className="mt-6 space-y-3">
@@ -93,33 +93,37 @@ export default function QuotesPage() {
             <Skeleton className="h-12 w-full" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="mt-6 rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+          <div className="mt-6 rounded-[var(--ti-radius)] border border-dashed border-border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
             No quotes yet. Create a quote to send pricing before invoicing.
           </div>
         ) : (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead>
-                <tr className="text-left text-xs font-semibold text-muted-foreground">
-                  <th className="border-b border-border px-3 py-2">Quote</th>
-                  <th className="border-b border-border px-3 py-2">Client</th>
-                  <th className="border-b border-border px-3 py-2">Status</th>
-                  <th className="border-b border-border px-3 py-2 text-right">Total</th>
-                  <th className="border-b border-border px-3 py-2 text-right">Valid until</th>
+          <div className="mt-4 min-h-0 flex-1 overflow-auto rounded-[var(--ti-radius)] border border-border">
+            <table className="w-full min-w-[720px] text-[13px]">
+              <thead className="sticky top-0 z-[1] bg-card">
+                <tr className="text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <th className="border-b border-border px-3 py-2.5">Quote</th>
+                  <th className="border-b border-border px-3 py-2.5">Client</th>
+                  <th className="border-b border-border px-3 py-2.5">Status</th>
+                  <th className="border-b border-border px-3 py-2.5 text-right">Total</th>
+                  <th className="border-b border-border px-3 py-2.5 text-right">Valid until</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((q) => (
-                  <tr key={q.id} className="motion-safe:transition-colors hover:bg-muted/30">
-                    <td className="border-b border-border px-3 py-3 font-medium">
-                      <Link className="text-primary underline-offset-4 hover:underline" href={`${routes.app.quotes}/${q.id}`}>
+                  <tr key={q.id} className="ti-row-hover">
+                    <td className="border-b border-border px-3 py-2.5 font-medium">
+                      <Link className="text-[var(--ti-brand-accent,#2F6F7E)] underline-offset-4 hover:underline" href={`${routes.app.quotes}/${q.id}`}>
                         {q.quoteNumber ?? '—'}
                       </Link>
                     </td>
-                    <td className="border-b border-border px-3 py-3">{q.clientName ?? '—'}</td>
-                    <td className="border-b border-border px-3 py-3 capitalize">{q.status}</td>
-                    <td className="border-b border-border px-3 py-3 text-right tabular-nums">{formatMoney(q.totalAmount, q.currency)}</td>
-                    <td className="border-b border-border px-3 py-3 text-right text-muted-foreground">{q.validUntil}</td>
+                    <td className="border-b border-border px-3 py-2.5">{q.clientName ?? '—'}</td>
+                    <td className="border-b border-border px-3 py-2.5 capitalize">
+                      <span className="rounded-[var(--ti-radius-sm)] bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                        {q.status}
+                      </span>
+                    </td>
+                    <td className="ti-num border-b border-border px-3 py-2.5 text-right">{formatMoney(q.totalAmount, q.currency)}</td>
+                    <td className="border-b border-border px-3 py-2.5 text-right text-muted-foreground">{q.validUntil}</td>
                   </tr>
                 ))}
               </tbody>

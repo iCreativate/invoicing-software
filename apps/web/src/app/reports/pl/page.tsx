@@ -9,7 +9,9 @@ import { routes } from '@/lib/routing/routes';
 import { formatMoney } from '@/lib/format/money';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getWorkspaceOwnerIdForClient } from '@/lib/auth/workspaceClient';
+import { isDemoUiActive } from '@/lib/demo/accounts';
 import { fetchExpensesList } from '@/features/expenses/api';
+import { demoInvoicesList } from '@/lib/demo/fixtures';
 import { Skeleton } from '@/components/ui/Skeleton';
 
 export default function ProfitLossPage() {
@@ -26,21 +28,27 @@ export default function ProfitLossPage() {
       try {
         setLoading(true);
         setError(null);
-        const supabase = createSupabaseBrowserClient();
-        const ownerId = await getWorkspaceOwnerIdForClient();
-
-        const { data: invs, error: invErr } = await supabase
-          .from('invoices')
-          .select('paid_amount,currency,status')
-          .eq('owner_id', ownerId);
-        if (invErr) throw invErr;
 
         let rev = 0;
         let cur = 'ZAR';
-        for (const r of invs ?? []) {
-          const row = r as any;
-          rev += Number(row.paid_amount ?? 0);
-          if (row.currency) cur = String(row.currency);
+        if (isDemoUiActive()) {
+          for (const row of demoInvoicesList()) {
+            rev += Number(row.paid_amount ?? 0);
+            if (row.currency) cur = String(row.currency);
+          }
+        } else {
+          const supabase = createSupabaseBrowserClient();
+          const ownerId = await getWorkspaceOwnerIdForClient();
+          const { data: invs, error: invErr } = await supabase
+            .from('invoices')
+            .select('paid_amount,currency,status')
+            .eq('owner_id', ownerId);
+          if (invErr) throw invErr;
+          for (const r of invs ?? []) {
+            const row = r as any;
+            rev += Number(row.paid_amount ?? 0);
+            if (row.currency) cur = String(row.currency);
+          }
         }
         if (!alive) return;
         setRevenue(rev);
@@ -79,9 +87,9 @@ export default function ProfitLossPage() {
         </Link>
       }
     >
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="p-5 md:col-span-3">
-          {error ? <div className="rounded-2xl bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4 md:grid md:grid-cols-3">
+        <Card className="flex min-h-0 flex-1 flex-col overflow-auto p-5 md:col-span-3">
+          {error ? <div className="rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
           {loading ? (
             <div className="grid gap-3 md:grid-cols-3">
               <Skeleton className="h-24 w-full" />
@@ -90,19 +98,19 @@ export default function ProfitLossPage() {
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-2xl bg-muted/20 p-4 motion-safe:animate-[ti-fade-up_0.4s_ease-out_both]">
-                <div className="text-xs font-semibold text-muted-foreground">Revenue (cash collected)</div>
-                <div className="mt-2 text-2xl font-semibold tabular-nums">{formatMoney(revenue, currency)}</div>
+              <div className="ti-surface rounded-[var(--ti-radius)] bg-muted/40 p-4">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Revenue (cash collected)</div>
+                <div className="ti-num mt-2 text-2xl font-semibold">{formatMoney(revenue, currency)}</div>
                 <p className="mt-2 text-xs text-muted-foreground">Sum of paid_amount on your invoices. FX normalization coming.</p>
               </div>
-              <div className="rounded-2xl bg-muted/20 p-4 motion-safe:animate-[ti-fade-up_0.45s_ease-out_both]">
-                <div className="text-xs font-semibold text-muted-foreground">Expenses</div>
-                <div className="mt-2 text-2xl font-semibold tabular-nums">{formatMoney(expensesTotal, expenseCurrency)}</div>
+              <div className="ti-surface rounded-[var(--ti-radius)] bg-muted/40 p-4">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Expenses</div>
+                <div className="ti-num mt-2 text-2xl font-semibold">{formatMoney(expensesTotal, expenseCurrency)}</div>
                 <p className="mt-2 text-xs text-muted-foreground">Logged in Expenses. Multi-currency rollups use company base currency next.</p>
               </div>
-              <div className="rounded-2xl bg-primary/10 p-4 motion-safe:animate-[ti-fade-up_0.5s_ease-out_both]">
-                <div className="text-xs font-semibold text-muted-foreground">Net (simple)</div>
-                <div className="mt-2 text-2xl font-semibold tabular-nums">
+              <div className="ti-surface rounded-[var(--ti-radius)] border-[var(--ti-brand-accent,#2F6F7E)]/25 bg-[var(--ti-brand-accent,#2F6F7E)]/[0.06] p-4">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Net (simple)</div>
+                <div className="ti-num mt-2 text-2xl font-semibold">
                   {formatMoney(profit, currency)}
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">Revenue minus expenses (same-currency approximation).</p>

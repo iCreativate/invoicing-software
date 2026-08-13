@@ -1,6 +1,8 @@
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getWorkspaceOwnerIdForClient } from '@/lib/auth/workspaceClient';
 import { computeNetPay, roundMoney } from '@/lib/payroll/calc';
+import { isDemoUiActive } from '@/lib/demo/accounts';
+import { demoPayrollCompensation, demoPayrollRuns, demoReadOnlyError } from '@/lib/demo/fixtures';
 import type { PayrollCompensationRow, PayrollRunLineItem, PayrollRunListItem, PayrollRunStatus } from './types';
 
 function coerceStatus(v: unknown): PayrollRunStatus {
@@ -9,6 +11,7 @@ function coerceStatus(v: unknown): PayrollRunStatus {
 }
 
 export async function fetchPayrollRuns(): Promise<PayrollRunListItem[]> {
+  if (isDemoUiActive()) return demoPayrollRuns();
   const ownerId = await getWorkspaceOwnerIdForClient();
   const supabase = createSupabaseBrowserClient();
 
@@ -31,6 +34,7 @@ export async function fetchPayrollRuns(): Promise<PayrollRunListItem[]> {
 }
 
 export async function fetchPayrollCompensationRows(): Promise<PayrollCompensationRow[]> {
+  if (isDemoUiActive()) return demoPayrollCompensation();
   const ownerId = await getWorkspaceOwnerIdForClient();
   const supabase = createSupabaseBrowserClient();
 

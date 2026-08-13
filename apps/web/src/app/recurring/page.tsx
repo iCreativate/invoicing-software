@@ -73,22 +73,22 @@ export default function RecurringPage() {
         </Link>
       }
     >
-      <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
-        <Card className="p-5">
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4 lg:grid lg:grid-cols-[1fr_380px]">
+        <Card className="flex min-h-0 flex-1 flex-col overflow-auto p-5">
           <div className="text-sm font-semibold">Schedules</div>
           <p className="mt-1 text-sm text-muted-foreground">
             A secure cron endpoint generates invoices and can email/WhatsApp links when{' '}
             <code className="text-xs">CRON_SECRET</code> is set. Example:{' '}
             <code className="text-xs">GET /api/cron/recurring?secret=…</code>
           </p>
-          {error ? <div className="mt-4 rounded-2xl bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
+          {error ? <div className="mt-4 rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
           {loading ? (
             <div className="mt-4 space-y-2">
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
             </div>
           ) : rows.length === 0 ? (
-            <div className="mt-6 text-sm text-muted-foreground">No recurring schedules yet.</div>
+            <div className="mt-6 rounded-[var(--ti-radius)] border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">No recurring schedules yet.</div>
           ) : (
             <div className="mt-4 space-y-3">
               {rows.map((r) => {
@@ -98,14 +98,14 @@ export default function RecurringPage() {
                 return (
                   <div
                     key={r.id}
-                    className="flex flex-col gap-3 rounded-2xl border border-border p-4 sm:flex-row sm:items-center sm:justify-between motion-safe:transition-shadow hover:shadow-[var(--shadow-sm)]"
+                    className="flex flex-col gap-3 rounded-[var(--ti-radius)] border border-border bg-card p-4 transition-[box-shadow,transform] duration-150 hover:-translate-y-px hover:shadow-[var(--ti-shadow)] sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div>
-                      <div className="font-semibold">{r.title}</div>
+                      <div className="font-semibold tracking-tight">{r.title}</div>
                       <div className="text-sm text-muted-foreground">
                         {r.clientName ?? 'Client'} · {r.frequency} · next {r.nextRunDate}
                       </div>
-                      <div className="mt-1 text-sm tabular-nums">{formatMoney(total, r.currency)} / run</div>
+                      <div className="ti-num mt-1 text-sm">{formatMoney(total, r.currency)} / run</div>
                       <div className="mt-1 text-xs text-muted-foreground">
                         Reminders: {r.remindEmail ? 'Email' : ''}
                         {r.remindEmail && r.remindWhatsapp ? ' · ' : ''}

@@ -1,163 +1,525 @@
 @import "tailwindcss";
 
+/* =========================================================
+   TIMELY – landing + app share one palette
+   Warm paper, ink, deep teal. Editorial, not SaaS-blue.
+   ========================================================= */
+
 :root {
-  /* Requested palette (light) */
-  --background: 210 40% 98%; /* #f8fafc */
-  --foreground: 222 47% 11%; /* #111827 */
+  --tl-bg: #f6f4f0;
+  --tl-bg-deep: #0f1418;
+  --tl-surface: #ffffff;
+  --tl-ink: #101418;
+  --tl-ink-2: #5a6169;
+  --tl-ink-3: #8b9199;
+  --tl-line: rgba(16, 20, 24, 0.1);
+  --tl-line-strong: rgba(16, 20, 24, 0.18);
+  --tl-accent: #1a3a4a;
+  --tl-accent-soft: rgba(26, 58, 74, 0.08);
+  --tl-success: #1b7f4e;
+  --tl-danger: #c0392b;
+  --tl-radius: 6px;
+  --tl-max: 1200px;
+  --tl-pad: clamp(1.25rem, 4vw, 2rem);
 
-  --card: 0 0% 100%; /* white */
-  --card-foreground: 222 47% 11%;
+  --ti-bg: var(--tl-bg);
+  --ti-surface: var(--tl-surface);
+  --ti-surface-muted: #eceae4;
+  --ti-text: var(--tl-ink);
+  --ti-text-2: var(--tl-ink-2);
+  --ti-text-3: var(--tl-ink-3);
+  --ti-accent: var(--tl-accent);
+  --ti-accent-deep: var(--tl-bg-deep);
+  --ti-brand-accent: var(--tl-accent);
+  --ti-success: var(--tl-success);
+  --ti-warning: #b45309;
+  --ti-danger: var(--tl-danger);
+  --ti-border: var(--tl-line);
+  --ti-sidebar: var(--tl-surface);
+  --ti-container: 1440px;
+  --ti-radius: 6px;
+  --ti-radius-sm: 4px;
+  --ti-shadow: 0 1px 0 rgb(16 20 24 / 0.04), 0 12px 32px rgb(16 20 24 / 0.05);
+  --ti-shadow-lift: 0 1px 0 rgb(16 20 24 / 0.04), 0 24px 48px rgb(16 20 24 / 0.06);
+  --ti-shadow-soft: 0 8px 28px rgb(16 20 24 / 0.08);
+}
 
-  --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
+@theme {
+  --font-sans: var(--font-inter), "Inter", var(--font-geist-sans), "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-inter), "Inter", var(--font-geist-sans), "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), "JetBrains Mono", var(--font-geist-mono), "SF Mono", ui-monospace, monospace;
 
-  /* Brand */
-  --primary: 217 91% 60%; /* #2563eb */
-  --primary-foreground: 210 40% 98%;
-  --success: 142 71% 45%; /* #22c55e */
-  --success-foreground: 210 40% 98%;
-  --danger: 0 84% 60%; /* #ef4444 */
-  --danger-foreground: 210 40% 98%;
+  --color-primary-50: #f3f6f7;
+  --color-primary-100: #e4ecef;
+  --color-primary-200: #c5d4db;
+  --color-primary-300: #9bb3be;
+  --color-primary-400: #5c7f90;
+  --color-primary-500: #2a5164;
+  --color-primary-600: #1a3a4a;
+  --color-primary-700: #142e3b;
+  --color-primary-800: #0f1418;
+  --color-primary-900: #0c1014;
+  --color-primary-950: #080b0d;
+  --color-primary: #1a3a4a;
+  --color-primary-foreground: #ffffff;
 
-  /* Neutrals */
-  --secondary: 210 40% 96%;
-  --secondary-foreground: 222 47% 11%;
-  --muted: 210 40% 96%;
-  --muted-foreground: 215 19% 43%; /* #6b7280 */
-  --accent: 210 40% 96%;
-  --accent-foreground: 222 47% 11%;
+  --color-success: #1b7f4e;
+  --color-success-soft: #e8f5ee;
+  --color-success-muted: #e8f5ee;
+  --color-success-foreground: #ffffff;
+  --color-warning: #b45309;
+  --color-warning-soft: #f8efe4;
+  --color-warning-muted: #f8efe4;
+  --color-warning-foreground: #101418;
+  --color-danger: #c0392b;
+  --color-danger-soft: #f8ecea;
+  --color-danger-muted: #f8ecea;
+  --color-danger-foreground: #ffffff;
+  --color-info: #1a3a4a;
+  --color-info-soft: rgba(26, 58, 74, 0.08);
+  --color-info-foreground: #ffffff;
+  --color-purple: #5c4d6b;
 
-  /* De-emphasize borders; cards are shadow-based */
-  --border: 210 40% 92%;
-  --input: 210 40% 92%;
-  --ring: 217 91% 60%;
+  --color-background: #f6f4f0;
+  --color-foreground: #101418;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-2: #ffffff;
+  --color-card: #ffffff;
+  --color-card-foreground: #101418;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #101418;
+  --color-muted: #eceae4;
+  --color-muted-foreground: #5a6169;
+  --color-secondary: #eceae4;
+  --color-secondary-foreground: #101418;
+  --color-accent: rgba(26, 58, 74, 0.08);
+  --color-accent-foreground: #1a3a4a;
+  --color-border: rgb(16 20 24 / 0.1);
+  --color-border-subtle: rgb(16 20 24 / 0.08);
+  --color-input: rgb(16 20 24 / 0.18);
+  --color-ring: #1a3a4a;
 
-  --radius: 0.875rem; /* 14px */
+  --color-slate-50: #f6f4f0;
+  --color-slate-100: #eceae4;
+  --color-slate-200: #ddd9d3;
+  --color-slate-300: #c4bfb8;
+  --color-slate-400: #8b9199;
+  --color-slate-500: #5a6169;
+  --color-slate-600: #3d444c;
+  --color-slate-700: #2a3036;
+  --color-slate-800: #1a1f24;
+  --color-slate-900: #101418;
+  --color-slate-950: #0f1418;
 
-  /* Elevation (soft shadows) */
-  --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.06);
-  --shadow-md: 0 10px 24px rgba(17, 24, 39, 0.10);
-  --shadow-lg: 0 18px 40px rgba(17, 24, 39, 0.14);
+  --color-sidebar: #ffffff;
+  --color-sidebar-hover: rgba(26, 58, 74, 0.06);
+  --color-sidebar-active: rgba(26, 58, 74, 0.1);
+  --color-sidebar-border: rgb(16 20 24 / 0.1);
+  --color-sidebar-text: #5a6169;
+  --color-sidebar-text-active: #101418;
+  --color-sidebar-muted: #8b9199;
+  --color-sidebar-foreground: #5a6169;
+  --color-sidebar-accent: rgba(26, 58, 74, 0.1);
+  --color-sidebar-accent-foreground: #101418;
+  --color-sidebar-ring: #1a3a4a;
 
-  /* -----------------------------------------------------------------------
-     TimelyInvoices premium design system tokens (global)
-     Used by landing (scoped via .ti-landing) and can expand site-wide.
-  ----------------------------------------------------------------------- */
-  /* Colors */
-  --ti-bg: #F8F4EF;
-  --ti-surface: #FFFFFF;
-  --ti-surface-muted: #F1ECE5;
-  --ti-text: #172026;
-  --ti-text-2: #5F6B73;
-  --ti-accent: #0F766E;
-  --ti-accent-deep: #0B1F33;
-  --ti-success: #16A34A;
-  --ti-warning: #F59E0B;
-  --ti-danger: #DC2626;
-  --ti-border: rgba(23, 32, 38, 0.10);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-card: 6px;
+  --radius-button: 6px;
+  --radius-badge: 4px;
 
-  /* Layout */
-  --ti-container: 1240px;
-  --ti-section-py-mobile: 48px;
-  --ti-section-py-tablet: 64px;
-  --ti-section-py-desktop: 96px;
+  --shadow-xs: 0 1px 0 rgb(16 20 24 / 0.04);
+  --shadow-sm: 0 1px 0 rgb(16 20 24 / 0.04), 0 1px 2px rgb(16 20 24 / 0.04);
+  --shadow-card: 0 1px 0 rgb(16 20 24 / 0.04), 0 12px 32px rgb(16 20 24 / 0.05);
+  --shadow-card-hover: 0 1px 0 rgb(16 20 24 / 0.04), 0 18px 40px rgb(16 20 24 / 0.07);
+  --shadow-elevated: 0 1px 0 rgb(16 20 24 / 0.04), 0 24px 48px rgb(16 20 24 / 0.08);
+  --shadow-dropdown: 0 10px 38px rgb(16 20 24 / 0.12), 0 3px 10px rgb(16 20 24 / 0.06);
 
-  /* Shape + elevation */
-  --ti-radius: 18px;
-  --ti-radius-sm: 14px;
-  --ti-shadow: 0 1px 2px rgba(23, 32, 38, 0.05), 0 18px 42px rgba(23, 32, 38, 0.08);
-  --ti-shadow-lift: 0 1px 2px rgba(23, 32, 38, 0.06), 0 26px 54px rgba(23, 32, 38, 0.12);
-  --ti-shadow-soft: 0 10px 28px rgba(23, 32, 38, 0.08);
+  --spacing-18: 4.5rem;
+  --spacing-22: 5.5rem;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-fluid: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-snappy: cubic-bezier(0.2, 0, 0, 1);
 }
 
 .ti-landing {
-  /* Landing now matches dashboard theme by default. */
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
+  background: var(--tl-bg);
+  color: var(--tl-ink);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-@theme inline {
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
-  --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground));
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
-  --color-success: hsl(var(--success));
-  --color-success-foreground: hsl(var(--success-foreground));
-  --color-danger: hsl(var(--danger));
-  --color-danger-foreground: hsl(var(--danger-foreground));
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
-
-  --radius-xl: var(--radius);
-
-  --shadow-soft-sm: var(--shadow-sm);
-  --shadow-soft-md: var(--shadow-md);
-  --shadow-soft-lg: var(--shadow-lg);
-
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.ti-landing .tl-num {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.03em;
 }
 
-html {
-  overflow-x: clip;
+.ti-landing .tl-display {
+  font-size: clamp(2.75rem, 8vw, 5.5rem);
+  font-weight: 560;
+  line-height: 0.98;
+  letter-spacing: -0.045em;
 }
 
-body {
-  min-height: 100dvh;
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
-  font-family: var(--font-sans), system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
-    "Segoe UI Emoji";
+.ti-landing .tl-h2 {
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  font-weight: 560;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
 }
 
-.dark {
-  /* Premium dark (keeps AA contrast) */
-  --background: 222 47% 7%;
-  --foreground: 210 40% 98%;
-
-  --card: 222 47% 9%;
-  --card-foreground: 210 40% 98%;
-
-  --popover: 222 47% 9%;
-  --popover-foreground: 210 40% 98%;
-
-  --secondary: 222 28% 14%;
-  --secondary-foreground: 210 40% 98%;
-
-  --muted: 222 28% 14%;
-  --muted-foreground: 215 20% 70%;
-
-  --accent: 222 28% 14%;
-  --accent-foreground: 210 40% 98%;
-
-  --border: 222 28% 18%;
-  --input: 222 28% 18%;
-  --ring: 217 91% 70%;
+.ti-landing .tl-h3 {
+  font-size: clamp(1.25rem, 2.5vw, 1.5rem);
+  font-weight: 560;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
 }
 
-html {
+.ti-landing .tl-body {
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: var(--tl-ink-2);
+}
+
+.ti-landing .tl-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+
+.ti-landing .tl-rule {
+  height: 1px;
+  background: var(--tl-line);
+  border: 0;
+}
+
+@keyframes tl-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tl-bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ti-landing .tl-reveal {
+    animation: tl-fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .ti-landing .tl-bar {
+    transform-origin: bottom;
+    animation: tl-bar-grow 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ti-landing .tl-reveal,
+  .ti-landing .tl-bar {
+    animation: none !important;
+  }
+}
+
+/* Base */
+@layer base {
+  html {
+    @apply antialiased;
+    overflow-x: clip;
+    color-scheme: light;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+  body {
+    @apply bg-background text-foreground font-sans text-[14.5px] leading-normal;
+    min-height: 100dvh;
+    font-family: var(--font-sans), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .tabular,
+  .ti-numeric,
+  .ti-num {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+  }
+}
+
+/* Components — @apply utilities only (custom classes like btn/card/tabular fail at build) */
+@layer components {
+  /* ---- Layout (explicit so sidebar cannot stack above main) ---- */
+  .app-shell {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    width: 100%;
+    max-width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 100vh;
+    overflow: hidden;
+    background: var(--color-background);
+  }
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    width: 232px;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--color-sidebar);
+    border-right: 1px solid var(--color-sidebar-border);
+  }
+  .app-shell > .sidebar {
+    display: none;
+  }
+  @media (min-width: 768px) {
+    .app-shell > .sidebar {
+      display: flex;
+    }
+  }
+  .main-area {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    min-height: 3.25rem;
+    gap: 0.75rem;
+    padding: 0 1.25rem;
+    border-bottom: 1px solid var(--tl-line);
+    background: var(--tl-bg);
+  }
+  .page-content {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .page-container {
+    width: 100%;
+    max-width: 1440px;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 1.25rem;
+  }
+
+  /* ---- Cards ---- */
+  .card {
+    @apply bg-surface rounded-card shadow-card border border-border;
+  }
+  .card-elevated {
+    @apply bg-surface rounded-card shadow-elevated border border-border;
+  }
+  .card-interactive {
+    @apply bg-surface rounded-card shadow-card border border-border
+           transition-all duration-200 ease-out
+           hover:shadow-card-hover;
+  }
+
+  /* ---- Metric cards — ProductStage language ---- */
+  .metric,
+  .metric-card {
+    @apply bg-surface rounded-card shadow-card border border-border
+           p-5 flex flex-col gap-2;
+  }
+  .metric-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--tl-ink-3);
+  }
+  .metric-value {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: clamp(1.5rem, 2.4vw, 1.85rem);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: var(--tl-ink);
+  }
+  .metric-meta {
+    @apply text-[13px] text-slate-500;
+  }
+  .metric-trend-up {
+    @apply text-[13px] font-medium text-success flex items-center gap-1;
+  }
+  .metric-trend-down {
+    @apply text-[13px] font-medium text-danger flex items-center gap-1;
+  }
+
+  /* ---- Buttons ---- */
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-button
+           px-3.5 py-1.5 text-[13px] font-medium transition-opacity duration-150
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25
+           disabled:opacity-40 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply bg-primary text-white hover:opacity-90 active:bg-primary-700;
+  }
+  .btn-secondary {
+    @apply bg-transparent text-foreground border border-[var(--tl-line-strong)]
+           hover:bg-surface;
+  }
+  .btn-ghost {
+    @apply text-slate-600 hover:bg-slate-100 hover:text-foreground;
+  }
+  .btn-danger {
+    @apply bg-danger text-white hover:opacity-90;
+  }
+  .btn-sm {
+    @apply px-2.5 py-1 text-[12.5px];
+  }
+
+  /* ---- Status badges (Jira / Float style) ---- */
+  .badge {
+    @apply inline-flex items-center rounded-badge px-1.5 py-[2px]
+           text-[11px] font-medium tracking-wide leading-none;
+  }
+  .badge-success {
+    @apply bg-success-soft text-emerald-800;
+  }
+  .badge-warning {
+    @apply bg-warning-soft text-amber-800;
+  }
+  .badge-danger {
+    @apply bg-danger-soft text-rose-800;
+  }
+  .badge-info {
+    @apply bg-info-soft text-sky-800;
+  }
+  .badge-neutral {
+    @apply bg-slate-100 text-slate-600;
+  }
+  .badge-purple {
+    @apply bg-purple-50 text-purple-800;
+  }
+  .badge-partial {
+    @apply bg-warning-soft text-amber-800;
+  }
+
+  /* ---- Tables (Jira density) ---- */
+  .data-table {
+    @apply w-full text-[13px];
+  }
+  .data-table th {
+    @apply px-3 py-2.5 text-left text-[11px] font-semibold text-slate-500
+           uppercase tracking-wider border-b border-border bg-transparent;
+  }
+  .data-table td {
+    @apply px-3 py-2.5 border-b border-border text-slate-700;
+  }
+  .data-table tbody tr {
+    @apply transition-colors hover:bg-slate-50/90;
+  }
+
+  /* ---- Sidebar items ---- */
+  .nav-item,
+  .sidebar-item {
+    @apply flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium
+           text-sidebar-text transition-colors duration-100
+           hover:bg-sidebar-hover hover:text-sidebar-text-active;
+  }
+  .nav-item-active,
+  .sidebar-item-active {
+    @apply flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium
+           bg-sidebar-active text-sidebar-text-active;
+  }
+  .nav-section,
+  .sidebar-section {
+    @apply px-2.5 pt-4 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-slate-400;
+  }
+
+  /* ---- Inputs ---- */
+  .input {
+    @apply w-full rounded-md border border-border bg-white px-3 py-1.5
+           text-[13px] text-slate-900 placeholder:text-slate-400
+           focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500
+           shadow-xs transition-shadow;
+  }
+
+  /* ---- Page headers ---- */
+  .page-header {
+    @apply flex items-start justify-between gap-4 mb-5;
+  }
+  .page-title {
+    font-size: clamp(1.5rem, 2.4vw, 1.85rem);
+    font-weight: 560;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    color: var(--tl-ink);
+  }
+  .page-subtitle {
+    @apply text-[13.5px] text-slate-500 mt-1;
+  }
+  .section-title {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--tl-ink-3);
+  }
+}
+
+.ti-fintech-app {
   color-scheme: light;
+  font-size: 14.5px;
+  line-height: 1.45;
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
 }
 
-html.dark {
-  color-scheme: dark;
+.ti-fintech-app table {
+  line-height: 1.35;
 }
 
-*:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 4px hsl(var(--ring) / 0.2);
-  border-radius: calc(var(--radius) - 4px);
+.ti-surface {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.ti-row-hover {
+  transition: background-color 100ms ease;
+}
+.ti-row-hover:hover {
+  background-color: var(--tl-accent-soft);
+}
+
+.ti-metric-display {
+  font-size: clamp(1.75rem, 3.5vw, 2.25rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
 }
 
 @media print {
@@ -165,7 +527,6 @@ html.dark {
     margin: 0;
   }
 
-  /* Preserve colors when printing/saving to PDF (browser must allow background graphics). */
   html,
   body,
   .ti-print-area,
@@ -175,7 +536,6 @@ html.dark {
     color-adjust: exact !important;
   }
 
-  /* Print only the final invoice preview (PDF) */
   .ti-no-print {
     display: none !important;
   }

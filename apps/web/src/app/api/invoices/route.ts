@@ -3,15 +3,20 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getWorkspaceContext } from '@/lib/auth/workspace';
 import { calcInvoiceTotals, linesToPayload, type LineInput } from '@/lib/invoices/calcLines';
 import { logInvoiceTimelineEvent } from '@/lib/invoices/timelineServer';
+import { demoNotAvailableResponse, demoSuccessResponse } from '@/lib/demo/apiGate';
+import { demoInvoicesList } from '@/lib/demo/fixtures';
 
 function coerceStatus(v: unknown): string {
   const s = String(v ?? '').toLowerCase();
-  if (['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled'].includes(s)) return s;
+  if (['draft', 'sent', 'viewed', 'partial', 'paid', 'overdue', 'cancelled'].includes(s)) return s;
   return '';
 }
 
 export async function GET(request: Request) {
   try {
+    const demo = demoSuccessResponse(request, { invoices: demoInvoicesList() });
+    if (demo) return demo;
+
     const supabase = await createSupabaseServerClient(request);
     const ctx = await getWorkspaceContext(supabase);
     if (!ctx) return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });
@@ -117,6 +122,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const blocked = demoNotAvailableResponse(request);
+    if (blocked) return blocked;
+
     const supabase = await createSupabaseServerClient(request);
     const ctx = await getWorkspaceContext(supabase);
     if (!ctx) return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });

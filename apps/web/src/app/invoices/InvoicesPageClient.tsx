@@ -16,6 +16,8 @@ import { fetchClientsList } from '@/features/clients/api';
 import type { ClientListItem } from '@/features/clients/types';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getWorkspaceOwnerIdForClient } from '@/lib/auth/workspaceClient';
+import { isDemoUiActive } from '@/lib/demo/accounts';
+import { demoInvoicesList } from '@/lib/demo/fixtures';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +47,7 @@ import { FileImportDialog } from '@/components/import/FileImportDialog';
 const STATUS_OPTIONS: { value: InvoiceStatus; label: string }[] = [
   { value: 'draft', label: 'Draft' },
   { value: 'sent', label: 'Sent' },
+  { value: 'viewed', label: 'Viewed' },
   { value: 'partial', label: 'Partial' },
   { value: 'paid', label: 'Paid' },
   { value: 'overdue', label: 'Overdue' },
@@ -68,6 +71,7 @@ export function InvoicesPageClient() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [sortAmountDesc, setSortAmountDesc] = useState(false);
 
   const [pageDraft, setPageDraft] = useState<ReturnType<typeof loadDraft>>(null);
 
@@ -103,10 +107,14 @@ export function InvoicesPageClient() {
     if (clientId) params.set('clientId', clientId);
     if (dateFrom) params.set('from', dateFrom);
     if (dateTo) params.set('to', dateTo);
-    const res = await fetch(`/api/invoices?${params.toString()}`);
+    if (isDemoUiActive()) {
+      setItems(demoInvoicesList());
+      return;
+    }
+    const res = await fetch(`/api/invoices?${params.toString()}`, { credentials: 'include' });
     const json = await res.json();
     if (!res.ok || !json.success) throw new Error(json.error ?? 'Failed to load invoices');
-    setItems(json.data.invoices as InvoiceListItem[]);
+    setItems(Array.isArray(json.data?.invoices) ? (json.data.invoices as InvoiceListItem[]) : []);
   }, [statusFilter, clientId, dateFrom, dateTo]);
 
   useEffect(() => {
@@ -132,6 +140,7 @@ export function InvoicesPageClient() {
   }, [loadInvoices]);
 
   useEffect(() => {
+    if (isDemoUiActive()) return;
     let ch: { unsubscribe?: () => void } | null = null;
     const supabase = createSupabaseBrowserClient();
     (async () => {
@@ -158,12 +167,15 @@ export function InvoicesPageClient() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((inv) => {
-      const hay = `${inv.invoice_number} ${inv.client_name ?? ''} ${inv.status}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }, [items, query]);
+    const base = !q
+      ? items
+      : items.filter((inv) => {
+          const hay = `${inv.invoice_number} ${inv.client_name ?? ''} ${inv.status}`.toLowerCase();
+          return hay.includes(q);
+        });
+    if (!sortAmountDesc) return base;
+    return [...base].sort((a, b) => b.total_amount - a.total_amount);
+  }, [items, query, sortAmountDesc]);
 
   const toggleStatus = (s: InvoiceStatus) => {
     setStatusFilter((prev) => {
@@ -296,9 +308,9 @@ export function InvoicesPageClient() {
         </div>
       }
     >
-      <PageBody maxWidthClassName="max-w-6xl">
-      <Card className="overflow-hidden p-4 sm:p-5">
-        <div className="flex flex-col gap-4">
+      <PageBody>
+      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 sm:p-5">
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
           {hasPageDraft && canMutate ? (
             <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -345,22 +357,33 @@ export function InvoicesPageClient() {
             </div>
           </div>
 
-          <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-muted/20 p-3 sm:flex-row sm:flex-wrap sm:items-end">
-            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground sm:mr-2">
+          <div className="flex min-w-0 flex-col gap-3 rounded-[var(--ti-radius)] border border-border bg-muted/40 p-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground sm:mr-2">
               <Filter className="h-3.5 w-3.5" />
               Filters
             </div>
-            <div className="flex min-w-0 flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={sortAmountDesc ? 'primary' : 'secondary'}
+                className="h-9 shrink-0"
+                onClick={() => setSortAmountDesc((v) => !v)}
+              >
+                Amount {sortAmountDesc ? '↓' : 'sort'}
+              </Button>
+            </div>
+            <div className="flex min-w-0 flex-wrap gap-1.5">
               {STATUS_OPTIONS.map((o) => (
                 <button
                   key={o.value}
                   type="button"
                   onClick={() => toggleStatus(o.value)}
                   className={cn(
-                    'rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
+                    'rounded-[var(--ti-radius-sm)] border px-2.5 py-1 text-xs font-medium transition-colors duration-150',
                     statusFilter.has(o.value)
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border bg-background text-muted-foreground hover:bg-muted/50'
+                      ? 'border-[var(--ti-brand-accent,#2F6F7E)]/40 bg-[var(--ti-brand-accent,#2F6F7E)]/10 text-[var(--ti-brand,#1A3A4A)]'
+                      : 'border-border bg-card text-muted-foreground hover:bg-muted/60'
                   )}
                 >
                   {o.label}
@@ -384,7 +407,7 @@ export function InvoicesPageClient() {
             <select
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
-              className="h-9 w-full min-w-0 rounded-lg border border-border bg-background px-2 text-sm sm:min-w-[180px] sm:w-auto"
+              className="h-9 w-full min-w-0 rounded-[var(--ti-radius-sm)] border border-border bg-card px-2 text-sm shadow-[var(--ti-shadow)] sm:min-w-[180px] sm:w-auto"
             >
               <option value="">All clients</option>
               {clients.map((c) => (
@@ -460,7 +483,7 @@ export function InvoicesPageClient() {
                 ))}
               </div>
 
-              <div className="hidden overflow-x-auto rounded-xl border border-border md:block">
+              <div className="ti-surface hidden min-h-0 flex-1 overflow-auto md:block">
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">

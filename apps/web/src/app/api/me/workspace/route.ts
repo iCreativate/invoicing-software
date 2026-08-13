@@ -7,9 +7,21 @@ import {
   canManageTeam,
   canRecordPayments,
 } from '@/lib/permissions/team';
+import { demoSuccessResponse } from '@/lib/demo/apiGate';
 
 export async function GET(request: Request) {
   try {
+    const demo = demoSuccessResponse(request, {
+      workspaceOwnerId: 'demo-owner',
+      permission: 'owner',
+      actorUserId: 'demo-owner',
+      canEdit: true,
+      canManageTeam: true,
+      canManageBilling: true,
+      canRecordPayments: true,
+    });
+    if (demo) return demo;
+
     const supabase = await createSupabaseServerClient(request);
     const ctx = await getWorkspaceContext(supabase);
     if (!ctx) return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });

@@ -1,5 +1,7 @@
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getWorkspaceOwnerIdForClient } from '@/lib/auth/workspaceClient';
+import { isDemoUiActive } from '@/lib/demo/accounts';
+import { demoEmployees } from '@/lib/demo/fixtures';
 import type { EmployeeListItem, EmployeeStatus } from './types';
 
 function coerceStatus(v: unknown): EmployeeStatus {
@@ -8,6 +10,7 @@ function coerceStatus(v: unknown): EmployeeStatus {
 }
 
 export async function fetchEmployeesList(): Promise<EmployeeListItem[]> {
+  if (isDemoUiActive()) return demoEmployees();
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
 

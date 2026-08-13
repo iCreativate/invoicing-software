@@ -68,11 +68,11 @@ export default function ClientsPage() {
         ) : null
       }
     >
-      <Card className="p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+        <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-sm font-semibold">All clients</div>
-            <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+            <div className="mt-1 text-sm text-muted-foreground">
               {loading ? 'Loading…' : `${filtered.length} client(s)`}
             </div>
           </div>
@@ -82,11 +82,11 @@ export default function ClientsPage() {
         </div>
 
         {error ? (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
+          <div className="mt-4 rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{error}</div>
         ) : null}
 
         {!loading && !error && filtered.length === 0 ? (
-          <div className="mt-6 rounded-2xl border border-dashed border-zinc-200 p-6 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
+          <div className="mt-6 rounded-[var(--ti-radius)] border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">
             No clients yet. Create your first client.
             <div className="mt-3">
               {canMutate ? (
@@ -114,7 +114,7 @@ export default function ClientsPage() {
                 </Card>
               ))}
             </div>
-            <div className="mt-4 hidden overflow-x-auto md:block">
+            <div className="mt-4 hidden min-h-0 flex-1 overflow-auto md:block">
               <table className="w-full min-w-[860px] border-separate border-spacing-0">
                 <thead>
                   <tr className="text-left text-xs font-semibold text-muted-foreground">
@@ -127,19 +127,19 @@ export default function ClientsPage() {
                 <tbody>
                   {[1, 2, 3, 4, 5].map((i) => (
                     <tr key={i} className="text-sm">
-                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5">
                         <div className="flex items-center gap-3">
                           <Skeleton className="h-9 w-9 rounded-2xl" />
                           <Skeleton className="h-5 w-40" />
                         </div>
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5">
                         <Skeleton className="h-5 w-36" />
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5">
                         <Skeleton className="h-6 w-14 rounded-full" />
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-3 text-right dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5 text-right">
                         <Skeleton className="ml-auto h-9 w-24" />
                       </td>
                     </tr>
@@ -187,7 +187,7 @@ export default function ClientsPage() {
               ))}
             </div>
 
-            <div className="mt-4 hidden overflow-x-auto md:block">
+            <div className="mt-4 hidden min-h-0 flex-1 overflow-auto md:block">
               <table className="w-full min-w-[860px] border-separate border-spacing-0">
                 <thead>
                   <tr className="text-left text-xs font-semibold text-muted-foreground">
@@ -200,7 +200,7 @@ export default function ClientsPage() {
                 <tbody>
                   {filtered.map((c) => (
                     <tr key={c.id} className="text-sm">
-                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5">
                         <div className="flex items-center gap-3">
                           <div className="h-9 w-9 rounded-2xl bg-primary/10 text-primary grid place-items-center text-xs font-semibold">
                             {initials(c.name)}
@@ -214,13 +214,13 @@ export default function ClientsPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-3 text-muted-foreground dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5 text-muted-foreground">
                         {c.email ?? '—'}
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5">
                         <Badge variant="success">Active</Badge>
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-3 text-right dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5 text-right">
                         <div className="inline-flex items-center gap-2">
                           <Link href={`${routes.app.clients}/${c.id}`}>
                             <Button variant="secondary" className="h-9">

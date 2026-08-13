@@ -258,7 +258,7 @@ export default function ProductsServicesClient() {
         )
       }
     >
-      <PageBody maxWidthClassName="max-w-5xl">
+      <PageBody>
         {tableMissing ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
             <p className="font-semibold">Database table required</p>
@@ -276,8 +276,8 @@ export default function ProductsServicesClient() {
         ) : null}
 
         <PageMain>
-        <Card className="p-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+          <div className="flex shrink-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="text-sm font-semibold">Catalog</div>
               <div className="mt-1 text-sm text-muted-foreground">
@@ -358,7 +358,7 @@ export default function ProductsServicesClient() {
                 ))}
               </div>
 
-              <div className="mt-4 hidden overflow-x-auto md:block">
+              <div className="mt-4 hidden min-h-0 flex-1 overflow-auto md:block">
                 <table className="w-full min-w-[720px] border-separate border-spacing-0">
                   <thead>
                     <tr className="text-left text-xs font-semibold text-muted-foreground">

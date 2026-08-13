@@ -3,6 +3,9 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getWorkspaceContext } from '@/lib/auth/workspace';
 import { canRecordPayments } from '@/lib/permissions/team';
 import { insertPaymentAndReconcile } from '@/lib/payments/recalculateInvoiceFromPayments';
+import { demoNotAvailableResponse } from '@/lib/demo/apiGate';
+import { demoPayments } from '@/lib/demo/fixtures';
+import { requestIsDemo } from '@/lib/demo/server';
 
 const ALLOWED_METHODS = new Set([
   'bank_transfer',
@@ -32,6 +35,24 @@ function currentMonthUtc() {
 
 export async function GET(request: Request) {
   try {
+    if (requestIsDemo(request)) {
+      const d = new Date();
+      const month = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+      const payments = demoPayments();
+      const monthlyIncome = payments.reduce((s, p) => s + Number(p.amount ?? 0), 0);
+      return NextResponse.json({
+        success: true,
+        payments,
+        analytics: {
+          month,
+          monthlyIncome,
+          monthlyCurrency: 'ZAR',
+          avgDaysToFirstPayment: 12,
+        },
+        demo: true,
+      });
+    }
+
     const supabase = await createSupabaseServerClient(request);
     const ctx = await getWorkspaceContext(supabase);
     if (!ctx) return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });
@@ -231,6 +252,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const blocked = demoNotAvailableResponse(request);
+    if (blocked) return blocked;
+
     const supabase = await createSupabaseServerClient(request);
     const ctx = await getWorkspaceContext(supabase);
     if (!ctx) return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });

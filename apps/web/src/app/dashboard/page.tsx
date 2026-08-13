@@ -1,26 +1,49 @@
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getWorkspaceContext } from '@/lib/auth/workspace';
-import { buildDemoDashboardSummary, getDashboardSummary } from '@/lib/dashboard/summary';
+import { buildDemoDashboardSummary, emptyDashboardSummary, getDashboardSummary } from '@/lib/dashboard/summary';
+import { isMissingRelationError, isTransientDbError, withTimeoutRetry } from '@/lib/demo/server';
 import DashboardClient from './DashboardClient';
+
+function isDemoCookieStore(store: Awaited<ReturnType<typeof cookies>>) {
+  return (
+    store.get('ti_demo')?.value === '1' ||
+    store.get('ti_demo_ui')?.value === '1' ||
+    store.get('ti_supabase_down')?.value === '1'
+  );
+}
 
 export default async function DashboardPage() {
   const cookieStore = await cookies();
-  const demo = cookieStore.get('ti_demo')?.value === '1';
 
-  if (demo) {
+  if (isDemoCookieStore(cookieStore)) {
     return <DashboardClient userEmail="demo@timelyinvoices.app" summary={buildDemoDashboardSummary()} />;
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user: { id: string; email?: string | null } | null = null;
+  let supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  try {
+    supabase = await createSupabaseServerClient();
+    const result = await withTimeoutRetry(() => supabase.auth.getUser(), 12000, 1);
+    user = result.data.user;
+  } catch {
+    redirect('/login?next=/dashboard');
+  }
 
-  const ws = await getWorkspaceContext(supabase);
-  const ownerId = ws?.workspaceOwnerId ?? user?.id ?? null;
+  if (!user) {
+    redirect('/login?next=/dashboard');
+  }
 
-  const summary = await getDashboardSummary(supabase, ownerId);
-
-  return <DashboardClient userEmail={user?.email ?? null} summary={summary} />;
+  try {
+    const ws = await getWorkspaceContext(supabase);
+    const ownerId = ws?.workspaceOwnerId ?? user.id;
+    const summary = await withTimeoutRetry(() => getDashboardSummary(supabase, ownerId), 20000, 1);
+    return <DashboardClient userEmail={user.email ?? null} summary={summary} />;
+  } catch (err) {
+    if (isTransientDbError(err) || isMissingRelationError(err)) {
+      return <DashboardClient userEmail={user.email ?? null} summary={emptyDashboardSummary()} />;
+    }
+    redirect('/login?next=/dashboard');
+  }
 }

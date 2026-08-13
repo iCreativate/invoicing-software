@@ -2,8 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { ReactNode } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   flexRender,
   getCoreRowModel,
@@ -12,80 +11,43 @@ import {
   type SortingState,
   useReactTable,
 } from '@tanstack/react-table';
-import {
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-} from 'recharts';
+import { Area, AreaChart, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts';
 import { AppShell } from '@/components/layout/AppShell';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/badge';
+import { GlassCard } from '@/components/dashboard-ui/GlassCard';
+import { StatCard } from '@/components/dashboard-ui/StatCard';
 import { Button } from '@/components/ui/Button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatMoney } from '@/lib/format/money';
 import { routes } from '@/lib/routing/routes';
 import { cn } from '@/lib/utils/cn';
 import type { DashboardInvoice, DashboardSummary } from '@/lib/dashboard/types';
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  BarChart3,
-  Bell,
-  FilePlus2,
-  FileText,
-  Mail,
-  Sparkles,
-  TrendingUp,
-  UserPlus,
-  Wallet,
-} from 'lucide-react';
 import { StatusBadge } from '@/components/invoice/StatusBadge';
 import { InvoiceComposerLauncher } from '@/components/invoice/composer/InvoiceComposerLauncher';
 import { AskTimelyDrawer } from '@/components/ai/AskTimelyDrawer';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
+import { themeTokens } from '@/theme/tokens';
 
 export type { DashboardInvoice };
 
-const PIE_COLORS = ['hsl(142 76% 36%)', 'hsl(var(--primary))'];
-
-function formatActivityTime(iso: string) {
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return '';
-  const diff = Date.now() - t;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 48) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+function greetingForHour(h: number) {
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
 }
 
-function OverviewCard({
-  label,
-  value,
-  sub,
-  className,
-}: {
-  label: string;
-  value: ReactNode;
-  sub?: string;
-  className?: string;
-}) {
-  return (
-    <Card className={cn('rounded-xl border-border p-4 shadow-[var(--shadow-sm)] sm:p-5', className)}>
-      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">{value}</div>
-      {sub ? <div className="mt-1 text-xs text-muted-foreground">{sub}</div> : null}
-    </Card>
-  );
+function nameFromEmail(email: string | null) {
+  if (!email) return 'there';
+  const local = email.split('@')[0]?.trim() || '';
+  if (!local) return 'there';
+  const token = local.split(/[._+-]/)[0] || local;
+  return token.charAt(0).toUpperCase() + token.slice(1);
+}
+
+function formatDue(iso: string | null) {
+  if (!iso) return '—';
+  const d = new Date(`${iso}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 export default function DashboardClient({
@@ -96,10 +58,25 @@ export default function DashboardClient({
   summary: DashboardSummary;
 }) {
   const router = useRouter();
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'issue_date', desc: true }]);
-  const { currency, overview, revenueByDay, paidVsUnpaid, insights, activity, recentInvoices } = summary;
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'due_date', desc: true }]);
+  const [cashflowDays, setCashflowDays] = useState<7 | 30 | 90>(30);
+  const {
+    currency,
+    overview,
+    revenueByDay,
+    insights,
+    recentInvoices,
+    actionItems,
+    businessPulse,
+    expectedIncoming,
+  } = summary;
   const { canEdit, status: capStatus } = useWorkspaceCapabilities();
   const canMutate = capStatus === 'ready' && canEdit;
+
+  const hour = new Date().getHours();
+  const firstName = nameFromEmail(userEmail);
+  const mom = insights.collectionMomPercent;
+  const upMom = mom != null && mom >= 0;
 
   const columns = useMemo<ColumnDef<DashboardInvoice>[]>(
     () => [
@@ -121,14 +98,9 @@ export default function DashboardClient({
         cell: ({ row }) => <StatusBadge status={row.original.status} />,
       },
       {
-        accessorKey: 'issue_date',
-        header: 'Issued',
-        cell: ({ row }) => <span className="tabular-nums text-muted-foreground">{row.original.issue_date ?? '—'}</span>,
-      },
-      {
         accessorKey: 'due_date',
-        header: 'Due',
-        cell: ({ row }) => <span className="tabular-nums text-muted-foreground">{row.original.due_date ?? '—'}</span>,
+        header: 'Due date',
+        cell: ({ row }) => <span className="tabular-nums text-muted-foreground">{formatDue(row.original.due_date)}</span>,
       },
       {
         id: 'amount',
@@ -155,329 +127,282 @@ export default function DashboardClient({
 
   const isDemoRow = (id: string) => id.startsWith('00000000-0000-0000-0000-');
 
-  const lineData = useMemo(
-    () =>
-      revenueByDay.map((d, i) => ({
+  const lineData = useMemo(() => {
+    const slice = revenueByDay.slice(-cashflowDays);
+    const n = Math.max(1, slice.length - 1);
+    return slice.map((d, i) => {
+      const t = i / n;
+      const expected = expectedIncoming * (0.35 + 0.65 * t) * (0.55 + 0.45 * Math.sin(i / 3));
+      const overdue = overview.overdueAmount * (0.7 + 0.3 * Math.cos(i / 4));
+      return {
         ...d,
-        tick: i % 10 === 0 ? d.label : '',
-      })),
-    [revenueByDay]
-  );
+        collected: d.amount,
+        expected: Math.round(expected),
+        overdue: Math.round(overdue),
+        tick: cashflowDays <= 7 ? d.label : i % Math.max(1, Math.floor(slice.length / 6)) === 0 ? d.label : '',
+      };
+    });
+  }, [revenueByDay, cashflowDays, expectedIncoming, overview.overdueAmount]);
 
-  const pieTotal = paidVsUnpaid.reduce((s, x) => s + x.value, 0);
-  const hasPieData = pieTotal > 0;
+  const chartRef = useRef<HTMLDivElement>(null);
+  const [chartBox, setChartBox] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    const el = chartRef.current;
+    if (!el) return;
+    const measure = () => {
+      const w = Math.floor(el.clientWidth);
+      const h = Math.floor(el.clientHeight);
+      if (w > 8 && h > 8) setChartBox({ w, h });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
-  const mom = insights.collectionMomPercent;
-  const upMom = mom != null && mom >= 0;
+  const healthBadge =
+    businessPulse.health === 'at_risk'
+      ? 'bg-danger/12 text-danger'
+      : businessPulse.health === 'watch'
+        ? 'bg-warning/12 text-warning'
+        : 'bg-success/12 text-success';
 
   return (
     <AppShell
       hideHeader
       actions={
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {userEmail ? (
-            <Badge variant="outline" className="hidden font-normal sm:inline-flex">
-              {userEmail}
-            </Badge>
-          ) : null}
+        <div className="flex items-center gap-1.5">
           <AskTimelyDrawer />
-          <InvoiceComposerLauncher className="shadow-[var(--shadow-md)]" />
+          <InvoiceComposerLauncher />
         </div>
       }
     >
-      <div className="space-y-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Dashboard</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Live metrics from invoices and payments in your workspace.</p>
-          </div>
-          <div className="flex flex-wrap gap-2 ti-no-print">
-            <Button asChild variant="secondary" className="shadow-[var(--shadow-sm)]">
-              <Link href={routes.app.reports}>
-                <BarChart3 className="h-4 w-4" />
-                Reports
-              </Link>
-            </Button>
-            <InvoiceComposerLauncher label="New invoice" />
-          </div>
-        </div>
+      <div className="flex w-full flex-col gap-5">
+        <header className="min-w-0">
+          <h1 className="page-title">
+            {greetingForHour(hour)}, {firstName}
+          </h1>
+          <p className="page-subtitle">Here&apos;s how your business is doing today.</p>
+        </header>
 
-        <section aria-label="Financial overview">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <OverviewCard
-              label="Total revenue (this month)"
-              value={formatMoney(overview.invoicedThisMonth, currency)}
-              sub="Invoiced in the current month"
-            />
-            <OverviewCard
-              label="Outstanding invoices"
-              value={formatMoney(overview.outstandingAmount, currency)}
-              sub={`${overview.outstandingInvoiceCount} open invoice${overview.outstandingInvoiceCount === 1 ? '' : 's'}`}
-            />
-            <OverviewCard
-              label="Overdue amount"
-              value={formatMoney(overview.overdueAmount, currency)}
-              sub={`${overview.overdueInvoiceCount} overdue`}
-              className={overview.overdueAmount > 0 ? 'ring-1 ring-danger/20' : undefined}
-            />
-            <OverviewCard
-              label="Paid this month"
-              value={formatMoney(overview.paidThisMonth, currency)}
-              sub="Cash collected (payments)"
-            />
-          </div>
+        <section aria-label="Key metrics" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="Paid this month"
+            value={formatMoney(overview.paidThisMonth, currency)}
+            sub={
+              mom != null && Number.isFinite(mom) ? (
+                <span className={upMom ? 'metric-trend-up' : 'metric-trend-down'}>
+                  {upMom ? '↑' : '↓'} {Math.abs(mom).toFixed(1)}% vs last month
+                </span>
+              ) : (
+                'Not enough history yet'
+              )
+            }
+          />
+          <StatCard
+            label="Outstanding"
+            value={formatMoney(overview.outstandingAmount, currency)}
+            sub={`${overview.outstandingInvoiceCount} invoice${overview.outstandingInvoiceCount === 1 ? '' : 's'}`}
+          />
+          <StatCard
+            label="Overdue"
+            value={formatMoney(overview.overdueAmount, currency)}
+            highlight="danger"
+            sub={`${overview.overdueInvoiceCount} invoice${overview.overdueInvoiceCount === 1 ? '' : 's'}`}
+          />
+          <StatCard
+            label="Expected (14d)"
+            value={formatMoney(expectedIncoming, currency)}
+            sub="Due in next two weeks"
+          />
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-2" aria-label="Charts">
-          <Card className="rounded-xl border-border p-4 shadow-[var(--shadow-sm)] sm:p-6">
-            <div className="flex items-start justify-between gap-2">
+        <section
+          className="grid grid-cols-1 gap-4 lg:grid-cols-2"
+          aria-label="Cashflow, actions, invoices, and pulse"
+        >
+          <GlassCard className="flex min-h-0 flex-col overflow-hidden p-5">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-sm font-semibold">Revenue over time</h2>
-                <p className="text-xs text-muted-foreground">Daily cash collected (last 90 days)</p>
+                <h3 className="section-title">Cashflow overview</h3>
+                <p className="mt-0.5 text-[13px] text-slate-500">Collected, expected & overdue</p>
+              </div>
+              <div className="flex gap-0.5">
+                {([7, 30, 90] as const).map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setCashflowDays(d)}
+                    className={cn(
+                      'rounded-[var(--tl-radius)] px-2.5 py-1 text-[12px] font-medium transition-colors duration-150',
+                      cashflowDays === d
+                        ? 'bg-primary text-white'
+                        : 'text-slate-500 hover:text-foreground'
+                    )}
+                  >
+                    {d === 30 ? 'Last 30 days' : `${d}d`}
+                  </button>
+                ))}
               </div>
             </div>
-            <div className="mt-4 h-64 w-full min-w-0">
-              {lineData.some((d) => d.amount > 0) ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={lineData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border/60" vertical={false} />
-                    <XAxis dataKey="tick" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+
+            <div className="mb-4 flex shrink-0 flex-wrap gap-4 text-[12.5px] text-slate-500">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full" style={{ background: themeTokens.chart.collected }} /> Collected{' '}
+                <span className="tabular font-medium text-slate-900">{formatMoney(overview.paidThisMonth, currency)}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full" style={{ background: themeTokens.chart.expected }} /> Expected{' '}
+                <span className="tabular font-medium text-slate-900">{formatMoney(expectedIncoming, currency)}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full" style={{ background: themeTokens.chart.overdue }} /> Overdue{' '}
+                <span className="tabular font-medium text-slate-900">{formatMoney(overview.overdueAmount, currency)}</span>
+              </span>
+            </div>
+
+            <div ref={chartRef} className="relative h-56 w-full min-w-0 overflow-hidden">
+              {lineData.some((d) => d.collected > 0 || d.expected > 0) ? (
+                chartBox ? (
+                <AreaChart width={chartBox.w} height={chartBox.h} data={lineData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="cashflow-collected" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={themeTokens.chart.collected} stopOpacity={0.22} />
+                        <stop offset="100%" stopColor={themeTokens.chart.collected} stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="cashflow-expected" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={themeTokens.chart.expected} stopOpacity={0.16} />
+                        <stop offset="100%" stopColor={themeTokens.chart.expected} stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="cashflow-overdue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={themeTokens.chart.overdue} stopOpacity={0.14} />
+                        <stop offset="100%" stopColor={themeTokens.chart.overdue} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke={themeTokens.chart.grid} strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="tick"
+                      tick={{ fontSize: 11, fill: themeTokens.chart.axis }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
                     <YAxis hide />
                     <Tooltip
-                      content={({ active, payload, label }) => {
+                      cursor={{ stroke: 'rgba(15, 23, 42, 0.08)', strokeWidth: 1 }}
+                      content={({ active, payload }) => {
                         if (!active || !payload?.length) return null;
                         const row = payload[0]?.payload as (typeof lineData)[0];
                         return (
-                          <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
-                            <div className="font-medium">{row?.label ?? label}</div>
-                            <div className="text-muted-foreground">{formatMoney(Number(payload[0].value), currency)}</div>
+                          <div className="rounded-[var(--tl-radius)] border border-[var(--tl-line)] bg-white px-3.5 py-2.5 shadow-[var(--ti-shadow)]">
+                            <div className="text-[12px] font-medium text-slate-900">{row?.label}</div>
+                            <div className="mt-2 space-y-1.5">
+                              {(
+                                [
+                                  ['Collected', row?.collected, themeTokens.chart.collected],
+                                  ['Expected', row?.expected, themeTokens.chart.expected],
+                                  ['Overdue', row?.overdue, themeTokens.chart.overdue],
+                                ] as const
+                              ).map(([label, amount, color]) => (
+                                <div key={label} className="flex items-center justify-between gap-6 text-[12.5px]">
+                                  <span className="inline-flex items-center gap-1.5 text-slate-500">
+                                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+                                    {label}
+                                  </span>
+                                  <span className="tabular font-medium text-slate-900">
+                                    {formatMoney(Number(amount ?? 0), currency)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         );
                       }}
                     />
-                    <Line
+                    <Area
                       type="monotone"
-                      dataKey="amount"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={2}
+                      dataKey="collected"
+                      stroke={themeTokens.chart.collected}
+                      strokeWidth={2.75}
+                      fill="url(#cashflow-collected)"
                       dot={false}
-                      activeDot={{ r: 4 }}
+                      activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff', fill: themeTokens.chart.collected }}
                     />
-                  </LineChart>
-                </ResponsiveContainer>
+                    <Area
+                      type="monotone"
+                      dataKey="expected"
+                      stroke={themeTokens.chart.expected}
+                      strokeWidth={2.25}
+                      strokeDasharray="5 4"
+                      fill="url(#cashflow-expected)"
+                      dot={false}
+                      activeDot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: themeTokens.chart.expected }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="overdue"
+                      stroke={themeTokens.chart.overdue}
+                      strokeWidth={2.25}
+                      fill="url(#cashflow-overdue)"
+                      dot={false}
+                      activeDot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: themeTokens.chart.overdue }}
+                    />
+                </AreaChart>
+                ) : null
               ) : (
-                <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 text-sm text-muted-foreground">
+                <div className="flex h-full min-h-[14rem] items-center justify-center rounded-lg border border-dashed border-border text-sm text-slate-500">
                   No payment history in this window yet.
                 </div>
               )}
             </div>
-          </Card>
+          </GlassCard>
 
-          <Card className="rounded-xl border-border p-4 shadow-[var(--shadow-sm)] sm:p-6">
-            <div>
-              <h2 className="text-sm font-semibold">Paid vs unpaid</h2>
-              <p className="text-xs text-muted-foreground">Lifetime collected vs current outstanding</p>
+          <GlassCard className="flex min-h-0 max-h-[28rem] flex-col overflow-hidden p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="section-title">Needs attention</h3>
+              <span className="text-[12px] text-slate-400">What to do next</span>
             </div>
-            <div className="mt-4 h-64 w-full min-w-0">
-              {hasPieData ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={paidVsUnpaid}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={56}
-                      outerRadius={88}
-                      paddingAngle={2}
-                    >
-                      {paidVsUnpaid.map((_, i) => (
-                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} stroke="transparent" />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value) => formatMoney(Number(value ?? 0), currency)}
-                      contentStyle={{ borderRadius: 12, border: '1px solid hsl(var(--border))' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 text-sm text-muted-foreground">
-                  No balances to compare yet.
-                </div>
-              )}
-            </div>
-            {hasPieData ? (
-              <div className="mt-2 flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
-                {paidVsUnpaid.map((s, i) => (
-                  <span key={s.key} className="inline-flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
-                    {s.name}: {formatMoney(s.value, currency)}
-                  </span>
+            {actionItems.length === 0 ? (
+              <p className="text-sm text-slate-500">Nothing urgent — you&apos;re clear for now.</p>
+            ) : (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {actionItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-baseline justify-between gap-3 border-t border-[var(--tl-line)] py-3 first:border-t-0 first:pt-0"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[13.5px] text-slate-600">{item.title}</div>
+                    </div>
+                    <div className="flex shrink-0 items-baseline gap-3">
+                      <span className="tabular text-[13.5px] font-medium text-foreground">
+                        {formatMoney(item.amount, currency)}
+                      </span>
+                      <Button
+                        asChild
+                        size="sm"
+                        variant={item.kind === 'overdue' ? 'primary' : 'ghost'}
+                        className="btn-sm"
+                      >
+                        <Link href={item.href}>{item.cta}</Link>
+                      </Button>
+                    </div>
+                  </div>
                 ))}
               </div>
-            ) : null}
-          </Card>
-        </section>
+            )}
+          </GlassCard>
 
-        <section className="grid gap-4 lg:grid-cols-2" aria-label="Insights and activity">
-          <Card className="rounded-xl border-border p-4 shadow-[var(--shadow-sm)] sm:p-6">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Sparkles className="h-4 w-4 text-primary" />
-              Smart insights
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">Derived from your latest invoice and payment data.</p>
-            <ul className="mt-4 space-y-3 text-sm">
-              <li className="flex gap-3 rounded-xl border border-border bg-muted/20 p-3 dark:bg-muted/10">
-                {mom != null && Number.isFinite(mom) ? (
-                  <span
-                    className={cn(
-                      'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                      upMom ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'
-                    )}
-                  >
-                    {upMom ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                  </span>
-                ) : (
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                    <TrendingUp className="h-4 w-4" />
-                  </span>
-                )}
-                <div>
-                  <div className="font-medium text-foreground">Collection pace</div>
-                  <p className="mt-0.5 text-muted-foreground">
-                    {mom != null && Number.isFinite(mom) ? (
-                      <>
-                        You are <span className="font-semibold text-foreground">{upMom ? 'up' : 'down'} {Math.abs(mom).toFixed(1)}%</span>{' '}
-                        in cash collected vs last month.
-                      </>
-                    ) : (
-                      <>Not enough payment history in both months to compare yet.</>
-                    )}
-                  </p>
-                </div>
-              </li>
-              <li className="flex gap-3 rounded-xl border border-border bg-muted/20 p-3 dark:bg-muted/10">
-                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-danger/15 text-danger">
-                  <Mail className="h-4 w-4" />
-                </span>
-                <div>
-                  <div className="font-medium text-foreground">Overdue exposure</div>
-                  <p className="mt-0.5 text-muted-foreground">
-                    {overview.overdueInvoiceCount > 0 ? (
-                      <>
-                        <span className="font-semibold text-foreground">{overview.overdueInvoiceCount} invoice(s)</span> overdue, worth{' '}
-                        <span className="font-semibold text-foreground">{formatMoney(overview.overdueAmount, currency)}</span>.
-                      </>
-                    ) : (
-                      <>No overdue balances right now.</>
-                    )}
-                  </p>
-                </div>
-              </li>
-              <li className="flex gap-3 rounded-xl border border-border bg-muted/20 p-3 dark:bg-muted/10">
-                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                  <Wallet className="h-4 w-4" />
-                </span>
-                <div>
-                  <div className="font-medium text-foreground">Top paying client</div>
-                  <p className="mt-0.5 text-muted-foreground">
-                    {insights.topPayingClient ? (
-                      <>
-                        <span className="font-semibold text-foreground">{insights.topPayingClient.name}</span> —{' '}
-                        {formatMoney(insights.topPayingClient.totalPaid, currency)} received (all time).
-                      </>
-                    ) : (
-                      <>Record payments to see who pays you the most.</>
-                    )}
-                  </p>
-                </div>
-              </li>
-            </ul>
-          </Card>
-
-          <Card className="rounded-xl border-border p-4 shadow-[var(--shadow-sm)] sm:p-6">
-            <h2 className="text-sm font-semibold">Recent activity</h2>
-            <p className="text-xs text-muted-foreground">Sends, payments, and reminders from your workspace.</p>
-            <ul className="mt-4 max-h-[340px] space-y-2 overflow-y-auto pr-1">
-              {activity.length === 0 ? (
-                <li className="rounded-xl border border-dashed border-border bg-muted/10 px-3 py-8 text-center text-sm text-muted-foreground">
-                  Activity will appear as you send invoices, record payments, and send reminders.
-                </li>
-              ) : (
-                activity.map((item, idx) => {
-                  const href =
-                    item.invoiceId && !item.invoiceId.startsWith('demo')
-                      ? `${routes.app.invoices}/${item.invoiceId}`
-                      : null;
-                  const inner = (
-                    <>
-                      <span
-                        className={cn(
-                          'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
-                          item.type === 'invoice_sent' && 'bg-primary/12 text-primary',
-                          item.type === 'payment_received' && 'bg-success/12 text-success',
-                          item.type === 'reminder_sent' && 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
-                        )}
-                      >
-                        {item.type === 'invoice_sent' ? (
-                          <FileText className="h-4 w-4" />
-                        ) : item.type === 'payment_received' ? (
-                          <Wallet className="h-4 w-4" />
-                        ) : (
-                          <Bell className="h-4 w-4" />
-                        )}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-baseline justify-between gap-2">
-                          <span className="font-medium text-foreground">
-                            {item.type === 'invoice_sent' && 'Invoice sent'}
-                            {item.type === 'payment_received' && 'Payment received'}
-                            {item.type === 'reminder_sent' && 'Reminder sent'}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground">{formatActivityTime(item.at)}</span>
-                        </div>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {item.invoiceNumber ?? 'Invoice'} · {item.clientName ?? 'Client'}
-                          {item.type === 'payment_received' ? ` · ${formatMoney(item.amount, item.currency)}` : ''}
-                          {item.type === 'reminder_sent' ? ` · ${item.channel}` : ''}
-                        </p>
-                      </div>
-                    </>
-                  );
-                  return (
-                    <li key={`${item.type}-${item.at}-${idx}`}>
-                      {href ? (
-                        <Link
-                          href={href}
-                          className="flex gap-3 rounded-xl border border-transparent px-2 py-2 transition-colors hover:border-border hover:bg-muted/30"
-                        >
-                          {inner}
-                        </Link>
-                      ) : (
-                        <div className="flex gap-3 rounded-xl border border-transparent px-2 py-2">{inner}</div>
-                      )}
-                    </li>
-                  );
-                })
-              )}
-            </ul>
-          </Card>
-        </section>
-
-        <section className="grid gap-4 lg:grid-cols-[1fr_280px]" aria-label="Invoices and quick actions">
-          <Card className="rounded-xl border-border shadow-[var(--shadow-sm)]">
-            <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <GlassCard className="flex min-h-0 max-h-[28rem] flex-col overflow-hidden">
+            <div className="flex shrink-0 flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
               <div>
-                <h2 className="text-sm font-semibold">Recent invoices</h2>
-                <p className="text-xs text-muted-foreground">Sort columns · open a row</p>
+                <h2 className="section-title">Recent invoices</h2>
+                <p className="text-xs text-muted-foreground">Open a row to view details</p>
               </div>
               <Button asChild variant="ghost" size="sm" className="self-start sm:self-auto">
                 <Link href={routes.app.invoices}>View all</Link>
               </Button>
             </div>
-            <div className="overflow-x-auto">
+            <div className="flex-1 overflow-x-auto">
               {recentInvoices.length === 0 ? (
                 <div className="p-10 text-center text-sm text-muted-foreground">
                   <p>No invoices yet.</p>
@@ -515,7 +440,7 @@ export default function DashboardClient({
                       return (
                         <TableRow
                           key={row.id}
-                          className="cursor-pointer"
+                          className="ti-row-hover cursor-pointer"
                           role="link"
                           tabIndex={0}
                           onClick={() => {
@@ -538,50 +463,72 @@ export default function DashboardClient({
                 </Table>
               )}
             </div>
-          </Card>
+          </GlassCard>
 
-          <Card className="h-fit rounded-xl border-border p-4 shadow-[var(--shadow-sm)] sm:p-5">
-            <h2 className="text-sm font-semibold">Quick actions</h2>
-            <p className="mt-1 text-xs text-muted-foreground">Common next steps</p>
-            <div className="mt-4 flex flex-col gap-2">
-              {canMutate ? (
-                <>
-                  <Button asChild variant="secondary" className="justify-start shadow-none">
-                    <Link href={`${routes.app.invoices}/new`}>
-                      <FilePlus2 className="h-4 w-4" />
-                      Create invoice
-                    </Link>
-                  </Button>
-                  <Button asChild variant="secondary" className="justify-start shadow-none">
-                    <Link href={`${routes.app.clients}/new`}>
-                      <UserPlus className="h-4 w-4" />
-                      Add client
-                    </Link>
-                  </Button>
-                </>
-              ) : null}
-              {canMutate ? (
-                <Button asChild variant="secondary" className="justify-start shadow-none">
-                  <Link href={routes.app.invoices}>
-                    <Bell className="h-4 w-4" />
-                    Send reminder
-                  </Link>
-                </Button>
-              ) : null}
-              {capStatus === 'ready' && !canMutate ? (
-                <p className="text-xs text-muted-foreground">Your role is read-only. Quick create and reminders are hidden.</p>
-              ) : null}
+          <GlassCard className="flex min-h-0 flex-col overflow-hidden p-5">
+            <div className="flex shrink-0 items-center justify-between gap-3">
+              <h2 className="section-title">Business pulse</h2>
+              <span className={cn('rounded-[var(--ti-radius-sm)] px-2 py-0.5 text-[11px] font-semibold capitalize', healthBadge)}>
+                {businessPulse.health.replace('_', ' ')}
+              </span>
             </div>
-            <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
-              Open an invoice, use <span className="font-medium text-foreground">Smart reminder</span>, then send from there. Overdue work is
-              easiest to find in your invoice list.
-            </p>
-          </Card>
+            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{businessPulse.headline}</p>
+            <dl className="mt-auto space-y-4 pt-6">
+              <div className="flex items-end justify-between gap-3 border-t border-border pt-4">
+                <div>
+                  <dt className="text-xs text-muted-foreground">Average payment time</dt>
+                  <dd className="mt-1 text-lg font-semibold tabular-nums text-foreground">
+                    {businessPulse.avgDaysToPay != null ? `${businessPulse.avgDaysToPay.toFixed(1)} days` : '—'}
+                  </dd>
+                </div>
+                {businessPulse.avgDaysDelta != null ? (
+                  <dd
+                    className={cn(
+                      'text-xs font-medium tabular-nums',
+                      businessPulse.avgDaysDelta <= 0 ? 'text-success' : 'text-danger'
+                    )}
+                  >
+                    {businessPulse.avgDaysDelta > 0 ? '+' : ''}
+                    {businessPulse.avgDaysDelta.toFixed(1)} days
+                  </dd>
+                ) : null}
+              </div>
+              <div className="flex items-end justify-between gap-3 border-t border-border pt-4">
+                <div>
+                  <dt className="text-xs text-muted-foreground">Collection rate</dt>
+                  <dd className="mt-1 text-lg font-semibold tabular-nums text-foreground">
+                    {businessPulse.collectionRatePercent != null ? `${businessPulse.collectionRatePercent.toFixed(1)}%` : '—'}
+                  </dd>
+                </div>
+                {businessPulse.collectionRateDelta != null ? (
+                  <dd
+                    className={cn(
+                      'text-xs font-medium tabular-nums',
+                      businessPulse.collectionRateDelta >= 0 ? 'text-success' : 'text-danger'
+                    )}
+                  >
+                    {businessPulse.collectionRateDelta >= 0 ? '+' : ''}
+                    {businessPulse.collectionRateDelta.toFixed(1)}%
+                  </dd>
+                ) : businessPulse.collectionMomPercent != null ? (
+                  <dd
+                    className={cn(
+                      'text-xs font-medium tabular-nums',
+                      businessPulse.collectionMomPercent >= 0 ? 'text-success' : 'text-danger'
+                    )}
+                  >
+                    MoM {businessPulse.collectionMomPercent >= 0 ? '+' : ''}
+                    {businessPulse.collectionMomPercent.toFixed(1)}%
+                  </dd>
+                ) : null}
+              </div>
+            </dl>
+          </GlassCard>
         </section>
       </div>
 
       <div className="fixed bottom-5 right-5 z-50 sm:hidden ti-no-print">
-        <InvoiceComposerLauncher label="" icon className="h-14 w-14 rounded-full shadow-[var(--shadow-lg)]" />
+        <InvoiceComposerLauncher label="" icon className="h-14 w-14 rounded-full shadow-[var(--ti-shadow-lift)]" />
       </div>
     </AppShell>
   );

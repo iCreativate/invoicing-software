@@ -1,6 +1,8 @@
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getWorkspaceOwnerIdForClient } from '@/lib/auth/workspaceClient';
 import { subscriptionShowsPoweredBy as subscriptionShowsPoweredByFn } from '@/lib/company/subscription';
+import { isDemoUiActive } from '@/lib/demo/accounts';
+import { demoCompanyProfile, demoReadOnlyError } from '@/lib/demo/fixtures';
 import type { CompanyProfile } from './types';
 
 export const subscriptionShowsPoweredBy = subscriptionShowsPoweredByFn;
@@ -66,6 +68,7 @@ async function selectCompanyProfileRow(supabase: ReturnType<typeof createSupabas
 }
 
 export async function fetchMyCompanyProfile(): Promise<CompanyProfile | null> {
+  if (isDemoUiActive()) return demoCompanyProfile();
   const supabase = createSupabaseBrowserClient();
   let workspaceOwnerId: string;
   try {
@@ -85,6 +88,7 @@ function makeReferralCode(): string {
 
 /** Ensures a stable referral_code exists (best-effort if column missing). */
 export async function ensureReferralCode(): Promise<string | null> {
+  if (isDemoUiActive()) return demoCompanyProfile().referralCode;
   const supabase = createSupabaseBrowserClient();
   const workspaceOwnerId = await getWorkspaceOwnerIdForClient();
 
@@ -122,6 +126,7 @@ export async function upsertMyCompanyProfile(input: {
   emailTemplateInvoice?: string | null;
   emailTemplateReminder?: string | null;
 }): Promise<CompanyProfile> {
+  if (isDemoUiActive()) throw demoReadOnlyError();
   const supabase = createSupabaseBrowserClient();
   const workspaceOwnerId = await getWorkspaceOwnerIdForClient();
 
@@ -203,6 +208,10 @@ function logoFileExtension(file: File): string {
 
 export async function uploadCompanyLogo(file: File): Promise<string> {
   const supabase = createSupabaseBrowserClient();
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session?.access_token) {
+    throw new Error('Not signed in.');
+  }
   const workspaceOwnerId = await getWorkspaceOwnerIdForClient();
 
   const ext = logoFileExtension(file);

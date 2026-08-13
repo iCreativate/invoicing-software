@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { assertCanEdit, getWorkspaceContext } from '@/lib/auth/workspace';
 import { canEditRecords, canManageTeam } from '@/lib/permissions/team';
+import { writeAuditLog } from '@/lib/audit/log';
+import { demoNotAvailableResponse, demoSuccessResponse } from '@/lib/demo/apiGate';
+import { demoSettingsPayload } from '@/lib/demo/fixtures';
 
 function mapProfile(row: any) {
   return {
@@ -98,6 +101,9 @@ async function loadProfile(supabase: Awaited<ReturnType<typeof createSupabaseSer
 
 export async function GET(request: Request) {
   try {
+    const demo = demoSuccessResponse(request, demoSettingsPayload());
+    if (demo) return demo;
+
     const supabase = await createSupabaseServerClient(request);
     const ctx = await getWorkspaceContext(supabase);
     if (!ctx) return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });
@@ -122,6 +128,8 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    const blocked = demoNotAvailableResponse(request);
+    if (blocked) return blocked;
     const supabase = await createSupabaseServerClient(request);
     const ctx = await getWorkspaceContext(supabase);
     if (!ctx) return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });
@@ -153,7 +161,7 @@ export async function PATCH(request: Request) {
       account_type: body.accountType != null ? String(body.accountType) || null : null,
     };
 
-    if (body.subscriptionPlan !== undefined) payload.subscription_plan = String(body.subscriptionPlan);
+    // subscription_plan is server-managed (billing provider / admin). Ignore client attempts to spoof.
     if (body.preferredLocale !== undefined) payload.preferred_locale = String(body.preferredLocale);
     if (body.baseCurrency !== undefined) payload.base_currency = String(body.baseCurrency).toUpperCase();
 
@@ -188,6 +196,15 @@ export async function PATCH(request: Request) {
     }
 
     if (error) throw error;
+
+    await writeAuditLog(supabase, {
+      ownerId: ctx.workspaceOwnerId,
+      actorUserId: ctx.actorUserId,
+      action: 'settings.updated',
+      entityType: 'company_profiles',
+      entityId: data?.id ? String(data.id) : ctx.workspaceOwnerId,
+      meta: { companyName },
+    });
 
     return NextResponse.json({ success: true, data: { company: mapProfile(data) } });
   } catch (e: any) {

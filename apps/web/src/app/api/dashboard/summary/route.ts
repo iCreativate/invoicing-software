@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getWorkspaceContext } from '@/lib/auth/workspace';
-import { getDashboardSummary } from '@/lib/dashboard/summary';
+import { buildDemoDashboardSummary, getDashboardSummary } from '@/lib/dashboard/summary';
+import { demoSuccessResponse } from '@/lib/demo/apiGate';
 
 export async function GET(request: Request) {
   try {
+    const demo = demoSuccessResponse(request, buildDemoDashboardSummary());
+    if (demo) return demo;
+
     const supabase = await createSupabaseServerClient(request);
     const ctx = await getWorkspaceContext(supabase);
     if (!ctx) {

@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils/cn';
  * Standard page structure inside {@link AppShell}:
  *
  * 1. **Header** — `title` + `actions` (AppShell props)
- * 2. **PageBody** — max-width container and vertical spacing
+ * 2. **PageBody** — full-bleed flex column (matches dashboard width/height fill)
  * 3. **PageAlerts** — optional warnings / errors (first)
  * 4. **PageSummary** — optional KPI / summary cards
  * 5. **PageMain** — filters, table, form, or charts
@@ -16,14 +16,18 @@ import { cn } from '@/lib/utils/cn';
 export function PageBody({
   children,
   className,
-  maxWidthClassName = 'max-w-6xl',
+  maxWidthClassName = 'max-w-none',
 }: {
   children: ReactNode;
   className?: string;
-  /** e.g. max-w-5xl for narrower pages */
+  /** @deprecated Prefer full-bleed; kept for rare narrow forms */
   maxWidthClassName?: string;
 }) {
-  return <div className={cn('mx-auto space-y-6', maxWidthClassName, className)}>{children}</div>;
+  return (
+    <div className={cn('flex w-full flex-1 flex-col gap-5', maxWidthClassName, className)}>
+      {children}
+    </div>
+  );
 }
 
 export function PageAlerts({ children, className }: { children: ReactNode; className?: string }) {
@@ -40,7 +44,7 @@ export function PageSummary({ children, className }: { children: ReactNode; clas
 
 export function PageMain({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <section aria-label="Main content" className={cn('space-y-4', className)}>
+    <section aria-label="Main content" className={cn('flex flex-1 flex-col gap-4', className)}>
       {children}
     </section>
   );

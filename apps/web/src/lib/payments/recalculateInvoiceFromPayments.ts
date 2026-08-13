@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { calcBalance, fromCents, toCents } from '@/lib/money';
 
 /**
  * Recompute invoice paid_amount, balance_amount, status, and paid_date from completed payments.
@@ -22,9 +23,10 @@ export async function recalculateInvoiceFromPayments(supabase: SupabaseClient, i
   if (payErr) throw payErr;
 
   const rows = (payRows ?? []) as { amount: number | string; payment_date: string }[];
-  const paid = rows.reduce((s, r) => s + Number(r.amount ?? 0), 0);
+  const paidCents = rows.reduce((s, r) => s + toCents(r.amount ?? 0), 0);
   const total = Number((inv as any).total_amount ?? 0);
-  const balance = Math.max(0, total - paid);
+  const { balance, paid, overpaid } = calcBalance({ total, paid: fromCents(paidCents) });
+  void overpaid;
 
   const prevStatus = String((inv as any).status ?? 'draft');
 

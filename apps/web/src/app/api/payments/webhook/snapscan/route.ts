@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { insertPaymentAndReconcile } from '@/lib/payments/recalculateInvoiceFromPayments';
 
 function secureEq(a: string, b: string) {
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Missing env: SNAPSCAN_WEBHOOK_AUTH_KEY' }, { status: 500 });
     }
 
-    const raw = await request.text(); // raw x-www-form-urlencoded body
+    const raw = await request.text();
     const signature = crypto.createHmac('sha256', authKey).update(raw).digest('hex');
     const expected = `SnapScan signature=${signature}`;
     const received = request.headers.get('authorization') ?? '';
@@ -33,14 +33,30 @@ export async function POST(request: Request) {
     }
 
     const payload = JSON.parse(payloadStr);
-    const status = String(payload.status ?? '').toLowerCase(); // completed|error|pending...
+    const status = String(payload.status ?? '').toLowerCase();
     const merchantReference = payload.merchantReference ?? payload.merchant_reference ?? payload.reference;
     const sessionId = String(merchantReference ?? '');
     if (!sessionId) {
       return NextResponse.json({ success: false, error: 'Missing merchantReference' }, { status: 400 });
     }
 
-    const supabase = await createSupabaseServerClient(request);
+    const externalEventId = payload.id != null ? `snap:${payload.id}` : `snap_session:${sessionId}:${status}`;
+    const supabase = createSupabaseAdminClient();
+
+    const { error: evtErr } = await supabase.from('payment_events').insert({
+      provider: 'snapscan',
+      external_event_id: externalEventId,
+      payment_session_id: sessionId,
+      event_type: status || 'notify',
+      payload,
+    });
+    if (evtErr) {
+      const msg = String((evtErr as any).message ?? '').toLowerCase();
+      if (msg.includes('duplicate') || msg.includes('unique')) {
+        return NextResponse.json({ success: true, data: { duplicate: true } });
+      }
+    }
+
     const { data: session } = await supabase
       .from('payment_sessions')
       .select('id,invoice_id,amount,currency,status')
@@ -63,7 +79,6 @@ export async function POST(request: Request) {
       .eq('id', sessionId);
 
     if (status === 'completed') {
-      // Idempotency: record payment once per session
       const { data: existing } = await supabase
         .from('payments')
         .select('id')
@@ -85,6 +100,12 @@ export async function POST(request: Request) {
           provider: 'snapscan',
           externalReference: payload?.id != null ? String(payload.id) : null,
         });
+
+        await supabase
+          .from('payment_events')
+          .update({ invoice_id: invoiceId })
+          .eq('provider', 'snapscan')
+          .eq('external_event_id', externalEventId);
       }
     }
 
@@ -93,4 +114,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, error: e?.message ?? 'Webhook error' }, { status: 500 });
   }
 }
-

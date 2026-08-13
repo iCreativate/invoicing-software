@@ -26,6 +26,11 @@ export function buildPayFastPaymentUrl(input: {
   itemName: string;
   itemDescription?: string;
   emailAddress?: string;
+  /** When set, creates a PayFast subscription (recurring billing). */
+  subscription?: {
+    frequency: 3 | 4 | 5 | 6; // 3=monthly, 4=quarterly, 5=biannual, 6=annual
+    cycles: number; // 0 = until cancelled
+  };
 }): { endpoint: string; params: Record<string, string>; signature: string; url: string } {
   const { config } = input;
   const params: Record<string, string> = {
@@ -41,6 +46,14 @@ export function buildPayFastPaymentUrl(input: {
 
   if (input.itemDescription) params.item_description = input.itemDescription;
   if (input.emailAddress) params.email_address = input.emailAddress;
+
+  if (input.subscription) {
+    params.subscription_type = '1';
+    params.billing_date = new Date().toISOString().slice(0, 10);
+    params.recurring_amount = Number(input.amount).toFixed(2);
+    params.frequency = String(input.subscription.frequency);
+    params.cycles = String(input.subscription.cycles);
+  }
 
   const signatureString =
     Object.keys(params)

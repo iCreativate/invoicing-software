@@ -12,6 +12,7 @@ import { getInvoiceStatusClasses, getInvoiceStatusLabel } from '@/features/invoi
 import type { InvoiceStatus } from '@/features/invoices/types';
 import { PayNowButton } from '@/components/payments/PayNowButton';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { isDemoUiActive } from '@/lib/demo/accounts';
 import { suggestSmartReminder } from '@/features/reminders/api';
 import { InvoicePreview } from '@/components/invoice/InvoicePreview';
 import { invoiceApiToPreviewDraft } from '@/features/invoices/previewMap';
@@ -87,6 +88,7 @@ export default function InvoiceDetailPage() {
   }, [load]);
 
   useEffect(() => {
+    if (isDemoUiActive()) return;
     const supabase = createSupabaseBrowserClient();
     const ch = supabase
       .channel(`invoice-detail-${invoiceId}`)
@@ -151,8 +153,8 @@ export default function InvoiceDetailPage() {
         </div>
       }
     >
-      <div className="grid gap-6">
-        <Card className="p-4 sm:p-6">
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-6">
+        <Card className="flex min-h-0 flex-1 flex-col overflow-auto p-4 sm:p-6">
           {error ? <div className="rounded-xl border border-danger/30 bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
 
           {loading ? (

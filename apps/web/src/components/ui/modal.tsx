@@ -20,7 +20,7 @@ export function ModalContent({
         className={cn(
           'fixed left-1/2 top-1/2 z-50 w-[calc(100%-max(1rem,env(safe-area-inset-left))-max(1rem,env(safe-area-inset-right)))] max-w-lg -translate-x-1/2 -translate-y-1/2',
           'max-h-[min(90dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem))] overflow-y-auto overscroll-contain',
-          'rounded-2xl border border-border bg-popover p-5 text-popover-foreground shadow-[var(--shadow-lg)]',
+          'rounded-card border border-border-subtle bg-popover p-5 text-popover-foreground shadow-elevated',
           'focus-visible:outline-none',
           className
         )}

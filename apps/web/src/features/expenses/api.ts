@@ -1,5 +1,7 @@
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getWorkspaceOwnerIdForClient } from '@/lib/auth/workspaceClient';
+import { isDemoUiActive } from '@/lib/demo/accounts';
+import { demoExpenses, demoReadOnlyError } from '@/lib/demo/fixtures';
 import type { ExpenseRow } from './types';
 
 export type { ExpenseRow } from './types';
@@ -31,6 +33,7 @@ export function isExpensesTableMissing(err: unknown): boolean {
 }
 
 export async function fetchExpensesList(): Promise<{ items: ExpenseRow[]; tableMissing: boolean }> {
+  if (isDemoUiActive()) return { items: demoExpenses(), tableMissing: false };
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
 
@@ -61,6 +64,7 @@ export type ExpenseInput = {
 };
 
 export async function createExpense(input: ExpenseInput): Promise<{ id: string }> {
+  if (isDemoUiActive()) throw demoReadOnlyError();
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
 
@@ -89,6 +93,7 @@ export async function createExpense(input: ExpenseInput): Promise<{ id: string }
 }
 
 export async function updateExpense(id: string, input: ExpenseInput): Promise<void> {
+  if (isDemoUiActive()) throw demoReadOnlyError();
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
 
@@ -116,6 +121,7 @@ export async function updateExpense(id: string, input: ExpenseInput): Promise<vo
 }
 
 export async function deleteExpense(id: string): Promise<void> {
+  if (isDemoUiActive()) throw demoReadOnlyError();
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
   const { error } = await supabase.from('expenses').delete().eq('id', id).eq('owner_id', ownerId);

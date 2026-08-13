@@ -36,6 +36,15 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       if (invId) return NextResponse.json({ success: true, invoiceId: String(invId) });
     }
 
+    // Prefer converting accepted quotes; owners may still convert sent/viewed (override).
+    const st = String((quote as any).status ?? '');
+    if (st === 'declined') {
+      return NextResponse.json(
+        { success: false, error: 'Declined quotes cannot be converted.' },
+        { status: 400 }
+      );
+    }
+
     const { data: items, error: iErr } = await supabase
       .from('quote_items')
       .select('description,quantity,unit_price,tax_rate,line_total')

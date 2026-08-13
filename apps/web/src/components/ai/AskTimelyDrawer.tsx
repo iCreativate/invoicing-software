@@ -54,8 +54,8 @@ export function AskTimelyDrawer() {
   return (
     <Modal open={open} onOpenChange={setOpen}>
       <ModalTrigger asChild>
-        <Button variant="secondary" className="gap-2">
-          <MessageSquare className="h-4 w-4" />
+        <Button variant="secondary" size="sm" className="gap-1.5">
+          <MessageSquare className="h-3.5 w-3.5" />
           Ask Timely
         </Button>
       </ModalTrigger>

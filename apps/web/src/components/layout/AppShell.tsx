@@ -6,38 +6,15 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils/cn';
 import { routes } from '@/lib/routing/routes';
-import {
-  LayoutDashboard,
-  FileText,
-  Users,
-  Settings,
-  Menu,
-  LogOut,
-  User,
-  WalletCards,
-  Receipt,
-  Repeat,
-  PieChart,
-  FileInput,
-  CreditCard,
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  Bell,
-  BarChart3,
-  Clock,
-  Package,
-  UsersRound,
-  Sparkles,
-  Search,
-  type LucideIcon,
-} from 'lucide-react';
+import { Menu, LogOut, Plus, Bell, ChevronLeft, ChevronRight, ChevronsUpDown, Search } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getBrowserUserSafe } from '@/lib/supabase/browserAuth';
+import { isDemoUiActive } from '@/lib/demo/accounts';
 import { ProfileBootstrap } from '@/components/profile/ProfileBootstrap';
-import { ThemeToggle } from '@/components/shell/ThemeToggle';
 import { CommandPalette } from '@/components/shell/CommandPalette';
+import { MobileNav } from '@/components/dashboard-ui/MobileNav';
+import { APP_NAV_GROUPS, APP_NAV_MORE, type AppNavItem } from '@/lib/navigation/app-nav';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
 import {
   DropdownMenu,
@@ -50,57 +27,41 @@ import {
 
 const SIDEBAR_KEY = 'ti-sidebar-collapsed';
 
-type NavItem = { href: string; label: string; icon: LucideIcon };
-
-const PRIMARY_NAV: NavItem[] = [
-  { href: routes.app.dashboard, label: 'Dashboard', icon: LayoutDashboard },
-  { href: routes.app.invoices, label: 'Invoices', icon: FileText },
-  { href: routes.app.quotes, label: 'Quotes', icon: FileInput },
-  { href: routes.app.clients, label: 'Clients', icon: Users },
-  { href: routes.app.productsServices, label: 'Products / services', icon: Package },
-  { href: routes.app.reports, label: 'Reports', icon: BarChart3 },
-  { href: routes.app.timeTracking, label: 'Time tracking', icon: Clock },
-  { href: routes.app.employees, label: 'Team', icon: UsersRound },
-  { href: routes.app.settings, label: 'Settings', icon: Settings },
-];
-
-const SECONDARY_NAV: NavItem[] = [
-  { href: routes.app.payments, label: 'Payments', icon: CreditCard },
-  { href: routes.app.expenses, label: 'Expenses', icon: Receipt },
-  { href: routes.app.recurring, label: 'Recurring', icon: Repeat },
-  { href: routes.app.reportsPl, label: 'P&L', icon: PieChart },
-  { href: routes.app.payroll, label: 'Payroll', icon: WalletCards },
-  { href: routes.app.profile, label: 'Profile', icon: User },
-];
-
 function NavLink({
   item,
   collapsed,
   onNavigate,
 }: {
-  item: NavItem;
+  item: AppNavItem;
   collapsed: boolean;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
   const Icon = item.icon;
+  const ai = item.href === routes.app.insights;
   return (
     <Link
       href={item.href}
       onClick={onNavigate}
       title={collapsed ? item.label : undefined}
       className={cn(
-        'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
-        collapsed && 'justify-center px-2',
-        active
-          ? 'bg-primary/12 text-primary shadow-sm ring-1 ring-primary/20'
-          : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+        active ? 'nav-item-active' : 'nav-item',
+        collapsed && 'justify-center px-2'
       )}
       aria-current={active ? 'page' : undefined}
     >
-      <Icon className={cn('h-[18px] w-[18px] shrink-0', active && 'text-primary')} />
-      {!collapsed ? <span className="truncate">{item.label}</span> : null}
+      <Icon className={cn('h-4 w-4 shrink-0 opacity-75', active && 'opacity-100')} />
+      {!collapsed ? (
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="truncate">{item.label}</span>
+          {ai ? (
+            <span className="rounded-badge bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-primary">
+              AI
+            </span>
+          ) : null}
+        </span>
+      ) : null}
     </Link>
   );
 }
@@ -110,87 +71,135 @@ function SidebarNav({
   variant,
   onCloseMobile,
   onToggleCollapsed,
-  onLogout,
+  userEmailLabel,
 }: {
   collapsed: boolean;
   variant: 'desktop' | 'mobile';
   onCloseMobile: () => void;
   onToggleCollapsed: () => void;
-  onLogout: () => void;
+  userEmailLabel: string | null;
 }) {
   const showLabels = variant === 'mobile' ? true : !collapsed;
   const navCollapsed = variant === 'mobile' ? false : collapsed;
+  const isDemo = Boolean(userEmailLabel?.includes('demo@'));
+  const workspaceName = isDemo ? 'Demo Business' : 'Timely';
+  const planLabel = isDemo ? 'Demo' : 'Free';
+  const userName = userEmailLabel?.split('@')[0] || 'Account';
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div
         className={cn(
-          'flex items-center gap-2 px-3 py-4',
-          variant === 'desktop' && collapsed && 'flex-col px-2'
+          'flex h-12 shrink-0 items-center gap-1.5 border-b border-sidebar-border px-4',
+          variant === 'desktop' && collapsed && 'justify-center px-2'
         )}
       >
         <Link
           href={routes.app.dashboard}
           className={cn(
-            'flex min-w-0 flex-1 items-center gap-2 rounded-xl',
-            variant === 'desktop' && collapsed && 'justify-center'
+            'flex min-w-0 flex-1 items-center gap-2',
+            variant === 'desktop' && collapsed && 'flex-none justify-center'
           )}
           onClick={onCloseMobile}
         >
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md">
-            <Sparkles className="h-4 w-4" />
-          </div>
           {showLabels ? (
             <div className="min-w-0">
-              <div className="truncate text-sm font-semibold tracking-tight">TimelyInvoices</div>
-              <div className="truncate text-[11px] text-muted-foreground">Cash flow clarity</div>
+              <div className="text-[13px] font-semibold tracking-[0.16em] text-sidebar-text-active">TIMELY</div>
+              {workspaceName !== 'Timely' ? (
+                <div className="truncate text-[11px] text-sidebar-text">{workspaceName}</div>
+              ) : null}
             </div>
-          ) : null}
+          ) : (
+            <span className="text-[11px] font-semibold tracking-[0.14em] text-sidebar-text-active">TI</span>
+          )}
         </Link>
+        {showLabels ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-active"
+                aria-label="Switch workspace"
+              >
+                <ChevronsUpDown className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-52">
+              <DropdownMenuLabel>Workspace</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href={routes.app.settings} onClick={onCloseMobile}>
+                  Settings
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href={routes.app.billing} onClick={onCloseMobile}>
+                  Billing · {planLabel}
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
         {variant === 'desktop' ? (
           <button
             type="button"
             onClick={onToggleCollapsed}
-            className={cn(
-              'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background/80 text-muted-foreground hover:bg-muted',
-              collapsed && 'mt-1'
-            )}
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-active"
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
           </button>
-        ) : null}
+        ) : (
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-active"
+            aria-label="Close menu"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
-      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-4">
-        {PRIMARY_NAV.map((item) => (
-          <NavLink key={item.href} item={item} collapsed={navCollapsed} onNavigate={onCloseMobile} />
-        ))}
-        {showLabels ? (
-          <div className="pt-4">
-            <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">More</div>
+      <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
+        {APP_NAV_GROUPS.map((group, index) => (
+          <div key={group.id}>
+            {showLabels ? (
+              <div className={cn('nav-section', index === 0 && 'pt-1')}>{group.label}</div>
+            ) : group.id !== 'overview' ? (
+              <div className="mx-2 my-2 h-px bg-sidebar-border" />
+            ) : null}
+            {group.items.map((item) => (
+              <NavLink key={item.href} item={item} collapsed={navCollapsed} onNavigate={onCloseMobile} />
+            ))}
           </div>
-        ) : (
-          <div className="my-2 h-px bg-border" />
-        )}
-        {SECONDARY_NAV.map((item) => (
+        ))}
+        {showLabels ? <div className="nav-section">More</div> : <div className="mx-2 my-2 h-px bg-sidebar-border" />}
+        {APP_NAV_MORE.map((item) => (
           <NavLink key={item.href} item={item} collapsed={navCollapsed} onNavigate={onCloseMobile} />
         ))}
       </nav>
 
-      <div className="border-t border-border p-2">
-        <Button
-          type="button"
-          variant="ghost"
+      <div className="border-t border-sidebar-border p-3">
+        <Link
+          href={routes.app.profile}
+          onClick={onCloseMobile}
           className={cn(
-            'h-10 w-full justify-start gap-3 px-3 text-muted-foreground',
+            'flex items-center gap-2.5 rounded-md px-1 py-0.5 hover:bg-sidebar-hover',
             !showLabels && 'justify-center px-0'
           )}
-          onClick={onLogout}
+          title={showLabels ? undefined : userName}
         >
-          <LogOut className="h-[18px] w-[18px] shrink-0" />
-          {showLabels ? 'Log out' : null}
-        </Button>
+          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+            {(userEmailLabel ?? 'U').charAt(0).toUpperCase()}
+          </div>
+          {showLabels ? (
+            <div className="min-w-0">
+              <div className="truncate text-[13px] font-medium text-sidebar-text-active">{userName}</div>
+              <div className="truncate text-[11px] text-sidebar-text">{planLabel}</div>
+            </div>
+          ) : null}
+        </Link>
       </div>
     </div>
   );
@@ -203,19 +212,23 @@ export function AppShell({
   fullWidth = true,
   hideHeader = false,
 }: {
-  /** Page title in the shell header; optional when `hideHeader` builds its own title. */
   title?: string;
   children: ReactNode;
   actions?: ReactNode;
   fullWidth?: boolean;
-  /** When true, skip the default page title row (e.g. dashboard builds its own header). */
   hideHeader?: boolean;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const caps = useWorkspaceCapabilities();
-  const showQuickCreate = caps.status === 'ready' && caps.canEdit;
+  // Defer permission-gated chrome until after mount so SSR HTML matches the first client paint.
+  // Capabilities still resolve in the provider; this only delays showing Quick create / read-only banner.
+  const [chromeReady, setChromeReady] = useState(false);
+  useEffect(() => {
+    setChromeReady(true);
+  }, []);
+  const showQuickCreate = chromeReady && caps.status === 'ready' && caps.canEdit;
 
   useEffect(() => {
     try {
@@ -227,7 +240,18 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
-    void getBrowserUserSafe().then((user) => setUserEmail(user?.email ?? null));
+    let cancelled = false;
+    void (async () => {
+      if (isDemoUiActive()) {
+        if (!cancelled) setUserEmail('demo@timelyinvoices.app');
+        return;
+      }
+      const user = await getBrowserUserSafe();
+      if (!cancelled) setUserEmail(user?.email ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const toggleCollapsed = useCallback(() => {
@@ -248,26 +272,26 @@ export function AppShell({
     } catch {
       // ignore
     }
-    try {
-      const supabase = createSupabaseBrowserClient();
-      await supabase.auth.signOut();
-    } catch {
-      // ignore
+    if (!isDemoUiActive()) {
+      try {
+        const supabase = createSupabaseBrowserClient();
+        await supabase.auth.signOut();
+      } catch {
+        // ignore
+      }
     }
     window.location.assign('/');
   };
 
   return (
-    <div className="min-h-dvh min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-background text-foreground">
+    <div className="app-shell ti-fintech-app">
       <ProfileBootstrap />
-      <div className="pointer-events-none fixed inset-0 -z-10 bg-[linear-gradient(to_bottom,hsl(var(--background)),hsl(var(--muted)/0.35))]" />
 
-      {/* Desktop sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 hidden border-r border-border bg-card/95 backdrop-blur-md md:block',
+          'sidebar',
           'transition-[width] duration-200 ease-out',
-          collapsed ? 'w-[76px]' : 'w-[260px]'
+          collapsed ? '!w-[68px]' : 'w-[232px]'
         )}
       >
         <SidebarNav
@@ -275,57 +299,47 @@ export function AppShell({
           collapsed={collapsed}
           onCloseMobile={() => setMobileOpen(false)}
           onToggleCollapsed={toggleCollapsed}
-          onLogout={handleLogout}
+          userEmailLabel={userEmail}
         />
       </aside>
 
-      {/* Mobile drawer */}
       {mobileOpen ? (
         <div className="fixed inset-0 z-50 md:hidden">
-          <button type="button" className="absolute inset-0 bg-black/50" aria-label="Close menu" onClick={() => setMobileOpen(false)} />
-          <div className="absolute inset-y-0 left-0 flex w-[min(100%,min(300px,calc(100vw-env(safe-area-inset-left)-env(safe-area-inset-right))))] max-w-[100vw] flex-col border-r border-border bg-card pb-[env(safe-area-inset-bottom)] shadow-xl">
-            <div className="flex items-center justify-between border-b border-border px-3 py-3">
-              <span className="text-sm font-semibold">Menu</span>
-              <Button type="button" variant="ghost" size="sm" className="h-9 px-2" onClick={() => setMobileOpen(false)}>
-                Close
-              </Button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <SidebarNav
-                variant="mobile"
-                collapsed={false}
-                onCloseMobile={() => setMobileOpen(false)}
-                onToggleCollapsed={toggleCollapsed}
-                onLogout={handleLogout}
-              />
-            </div>
+          <button type="button" className="absolute inset-0 bg-black/40" aria-label="Close menu" onClick={() => setMobileOpen(false)} />
+          <div className="sidebar absolute inset-y-0 left-0 flex w-[min(100%,min(288px,calc(100vw-env(safe-area-inset-left)-env(safe-area-inset-right))))] max-w-[100vw] flex-col pb-[env(safe-area-inset-bottom)] shadow-elevated">
+            <SidebarNav
+              variant="mobile"
+              collapsed={false}
+              onCloseMobile={() => setMobileOpen(false)}
+              onToggleCollapsed={toggleCollapsed}
+              userEmailLabel={userEmail}
+            />
           </div>
         </div>
       ) : null}
 
-      <div className={cn('flex min-h-dvh flex-col', collapsed ? 'md:pl-[76px]' : 'md:pl-[260px]')}>
-        <header className="sticky top-0 z-30 border-b border-border bg-background/80 pt-[env(safe-area-inset-top)] backdrop-blur-xl ti-no-print">
-          <div className="flex h-14 w-full min-w-0 items-center gap-2 px-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] sm:px-4 lg:px-6">
+      <div className="main-area">
+        <header className="topbar ti-no-print pt-[env(safe-area-inset-top)]">
             <div className="flex shrink-0 items-center gap-1 md:hidden">
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-10 w-10"
+                className="h-8 w-8"
                 aria-label="Open menu"
                 onClick={() => setMobileOpen(true)}
               >
-                <Menu className="h-5 w-5" />
+                <Menu className="h-4 w-4" />
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-10 w-10"
+                className="h-8 w-8"
                 aria-label="Search"
                 onClick={() => window.dispatchEvent(new Event('ti-cmdk-open'))}
               >
-                <Search className="h-5 w-5" />
+                <Search className="h-4 w-4" />
               </Button>
             </div>
 
@@ -333,17 +347,15 @@ export function AppShell({
               <CommandPalette />
             </div>
 
-            <div className="flex shrink-0 items-center justify-end gap-1 sm:gap-2">
+            <div className="flex shrink-0 items-center justify-end gap-1.5">
+              {hideHeader && actions ? (
+                <div className="hidden items-center gap-1.5 sm:flex">{actions}</div>
+              ) : null}
               {showQuickCreate ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="h-9 gap-1.5 px-2 shadow-sm sm:px-3"
-                      aria-label="Quick create"
-                    >
-                      <Plus className="h-4 w-4" />
+                    <Button type="button" variant="primary" size="sm" className="gap-1.5" aria-label="Quick create">
+                      <Plus className="h-3.5 w-3.5" />
                       <span className="hidden lg:inline">Create</span>
                     </Button>
                   </DropdownMenuTrigger>
@@ -365,33 +377,26 @@ export function AppShell({
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 relative" aria-label="Notifications">
-                    <Bell className="h-[18px] w-[18px]" />
+                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="Notifications">
+                    <Bell className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-72">
                   <DropdownMenuLabel>Notifications</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <div className="px-3 py-6 text-center text-sm text-muted-foreground">You&apos;re all caught up.</div>
+                  <DropdownMenuItem asChild>
+                    <Link href={routes.app.notifications}>Open notification centre</Link>
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <div
-                className="hidden sm:flex h-9 items-center rounded-lg border border-border bg-muted/40 px-2.5 text-xs font-semibold tabular-nums text-foreground"
-                title="Base currency"
-              >
-                R&nbsp;·&nbsp;ZAR
-              </div>
-
-              <ThemeToggle />
-
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="ghost" className="h-9 gap-2 px-2 max-w-[160px]">
-                    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/15 text-primary text-xs font-bold">
+                  <Button type="button" variant="ghost" size="sm" className="max-w-[160px] gap-2 px-1.5">
+                    <div className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
                       {(userEmail?.[0] ?? 'U').toUpperCase()}
                     </div>
-                    <span className="hidden truncate text-left text-sm font-medium lg:inline">{userEmail ?? 'Account'}</span>
+                    <span className="hidden truncate text-left text-[13px] font-medium lg:inline">{userEmail ?? 'Account'}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
@@ -413,36 +418,33 @@ export function AppShell({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-          </div>
         </header>
 
-        {caps.status === 'ready' && !caps.canEdit ? (
-          <div className="border-b border-amber-500/25 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-950 dark:text-amber-100">
-            Read-only access: you can view data but not create or change records. Owner or admin can adjust your role under
-            Team.
+        {chromeReady && caps.status === 'ready' && !caps.canEdit ? (
+          <div className="border-b border-warning/30 bg-warning/10 px-4 py-2 text-center text-xs font-medium text-foreground">
+            Read-only access. Owner or admin can adjust your role under{' '}
+            <Link href={routes.app.team} className="font-semibold underline underline-offset-2">
+              Team
+            </Link>
+            .
           </div>
         ) : null}
 
-        <main
-          className={cn(
-            'min-w-0 flex-1 px-[max(1rem,env(safe-area-inset-left))] py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pr-[max(1rem,env(safe-area-inset-right))] sm:px-5 lg:px-8',
-            fullWidth ? 'mx-auto w-full max-w-[1600px]' : 'mx-auto w-full max-w-6xl'
-          )}
-        >
-          {!hideHeader ? (
-            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between ti-no-print">
-              <div>
-                <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{title ?? 'Workspace'}</h1>
-                <p className="mt-1 text-sm text-muted-foreground">Workspace overview and shortcuts.</p>
+        <main className="page-content pb-[max(5.5rem,env(safe-area-inset-bottom))] md:pb-0">
+          <div className={cn('page-container', !fullWidth && 'max-w-6xl')}>
+            {!hideHeader ? (
+              <div className="page-header mb-5 flex-col sm:flex-row sm:items-end ti-no-print">
+                <div>
+                  <h1 className="page-title">{title ?? 'Workspace'}</h1>
+                </div>
+                {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
               </div>
-              {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
-            </div>
-          ) : (
-            actions ? <div className="mb-6 flex justify-end ti-no-print">{actions}</div> : null
-          )}
-          {children}
+            ) : null}
+            {children}
+          </div>
         </main>
       </div>
+      <MobileNav />
     </div>
   );
 }

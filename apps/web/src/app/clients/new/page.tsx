@@ -85,7 +85,7 @@ export default function NewClientPage() {
       >
         <Card className="p-4">
           {submitError ? (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{submitError}</div>
+            <div className="mb-4 rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{submitError}</div>
           ) : null}
 
           <form onSubmit={onSubmit} className="grid gap-6 sm:max-w-xl">

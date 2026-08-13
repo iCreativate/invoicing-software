@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { assertCanEdit, assertRowOwnedByWorkspace, getWorkspaceContext } from '@/lib/auth/workspace';
 import { buildPayFastPaymentUrl } from '@/lib/payments/payfast';
+import { canManageBilling } from '@/lib/permissions/team';
+import { hasEntitlement } from '@/lib/billing/entitlements';
+import { checkRateLimit, rateLimitResponse } from '@/lib/security/rateLimit';
 
 export async function POST(request: Request) {
   try {
@@ -13,14 +17,56 @@ export async function POST(request: Request) {
     }
 
     const supabase = await createSupabaseServerClient(request);
+    const ctx = await getWorkspaceContext(supabase);
+    if (!ctx) {
+      return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });
+    }
+    if (!canManageBilling(ctx.permission)) {
+      try {
+        assertCanEdit(ctx);
+      } catch {
+        return NextResponse.json({ success: false, error: 'Not allowed to create payment sessions.' }, { status: 403 });
+      }
+    }
+
+    const rl = await checkRateLimit({
+      key: `payments:session:${ctx.workspaceOwnerId}`,
+      limit: 40,
+      windowSec: 3600,
+    });
+    if (!rl.ok) return rateLimitResponse(rl.retryAfterSec);
+
+    const { data: profile } = await supabase
+      .from('company_profiles')
+      .select('subscription_plan')
+      .eq('owner_id', ctx.workspaceOwnerId)
+      .maybeSingle();
+    const plan = (profile as { subscription_plan?: string } | null)?.subscription_plan;
+    if (!hasEntitlement(plan, 'payment_links')) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Online payment links require Pro or Business. Upgrade under Billing.',
+          code: 'entitlement_payment_links',
+        },
+        { status: 402 }
+      );
+    }
+
     const { data: invoice, error: invErr } = await supabase
       .from('invoices')
-      .select('id,invoice_number,total_amount,balance_amount,currency,client:clients(email,name)')
+      .select('id,owner_id,invoice_number,total_amount,balance_amount,currency,client:clients(email,name)')
       .eq('id', invoiceId)
       .single();
 
     if (invErr || !invoice) {
       return NextResponse.json({ success: false, error: invErr?.message ?? 'Invoice not found' }, { status: 404 });
+    }
+
+    try {
+      assertRowOwnedByWorkspace((invoice as any).owner_id, ctx);
+    } catch {
+      return NextResponse.json({ success: false, error: 'Not allowed for this workspace.' }, { status: 403 });
     }
 
     const amount = Number((invoice as any).balance_amount ?? (invoice as any).total_amount ?? 0);
@@ -112,4 +158,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, error: e?.message ?? 'Failed to create payment session.' }, { status: 500 });
   }
 }
-

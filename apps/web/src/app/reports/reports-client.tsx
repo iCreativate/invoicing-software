@@ -22,6 +22,7 @@ import { fetchReports, openReportPrintDialog, reportsToCsv } from '@/features/re
 import type { ReportsPayload } from '@/features/reports/types';
 import { FileSpreadsheet, FileText, PieChart } from 'lucide-react';
 import { notifySuccess } from '@/lib/notify';
+import { themeTokens } from '@/theme/tokens';
 
 function startOfMonth(d: Date) {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
@@ -156,11 +157,11 @@ export default function ReportsClient() {
         </div>
       }
     >
-      <div className="grid gap-4">
-        <Card className="p-5">
-          <div className="text-sm font-semibold">Filters</div>
-          <p className="mt-1 text-sm text-muted-foreground">Date range applies to invoiced activity and payment collections. Outstanding list shows open balances (optionally filtered by currency).</p>
-          <div className="mt-4 flex flex-wrap gap-2">
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
+        <Card className="shrink-0 border-border bg-muted/30 p-5">
+          <div className="text-sm font-semibold tracking-tight">Filters</div>
+          <p className="mt-1 text-[13px] text-muted-foreground">Date range applies to invoiced activity and payment collections. Outstanding list shows open balances (optionally filtered by currency).</p>
+          <div className="mt-4 flex flex-wrap gap-1.5">
             {(
               [
                 ['this_month', 'This month'],
@@ -174,7 +175,8 @@ export default function ReportsClient() {
                 key={id}
                 type="button"
                 variant="secondary"
-                className="text-xs"
+                size="sm"
+                className="h-8 text-xs"
                 onClick={() => {
                   const r = presetRange(id);
                   setFrom(r.from);
@@ -210,33 +212,33 @@ export default function ReportsClient() {
             </div>
           </div>
           {data?.mixed_currency && !currency.trim() ? (
-            <p className="mt-3 text-xs text-amber-800 dark:text-amber-200/90">
+            <p className="mt-3 text-xs text-warning">
               Totals may mix multiple currencies. Set a currency filter for comparable figures.
             </p>
           ) : null}
         </Card>
 
-        {error ? <div className="rounded-2xl bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
+        {error ? <div className="rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
 
         {data ? (
           <>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Card className="p-4">
-                <div className="text-xs font-semibold text-muted-foreground">Invoiced (range)</div>
-                <div className="mt-1 text-xl font-bold tabular-nums">{formatMoney(data.totals_in_range.invoiced, cur)}</div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Invoiced (range)</div>
+                <div className="ti-num mt-1 text-xl font-semibold">{formatMoney(data.totals_in_range.invoiced, cur)}</div>
               </Card>
               <Card className="p-4">
-                <div className="text-xs font-semibold text-muted-foreground">Collected (payments in range)</div>
-                <div className="mt-1 text-xl font-bold tabular-nums">{formatMoney(data.totals_in_range.collected, cur)}</div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Collected (payments in range)</div>
+                <div className="ti-num mt-1 text-xl font-semibold">{formatMoney(data.totals_in_range.collected, cur)}</div>
               </Card>
               <Card className="p-4">
-                <div className="text-xs font-semibold text-muted-foreground">Tax in range</div>
-                <div className="mt-1 text-xl font-bold tabular-nums">{formatMoney(data.tax_summary.tax_amount, cur)}</div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Tax in range</div>
+                <div className="ti-num mt-1 text-xl font-semibold">{formatMoney(data.tax_summary.tax_amount, cur)}</div>
                 <div className="mt-1 text-xs text-muted-foreground">{data.tax_summary.invoice_count} invoice(s)</div>
               </Card>
               <Card className="p-4">
-                <div className="text-xs font-semibold text-muted-foreground">Taxable subtotal</div>
-                <div className="mt-1 text-xl font-bold tabular-nums">{formatMoney(data.tax_summary.taxable_subtotal, cur)}</div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Taxable subtotal</div>
+                <div className="ti-num mt-1 text-xl font-semibold">{formatMoney(data.tax_summary.taxable_subtotal, cur)}</div>
               </Card>
             </div>
 
@@ -263,18 +265,24 @@ export default function ReportsClient() {
                 </div>
               </div>
               <div className="mt-4 h-[320px] w-full min-h-[280px]">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={280} debounce={50}>
                   <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => String(v)} />
+                    <CartesianGrid stroke={themeTokens.chart.grid} strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: themeTokens.chart.axis }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: themeTokens.chart.axis }} tickFormatter={(v) => String(v)} tickLine={false} axisLine={false} />
                     <Tooltip
                       formatter={(value) => [formatMoney(Number(value ?? 0), cur), '']}
                       labelStyle={{ fontWeight: 600 }}
+                      contentStyle={{
+                        borderRadius: 8,
+                        border: `1px solid ${themeTokens.colors.border}`,
+                        background: themeTokens.colors.surface,
+                        boxShadow: themeTokens.shadows.softMd,
+                      }}
                     />
                     <Legend />
-                    <Bar dataKey="invoiced" name="Invoiced" fill="#2563eb" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="collected" name="Collected" fill="#16a34a" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="invoiced" name="Invoiced" fill={themeTokens.chart.expected} radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="collected" name="Collected" fill={themeTokens.chart.collected} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -304,16 +312,16 @@ export default function ReportsClient() {
                       ) : (
                         data.top_clients.map((c) => (
                           <tr key={c.client_id}>
-                            <td className="border-b border-zinc-100 py-2 pr-2 font-medium dark:border-zinc-900">
+                            <td className="border-b border-border py-2 pr-2 font-medium">
                               {c.client_name}
                             </td>
-                            <td className="border-b border-zinc-100 py-2 text-right tabular-nums dark:border-zinc-900">
+                            <td className="border-b border-border py-2 text-right tabular-nums">
                               {formatMoney(c.invoiced, cur)}
                             </td>
-                            <td className="border-b border-zinc-100 py-2 text-right tabular-nums dark:border-zinc-900">
+                            <td className="border-b border-border py-2 text-right tabular-nums">
                               {formatMoney(c.paid_on_invoices, cur)}
                             </td>
-                            <td className="border-b border-zinc-100 py-2 text-right tabular-nums dark:border-zinc-900">
+                            <td className="border-b border-border py-2 text-right tabular-nums">
                               {c.invoice_count}
                             </td>
                           </tr>
@@ -347,16 +355,16 @@ export default function ReportsClient() {
                       ) : (
                         data.outstanding.map((o) => (
                           <tr key={o.invoice_id}>
-                            <td className="border-b border-zinc-100 py-2 pr-2 dark:border-zinc-900">
+                            <td className="border-b border-border py-2 pr-2">
                               <Link className="font-semibold hover:underline" href={`${routes.app.invoices}/${o.invoice_id}`}>
                                 {o.invoice_number || o.invoice_id.slice(0, 8)}
                               </Link>
                             </td>
-                            <td className="border-b border-zinc-100 py-2 pr-2 text-muted-foreground dark:border-zinc-900">
+                            <td className="border-b border-border py-2 pr-2 text-muted-foreground">
                               {o.client_name ?? '—'}
                             </td>
-                            <td className="border-b border-zinc-100 py-2 tabular-nums dark:border-zinc-900">{o.due_date}</td>
-                            <td className="border-b border-zinc-100 py-2 text-right font-semibold tabular-nums dark:border-zinc-900">
+                            <td className="border-b border-border py-2 tabular-nums">{o.due_date}</td>
+                            <td className="border-b border-border py-2 text-right font-semibold tabular-nums">
                               {formatMoney(o.balance_amount, o.currency)}
                             </td>
                           </tr>

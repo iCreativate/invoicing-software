@@ -10,6 +10,9 @@ export function InvoiceListStatusBadge({ inv }: { inv: InvoiceListItem }) {
   if (st === 'cancelled') {
     return <Badge variant="outline">Cancelled</Badge>;
   }
+  if (st === 'viewed') {
+    return <Badge variant="primary">Viewed</Badge>;
+  }
   if (st === 'paid' || (inv.balance_amount <= 0 && inv.total_amount > 0 && inv.paid_amount > 0)) {
     return <Badge variant="success">Paid</Badge>;
   }
@@ -20,18 +23,15 @@ export function InvoiceListStatusBadge({ inv }: { inv: InvoiceListItem }) {
 
   if (overdue) {
     return (
-      <Badge
-        variant="danger"
-        className={cn('motion-safe:animate-pulse motion-reduce:animate-none')}
-      >
+      <Badge variant="danger" className={cn('motion-safe:animate-pulse motion-reduce:animate-none')}>
         Overdue
       </Badge>
     );
   }
 
-  return (
-    <Badge variant="primary" className="bg-primary/12 text-primary border-primary/20">
-      Pending
-    </Badge>
-  );
+  if (st === 'draft') {
+    return <Badge variant="default">Draft</Badge>;
+  }
+
+  return <Badge variant="primary">Pending</Badge>;
 }

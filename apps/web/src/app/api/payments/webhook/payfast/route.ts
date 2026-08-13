@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { verifyPayFastSignature } from '@/lib/payments/payfast';
 import { insertPaymentAndReconcile } from '@/lib/payments/recalculateInvoiceFromPayments';
 
@@ -10,7 +10,7 @@ function asStringMap(obj: any): Record<string, string> {
 }
 
 export async function POST(request: Request) {
-  // PayFast ITN: form-encoded POST
+  // PayFast ITN: form-encoded POST — no user session; use service role.
   try {
     const text = await request.text();
     const params = new URLSearchParams(text);
@@ -28,10 +28,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Missing m_payment_id' }, { status: 400 });
     }
 
-    const paymentStatus = String(body.payment_status ?? '').toUpperCase(); // COMPLETE|FAILED|CANCELLED
+    const paymentStatus = String(body.payment_status ?? '').toUpperCase();
     const pfAmountGross = Number(body.amount_gross ?? body.amount ?? 0);
+    const externalEventId = body.pf_payment_id
+      ? `pf:${body.pf_payment_id}`
+      : `pf_session:${sessionId}:${paymentStatus}`;
 
-    const supabase = await createSupabaseServerClient(request);
+    const supabase = createSupabaseAdminClient();
+
+    // Idempotent event ledger
+    const { error: evtErr } = await supabase.from('payment_events').insert({
+      provider: 'payfast',
+      external_event_id: externalEventId,
+      payment_session_id: sessionId,
+      event_type: paymentStatus || 'notify',
+      payload: body,
+    });
+    if (evtErr) {
+      const msg = String((evtErr as any).message ?? '').toLowerCase();
+      if (msg.includes('duplicate') || msg.includes('unique')) {
+        return NextResponse.json({ success: true, data: { duplicate: true } });
+      }
+      // Table may not exist yet in older envs — continue processing
+    }
+
     const { data: session, error: sessErr } = await supabase
       .from('payment_sessions')
       .select('id,invoice_id,amount,currency,status,provider')
@@ -42,7 +62,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Session not found' }, { status: 404 });
     }
 
-    // Update session status
     const nextStatus =
       paymentStatus === 'COMPLETE'
         ? 'paid'
@@ -62,7 +81,6 @@ export async function POST(request: Request) {
       .eq('id', sessionId);
 
     if (paymentStatus === 'COMPLETE') {
-      // Idempotency: only record a payment once per session
       const { data: existing } = await supabase
         .from('payments')
         .select('id')
@@ -70,7 +88,10 @@ export async function POST(request: Request) {
         .maybeSingle();
 
       if (!existing) {
-        const amount = Math.min(Number((session as any).amount ?? 0), pfAmountGross || Number((session as any).amount ?? 0));
+        const amount = Math.min(
+          Number((session as any).amount ?? 0),
+          pfAmountGross || Number((session as any).amount ?? 0)
+        );
         const currency = String((session as any).currency ?? 'ZAR');
         const invoiceId = String((session as any).invoice_id);
 
@@ -84,13 +105,17 @@ export async function POST(request: Request) {
           provider: 'payfast',
           externalReference: body.pf_payment_id ? String(body.pf_payment_id) : null,
         });
+
+        await supabase
+          .from('payment_events')
+          .update({ invoice_id: invoiceId })
+          .eq('provider', 'payfast')
+          .eq('external_event_id', externalEventId);
       }
     }
 
-    // PayFast expects 200 OK
     return NextResponse.json({ success: true });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e?.message ?? 'Webhook error' }, { status: 500 });
   }
 }
-

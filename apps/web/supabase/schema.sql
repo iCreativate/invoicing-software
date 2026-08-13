@@ -409,9 +409,10 @@ alter table public.company_profiles add column if not exists email_template_remi
 -- ---------------------------------------------------------------------------
 -- After core schema: run these in order (SQL Editor):
 --   1. This file (schema.sql) — tables + ALTER owner_id + indexes
---   2. supabase/storage-receipts.sql — bucket `receipts` + RLS policies
---   3. supabase/storage-logos.sql — bucket `logos` + RLS for company logo uploads
---   4. supabase/backfill-owner-id.sql — only if you have null owner_id rows
---   5. supabase/payroll-compensation.sql — if payroll_compensation / payroll_run_lines are missing
+--   2. supabase/fix-rls-inserts.sql — RLS SELECT/INSERT/UPDATE/DELETE (required for app writes)
+--   3. supabase/storage-receipts.sql — bucket `receipts` + RLS policies
+--   4. supabase/storage-logos.sql — bucket `logos` + RLS for company logo uploads
+--   5. supabase/backfill-owner-id.sql — only if you have null owner_id rows
+--   6. supabase/payroll-compensation.sql — if payroll_compensation / payroll_run_lines are missing
 -- ---------------------------------------------------------------------------
 

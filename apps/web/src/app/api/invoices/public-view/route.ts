@@ -45,6 +45,13 @@ export async function POST(request: Request) {
 
     await logInvoiceTimelineEvent(supabase, invoiceId, 'viewed', { via: 'public_share' });
 
+    // Best-effort: stamp viewed_at (ignore missing column / update errors).
+    const viewedRes = await supabase
+      .from('invoices')
+      .update({ viewed_at: new Date().toISOString() })
+      .eq('id', invoiceId);
+    void viewedRes.error;
+
     return NextResponse.json({ success: true, data: { logged: true } });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e?.message ?? 'Failed.' }, { status: 500 });

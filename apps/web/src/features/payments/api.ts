@@ -1,4 +1,6 @@
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { isDemoUiActive } from '@/lib/demo/accounts';
+import { demoInvoicesList, demoPayments } from '@/lib/demo/fixtures';
 import type {
   PaymentListItem,
   PaymentMethod,
@@ -49,6 +51,21 @@ export async function fetchPaymentsDashboard(params?: {
   month?: string;
   limit?: number;
 }): Promise<{ payments: WorkspacePaymentListRow[]; analytics: PaymentsAnalytics }> {
+  if (isDemoUiActive()) {
+    const d = new Date();
+    const month = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    const payments = demoPayments().map((p) => mapApiPayment(p as unknown as Record<string, unknown>));
+    const monthlyIncome = payments.reduce((s, p) => s + Number(p.amount ?? 0), 0);
+    return {
+      payments,
+      analytics: {
+        month,
+        monthlyIncome,
+        monthlyCurrency: 'ZAR',
+        avgDaysToFirstPayment: 12,
+      },
+    };
+  }
   const sp = new URLSearchParams();
   if (params?.month?.trim()) sp.set('month', params.month.trim());
   sp.set('limit', String(params?.limit ?? 200));
@@ -145,6 +162,17 @@ export async function fetchInvoicesForPaymentPicker(): Promise<
     status: string;
   }[]
 > {
+  if (isDemoUiActive()) {
+    return demoInvoicesList().map((row) => ({
+      id: String(row.id),
+      invoice_number: String(row.invoice_number ?? ''),
+      client_name: row.client_name != null ? String(row.client_name) : null,
+      currency: String(row.currency ?? 'ZAR'),
+      balance_amount: Number(row.balance_amount ?? 0),
+      total_amount: Number(row.total_amount ?? 0),
+      status: String(row.status ?? 'draft'),
+    }));
+  }
   const res = await fetch('/api/invoices', { credentials: 'include' });
   const json = await res.json().catch(() => ({}));
   if (!res.ok || !json.success) {

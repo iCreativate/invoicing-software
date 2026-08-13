@@ -257,18 +257,18 @@ export default function ExpensesPageClient() {
     >
       <PageBody>
         {tableMissing ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
+          <div className="rounded-[var(--ti-radius)] border border-warning/30 bg-warning/10 p-4 text-sm text-foreground">
             <p className="font-semibold">Database table required</p>
-            <p className="mt-1 text-amber-900/90 dark:text-amber-100/90">
+            <p className="mt-1 text-muted-foreground">
               Run the SQL in{' '}
-              <code className="rounded bg-amber-100/80 px-1 py-0.5 text-xs dark:bg-amber-900/50">apps/web/supabase/expenses.sql</code> in the Supabase SQL
+              <code className="rounded bg-warning/15 px-1 py-0.5 text-xs">apps/web/supabase/expenses.sql</code> in the Supabase SQL
               editor, then refresh this page.
             </p>
           </div>
         ) : null}
 
         {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+          <div className="rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">
             {error}
           </div>
         ) : null}
@@ -292,7 +292,7 @@ export default function ExpensesPageClient() {
         </PageSummary>
 
         <PageMain>
-        <Card className="p-4">
+        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="flex flex-wrap items-center gap-2">
               <Filter className="h-4 w-4 text-muted-foreground" />
@@ -337,8 +337,8 @@ export default function ExpensesPageClient() {
           </div>
         </Card>
 
-        <Card className="p-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-semibold">Expense log</div>
               <div className="mt-1 text-sm text-muted-foreground">
@@ -418,7 +418,7 @@ export default function ExpensesPageClient() {
                 ))}
               </div>
 
-              <div className="mt-4 hidden overflow-x-auto lg:block">
+              <div className="mt-4 hidden min-h-0 flex-1 overflow-auto lg:block">
                 <table className="w-full min-w-[720px] text-sm">
                   <thead>
                     <tr className="text-left text-xs font-semibold text-muted-foreground">
@@ -432,16 +432,16 @@ export default function ExpensesPageClient() {
                   </thead>
                   <tbody>
                     {filtered.map((x) => (
-                      <tr key={x.id} className="motion-safe:transition-colors hover:bg-muted/25">
-                        <td className="border-b border-border px-3 py-3 text-muted-foreground">{x.expenseDate}</td>
-                        <td className="border-b border-border px-3 py-3">
+                      <tr key={x.id} className="ti-row-hover">
+                        <td className="border-b border-border px-3 py-2.5 text-muted-foreground">{x.expenseDate}</td>
+                        <td className="border-b border-border px-3 py-2.5">
                           <Badge variant="outline">{formatExpenseCategoryLabel(x.aiCategory ?? x.category)}</Badge>
                         </td>
-                        <td className="border-b border-border px-3 py-3 text-foreground">{x.description ?? '—'}</td>
-                        <td className="border-b border-border px-3 py-3">
+                        <td className="border-b border-border px-3 py-2.5 text-foreground">{x.description ?? '—'}</td>
+                        <td className="border-b border-border px-3 py-2.5">
                           {x.receiptPath ? (
                             <a
-                              className="text-xs font-medium text-primary underline"
+                              className="text-xs font-medium text-[var(--ti-brand-accent,#2F6F7E)] underline"
                               href={`/api/storage/receipt?path=${encodeURIComponent(x.receiptPath)}`}
                               target="_blank"
                               rel="noreferrer"
@@ -452,10 +452,10 @@ export default function ExpensesPageClient() {
                             '—'
                           )}
                         </td>
-                        <td className="border-b border-border px-3 py-3 text-right tabular-nums font-medium">
+                        <td className="ti-num border-b border-border px-3 py-2.5 text-right font-medium">
                           {formatMoney(x.amount, x.currency)}
                         </td>
-                        <td className="border-b border-border px-3 py-3 text-right">
+                        <td className="border-b border-border px-3 py-2.5 text-right">
                           <div className="inline-flex flex-wrap justify-end gap-2">
                             {x.source === 'import' ? (
                               <Button type="button" size="sm" variant="secondary" className="h-9" onClick={() => setViewing(x)}>
@@ -506,7 +506,7 @@ export default function ExpensesPageClient() {
           </ModalHeader>
           <form onSubmit={submitForm} className="mt-2 space-y-4">
             {formError ? (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{formError}</div>
+              <div className="rounded-[var(--ti-radius-sm)] border border-danger/25 bg-danger/10 px-3 py-2 text-sm text-danger">{formError}</div>
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">

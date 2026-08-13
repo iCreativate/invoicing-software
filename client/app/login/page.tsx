@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { API_BASE } from '@/app/config';
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const passwordResetOk = searchParams.get('passwordReset') === '1';
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -38,7 +40,7 @@ export default function LoginPage() {
         const msg = data.error?.message || 'Login failed';
         setError(
           response.status >= 500 || msg === 'Internal Server Error'
-            ? 'Server is unavailable. Ensure the backend is running on port 5000 and the database is connected.'
+            ? 'Server is unavailable. Ensure the backend is running on port 5001 and the database is connected.'
             : msg
         );
       }
@@ -77,6 +79,12 @@ export default function LoginPage() {
           <p className="text-sm sm:text-base text-gray-600">Sign in to your account to continue</p>
         </div>
 
+        {passwordResetOk ? (
+          <div className="rounded-xl border border-green-200 bg-green-50 text-green-900 px-4 py-3 text-sm mb-6" role="status">
+            Password updated. Sign in with your new password.
+          </div>
+        ) : null}
+
         {error && (
           <div className="bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-lg mb-6 animate-slideIn">
             <div className="flex items-start">
@@ -108,9 +116,21 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
-              Password
-            </label>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <label htmlFor="password" className="block text-sm font-semibold text-gray-700">
+                Password
+              </label>
+              <Link
+                href={
+                  formData.email.trim()
+                    ? `/forgot-password?email=${encodeURIComponent(formData.email.trim())}`
+                    : '/forgot-password'
+                }
+                className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors"
+              >
+                Forgot password?
+              </Link>
+            </div>
             <input
               id="password"
               type="password"
@@ -143,7 +163,7 @@ export default function LoginPage() {
 
         <div className="mt-8 text-center">
           <p className="text-gray-600">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <Link href="/register" className="text-blue-600 hover:text-blue-700 font-bold transition-colors">
               Sign up
             </Link>
@@ -151,6 +171,20 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 text-gray-600">
+          Loading…
+        </div>
+      }
+    >
+      <LoginPageContent />
+    </Suspense>
   );
 }
 

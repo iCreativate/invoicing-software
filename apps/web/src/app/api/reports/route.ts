@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getWorkspaceContext } from '@/lib/auth/workspace';
+import { demoSuccessResponse } from '@/lib/demo/apiGate';
+import { demoReportsPayload } from '@/lib/demo/fixtures';
 
 function canViewReports(permission: string) {
   const p = String(permission ?? 'member').toLowerCase();
@@ -44,6 +46,9 @@ function yearKey(ym: string) {
 
 export async function GET(request: Request) {
   try {
+    const demo = demoSuccessResponse(request, demoReportsPayload());
+    if (demo) return demo;
+
     const supabase = await createSupabaseServerClient(request);
     const ctx = await getWorkspaceContext(supabase);
     if (!ctx) return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });

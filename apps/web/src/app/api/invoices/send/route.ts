@@ -13,6 +13,7 @@ import {
 } from '@/lib/integrations/messaging';
 import { logInvoiceTimelineEvent } from '@/lib/invoices/timelineServer';
 import { maybeDeductInventoryForSentInvoice } from '@/lib/inventory/invoiceInventory';
+import { writeAuditLog } from '@/lib/audit/log';
 
 export async function POST(request: Request) {
   try {
@@ -26,6 +27,14 @@ export async function POST(request: Request) {
     const supabase = await createSupabaseServerClient(request);
     const ctx = await getWorkspaceContext(supabase);
     if (!ctx) return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });
+
+    const { checkRateLimit, rateLimitResponse } = await import('@/lib/security/rateLimit');
+    const rl = await checkRateLimit({
+      key: `send:invoice:${ctx.workspaceOwnerId}`,
+      limit: 20,
+      windowSec: 3600,
+    });
+    if (!rl.ok) return rateLimitResponse(rl.retryAfterSec);
 
     if (toEmail) {
       const resend = await getResend();
@@ -165,6 +174,15 @@ export async function POST(request: Request) {
         });
       }
     }
+
+    await writeAuditLog(supabase, {
+      ownerId: ctx.workspaceOwnerId,
+      actorUserId: ctx.actorUserId,
+      action: 'invoice.sent',
+      entityType: 'invoice',
+      entityId: invoiceId,
+      meta: { toEmail: Boolean(toEmail), toWhatsapp: Boolean(toWhatsapp) },
+    });
 
     return NextResponse.json({ success: true, data: { shareId, shareUrl } });
   } catch (e: any) {

@@ -71,8 +71,8 @@ export default function EmployeesPage() {
         canInvite ? <Button onClick={() => setOpen(true)}>Invite employee</Button> : null
       }
     >
-      <Card className="p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-5">
+        <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-sm font-semibold">Team directory</div>
             <div className="mt-1 text-sm text-muted-foreground">{loading ? 'Loading…' : `${filtered.length} member(s)`}</div>
@@ -82,9 +82,9 @@ export default function EmployeesPage() {
           </div>
         </div>
 
-        {error ? <div className="mt-4 rounded-2xl bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
+        {error ? <div className="mt-4 rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
         {inviteNotice ? (
-          <div className="mt-4 rounded-2xl border border-amber-200/80 bg-amber-50/90 p-3 text-sm text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-100">
+          <div className="mt-4 rounded-[var(--ti-radius)] border border-warning/30 bg-warning/10 p-3 text-sm text-foreground">
             {inviteNotice}
           </div>
         ) : null}
@@ -95,7 +95,7 @@ export default function EmployeesPage() {
           </div>
         ) : null}
 
-        <div className="mt-4 overflow-x-auto">
+        <div className="mt-4 min-h-0 flex-1 overflow-auto">
           <table className="w-full min-w-[960px] border-separate border-spacing-0">
             <thead>
               <tr className="text-left text-xs font-semibold text-muted-foreground">
@@ -110,30 +110,30 @@ export default function EmployeesPage() {
               {loading
                 ? Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i} className="text-sm">
-                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5">
                         <Skeleton className="h-5 w-36" />
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5">
                         <Skeleton className="h-5 w-24" />
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5">
                         <Skeleton className="h-5 w-44" />
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5">
                         <Skeleton className="h-5 w-20" />
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5">
                         <Skeleton className="h-6 w-16 rounded-full" />
                       </td>
                     </tr>
                   ))
                 : filtered.map((e) => (
                     <tr key={e.id} className="text-sm">
-                      <td className="border-b border-zinc-100 px-3 py-3 font-semibold dark:border-zinc-900">{e.name}</td>
-                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">{e.role}</td>
-                      <td className="border-b border-zinc-100 px-3 py-3 text-muted-foreground dark:border-zinc-900">{e.email}</td>
-                      <td className="border-b border-zinc-100 px-3 py-3 capitalize dark:border-zinc-900">{e.permission}</td>
-                      <td className="border-b border-zinc-100 px-3 py-3 dark:border-zinc-900">
+                      <td className="border-b border-border px-3 py-2.5 font-semibold">{e.name}</td>
+                      <td className="border-b border-border px-3 py-2.5">{e.role}</td>
+                      <td className="border-b border-border px-3 py-2.5 text-muted-foreground">{e.email}</td>
+                      <td className="border-b border-border px-3 py-2.5 capitalize">{e.permission}</td>
+                      <td className="border-b border-border px-3 py-2.5">
                         <Badge variant={statusVariant(e.status)}>{e.status}</Badge>
                       </td>
                     </tr>
@@ -193,7 +193,7 @@ export default function EmployeesPage() {
               </select>
             </div>
 
-            {inviteError ? <div className="rounded-2xl bg-danger/10 p-3 text-sm text-danger">{inviteError}</div> : null}
+            {inviteError ? <div className="rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{inviteError}</div> : null}
 
             <div className="mt-1 flex items-center justify-end gap-2">
               <Button type="button" variant="secondary" onClick={() => setOpen(false)}>

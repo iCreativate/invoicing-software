@@ -319,7 +319,7 @@ export default function PayrollPageClient() {
       title="Payroll"
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={routes.app.employees}>
+          <Link href={routes.app.team}>
             <Button type="button" variant="secondary">
               <Users className="mr-2 h-4 w-4" />
               Team / HR
@@ -356,12 +356,12 @@ export default function PayrollPageClient() {
         </div>
       }
     >
-      <div className="grid gap-4">
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
         {error ? (
-          <div className="rounded-2xl bg-danger/10 p-4 text-sm text-danger">{error}</div>
+          <div className="rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-4 text-sm text-danger">{error}</div>
         ) : null}
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Card className="p-5 shadow-[var(--shadow-sm)]">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Monthly net (worksheet)</div>
             <div className="mt-2 text-2xl font-semibold tabular-nums">
@@ -390,7 +390,7 @@ export default function PayrollPageClient() {
           </Card>
         </div>
 
-        <Card className="p-0 overflow-hidden shadow-[var(--shadow-sm)]">
+        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-0 shadow-[var(--shadow-sm)]">
           <div className="border-b border-border bg-muted/15 px-5 py-4">
             <div className="text-sm font-semibold">Payroll worksheet</div>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -442,7 +442,7 @@ export default function PayrollPageClient() {
                   <tr>
                     <td colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                       No one on payroll yet. Add employees from your team, or invite people under{' '}
-                      <Link href={routes.app.employees} className="font-medium text-primary underline">
+                      <Link href={routes.app.team} className="font-medium text-primary underline">
                         Team / HR
                       </Link>
                       .
@@ -499,7 +499,7 @@ export default function PayrollPageClient() {
           </div>
         </Card>
 
-        <Card className="p-0 overflow-hidden shadow-[var(--shadow-sm)]">
+        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-0 shadow-[var(--shadow-sm)]">
           <div className="border-b border-border bg-muted/15 px-5 py-4">
             <div className="text-sm font-semibold">Payroll history</div>
             <p className="mt-1 text-sm text-muted-foreground">Each run snapshots salaries and prints totals. Expand a row for line items.</p>
@@ -643,7 +643,7 @@ export default function PayrollPageClient() {
               Total net: <span className="font-semibold text-foreground">{formatMoney(monthlyNetTotal, compRows[0]?.currency ?? 'ZAR')}</span> ·{' '}
               {compRows.length} employee(s)
             </div>
-            {runErr ? <div className="rounded-2xl bg-danger/10 p-3 text-sm text-danger">{runErr}</div> : null}
+            {runErr ? <div className="rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{runErr}</div> : null}
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="secondary" onClick={() => setRunOpen(false)}>
                 Cancel
@@ -683,7 +683,7 @@ export default function PayrollPageClient() {
             {!availableToAdd.length ? (
               <p className="text-sm text-muted-foreground">
                 Everyone is already on payroll, or your team list is empty.{' '}
-                <Link href={routes.app.employees} className="font-medium text-primary underline">
+                <Link href={routes.app.team} className="font-medium text-primary underline">
                   Invite employees
                 </Link>
               </p>
@@ -725,11 +725,11 @@ export default function PayrollPageClient() {
               <label className="text-sm font-medium">Currency</label>
               <Input value={editCurrency} onChange={(e) => setEditCurrency(e.target.value)} placeholder="ZAR" />
             </div>
-            <div className="rounded-2xl bg-primary/5 px-3 py-3 text-sm sm:col-span-2">
+            <div className="rounded-[var(--ti-radius)] bg-[var(--ti-brand-accent,#2F6F7E)]/8 px-3 py-3 text-sm sm:col-span-2">
               <span className="text-muted-foreground">Net pay preview:</span>{' '}
               <span className="text-lg font-semibold tabular-nums">{formatMoney(previewNet, editCurrency || 'ZAR')}</span>
             </div>
-            {editErr ? <div className="sm:col-span-2 rounded-2xl bg-danger/10 p-3 text-sm text-danger">{editErr}</div> : null}
+            {editErr ? <div className="sm:col-span-2 rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{editErr}</div> : null}
             <div className="flex justify-end gap-2 sm:col-span-2">
               <Button type="button" variant="secondary" onClick={() => setEditOpen(false)}>
                 Cancel

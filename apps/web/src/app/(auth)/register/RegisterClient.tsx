@@ -22,7 +22,6 @@ export function RegisterClient() {
   const [companyWebsite, setCompanyWebsite] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const ref = (searchParams.get('ref') ?? '').trim().toUpperCase();
@@ -39,7 +38,6 @@ export function RegisterClient() {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
-    setSuccess(null);
 
     let ref = '';
     try {
@@ -59,7 +57,7 @@ export function RegisterClient() {
 
     const supabase = createSupabaseBrowserClient();
     const origin = getPublicAppOrigin();
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -68,14 +66,45 @@ export function RegisterClient() {
       },
     });
 
-    setSubmitting(false);
-
     if (signUpError) {
+      setSubmitting(false);
       setError(signUpError.message);
       return;
     }
 
-    setSuccess('Account created. Check your email if confirmation is required, then sign in. Your profile details will apply when you first open the app.');
+    const user = signUpData.user;
+    const identities = user?.identities ?? [];
+    if (user && !signUpData.session && identities.length === 0) {
+      setSubmitting(false);
+      setError('An account with this email already exists. Sign in instead.');
+      return;
+    }
+
+    if (!signUpData.session) {
+      const confirmRes = await fetch('/api/auth/confirm-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, userId: user?.id }),
+      });
+      const confirmJson = (await confirmRes.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!confirmRes.ok || !confirmJson?.ok) {
+        setSubmitting(false);
+        setError(
+          confirmJson?.error ||
+            'Account created, but email confirmation is on and no mail was sent. In Supabase: Authentication → Providers → Email → turn off Confirm email. Then sign in.'
+        );
+        return;
+      }
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        setSubmitting(false);
+        setError(signInError.message);
+        return;
+      }
+    }
+
+    window.location.assign(routes.auth.onboarding);
   };
 
   return (
@@ -218,11 +247,6 @@ export function RegisterClient() {
           {error ? (
             <div className="rounded-xl border border-danger/25 bg-danger/10 p-3 text-sm text-danger" role="alert">
               {error}
-            </div>
-          ) : null}
-          {success ? (
-            <div className="rounded-xl border border-success/25 bg-success/10 p-3 text-sm text-success" role="status">
-              {success}
             </div>
           ) : null}
 

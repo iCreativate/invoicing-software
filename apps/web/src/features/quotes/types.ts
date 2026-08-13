@@ -33,5 +33,9 @@ export type QuoteDetail = {
   notes: string | null;
   clientId: string;
   convertedInvoiceId: string | null;
+  publicShareId: string | null;
+  viewedAt: string | null;
+  acceptedAt: string | null;
+  declinedAt: string | null;
   items: QuoteItemRow[];
 };

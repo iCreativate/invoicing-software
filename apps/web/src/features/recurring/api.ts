@@ -1,5 +1,7 @@
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getWorkspaceOwnerIdForClient } from '@/lib/auth/workspaceClient';
+import { isDemoUiActive } from '@/lib/demo/accounts';
+import { demoReadOnlyError, demoRecurringList } from '@/lib/demo/fixtures';
 
 export type RecurringScheduleRow = {
   id: string;
@@ -22,6 +24,7 @@ export type RecurringScheduleRow = {
 };
 
 export async function fetchRecurringList(): Promise<RecurringScheduleRow[]> {
+  if (isDemoUiActive()) return demoRecurringList();
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
 
@@ -70,6 +73,7 @@ export async function createRecurringSchedule(input: {
   remindWhatsapp: boolean;
   whatsappPhone?: string | null;
 }): Promise<{ id: string }> {
+  if (isDemoUiActive()) throw demoReadOnlyError();
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
 
@@ -99,6 +103,7 @@ export async function createRecurringSchedule(input: {
 }
 
 export async function setRecurringActive(id: string, active: boolean) {
+  if (isDemoUiActive()) throw demoReadOnlyError();
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
 

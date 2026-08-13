@@ -23,8 +23,8 @@ export function InvoiceComposerLauncher({
 
   return (
     <Link href={`${routes.app.invoices}/new`} className={className}>
-      <Button variant={buttonVariant} className={className}>
-        {icon ? <FilePlus2 className="h-4 w-4" /> : null}
+      <Button variant={buttonVariant} size="sm" className={className}>
+        {icon ? <FilePlus2 className="h-3.5 w-3.5" /> : null}
         {label ? label : null}
       </Button>
     </Link>

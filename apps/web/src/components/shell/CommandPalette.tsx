@@ -5,52 +5,39 @@ import { useCallback, useEffect, useState } from 'react';
 import { Command } from 'cmdk';
 import { Modal, ModalContent, ModalTitle } from '@/components/ui/modal';
 import { routes } from '@/lib/routing/routes';
-import {
-  LayoutDashboard,
-  FileText,
-  Users,
-  Plus,
-  Settings,
-  BarChart3,
-  Clock,
-  Package,
-  UsersRound,
-  FileInput,
-  CreditCard,
-  Receipt,
-  Repeat,
-  PieChart,
-  WalletCards,
-  User,
-} from 'lucide-react';
-import { cn } from '@/lib/utils/cn';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
+import { cn } from '@/lib/utils/cn';
 
 const go = [
-  { label: 'Dashboard', href: routes.app.dashboard, icon: LayoutDashboard },
-  { label: 'Invoices', href: routes.app.invoices, icon: FileText },
-  { label: 'Quotes', href: routes.app.quotes, icon: FileInput },
-  { label: 'Clients', href: routes.app.clients, icon: Users },
-  { label: 'Products & services', href: routes.app.productsServices, icon: Package },
-  { label: 'Reports', href: routes.app.reports, icon: BarChart3 },
-  { label: 'Time tracking', href: routes.app.timeTracking, icon: Clock },
-  { label: 'Team', href: routes.app.employees, icon: UsersRound },
-  { label: 'Settings', href: routes.app.settings, icon: Settings },
+  { label: 'Dashboard', href: routes.app.dashboard },
+  { label: 'Invoices', href: routes.app.invoices },
+  { label: 'Quotes', href: routes.app.quotes },
+  { label: 'Clients', href: routes.app.clients },
+  { label: 'Collections', href: routes.app.collections },
+  { label: 'Cashflow', href: routes.app.cashflow },
+  { label: 'Insights', href: routes.app.insights },
+  { label: 'Reports', href: routes.app.reports },
+  { label: 'Notifications', href: routes.app.notifications },
+  { label: 'Settings', href: routes.app.settings },
 ];
 
 const create = [
-  { label: 'New invoice', href: `${routes.app.invoices}/new`, icon: FileText },
-  { label: 'New quote', href: `${routes.app.quotes}/new`, icon: FileInput },
-  { label: 'New client', href: `${routes.app.clients}/new`, icon: Users },
+  { label: 'New invoice', href: `${routes.app.invoices}/new` },
+  { label: 'New quote', href: `${routes.app.quotes}/new` },
+  { label: 'New client', href: `${routes.app.clients}/new` },
 ];
 
 const more = [
-  { label: 'Payments', href: routes.app.payments, icon: CreditCard },
-  { label: 'Expenses', href: routes.app.expenses, icon: Receipt },
-  { label: 'Recurring', href: routes.app.recurring, icon: Repeat },
-  { label: 'P&L report', href: routes.app.reportsPl, icon: PieChart },
-  { label: 'Payroll', href: routes.app.payroll, icon: WalletCards },
-  { label: 'Profile', href: routes.app.profile, icon: User },
+  { label: 'Payments', href: routes.app.payments },
+  { label: 'Expenses', href: routes.app.expenses },
+  { label: 'Billing', href: routes.app.billing },
+  { label: 'Integrations', href: routes.app.integrations },
+  { label: 'Recurring', href: routes.app.recurring },
+  { label: 'Products & services', href: routes.app.productsServices },
+  { label: 'Team', href: routes.app.team },
+  { label: 'Payroll', href: routes.app.payroll },
+  { label: 'Time tracking', href: routes.app.timeTracking },
+  { label: 'Profile', href: routes.app.profile },
 ];
 
 export function CommandPalette() {
@@ -90,12 +77,24 @@ export function CommandPalette() {
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          'hidden md:flex max-w-full min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2 text-left text-sm text-muted-foreground',
-          'hover:bg-muted/60 hover:text-foreground transition-colors md:min-w-[200px] lg:min-w-[260px]'
+          'hidden md:flex h-8 max-w-full min-w-0 flex-1 items-center gap-2 rounded-[var(--tl-radius)] border border-[var(--tl-line)] bg-white px-2.5 text-left text-[13px] text-slate-500',
+          'hover:bg-muted hover:text-slate-700 transition-colors md:min-w-[200px] lg:min-w-[280px]'
         )}
       >
-        <span className="text-xs">Search or jump to…</span>
-        <kbd className="ml-auto rounded-md border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] font-medium">
+        <svg
+          className="h-3.5 w-3.5 shrink-0 text-slate-400"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          aria-hidden
+        >
+          <circle cx="11" cy="11" r="7" />
+          <path d="M21 21l-4.35-4.35" />
+        </svg>
+        <span className="truncate">Search or jump to…</span>
+        <kbd className="ml-auto rounded border border-border bg-white px-1.5 py-0.5 font-mono text-[10px] font-medium text-slate-400">
           ⌘K
         </kbd>
       </button>
@@ -126,9 +125,8 @@ export function CommandPalette() {
                       key={item.href}
                       value={`create ${item.label}`}
                       onSelect={() => run(item.href)}
-                      className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm aria-selected:bg-accent"
+                      className="flex cursor-pointer items-center rounded-lg px-3 py-2 text-sm aria-selected:bg-accent"
                     >
-                      <item.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                       {item.label}
                     </Command.Item>
                   ))}
@@ -140,9 +138,8 @@ export function CommandPalette() {
                     key={item.href}
                     value={item.label}
                     onSelect={() => run(item.href)}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm aria-selected:bg-accent"
+                    className="flex cursor-pointer items-center rounded-lg px-3 py-2 text-sm aria-selected:bg-accent"
                   >
-                    <item.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                     {item.label}
                   </Command.Item>
                 ))}
@@ -153,9 +150,8 @@ export function CommandPalette() {
                     key={item.href}
                     value={item.label}
                     onSelect={() => run(item.href)}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm aria-selected:bg-accent"
+                    className="flex cursor-pointer items-center rounded-lg px-3 py-2 text-sm aria-selected:bg-accent"
                   >
-                    <item.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                     {item.label}
                   </Command.Item>
                 ))}

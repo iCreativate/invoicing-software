@@ -139,10 +139,10 @@ export default function InvoicePaymentsPage() {
         </div>
       }
     >
-      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4 lg:grid lg:grid-cols-[1fr_360px]">
         <Card className="p-4">
           {error ? (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
+            <div className="mb-4 rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{error}</div>
           ) : null}
 
           {loading ? (
@@ -162,19 +162,19 @@ export default function InvoicePaymentsPage() {
 
               <div className="mt-4 space-y-2">
                 {payments.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-zinc-200 p-6 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
+                  <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">
                     No payments recorded yet.
                   </div>
                 ) : (
                   payments.map((p) => (
-                    <div key={p.id} className="rounded-2xl border border-zinc-200 p-4 text-sm dark:border-zinc-800">
+                    <div key={p.id} className="rounded-[var(--ti-radius)] border border-border p-4 text-sm">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="font-semibold">{formatMoney(p.amount, p.currency)}</div>
                           <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
                             {p.payment_date || '—'} · {methodLabel(p.method)} · {p.status}
                           </div>
-                          {p.notes ? <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">{p.notes}</div> : null}
+                          {p.notes ? <div className="mt-2 text-sm text-muted-foreground">{p.notes}</div> : null}
                         </div>
                       </div>
                     </div>
@@ -215,7 +215,7 @@ export default function InvoicePaymentsPage() {
               </label>
               <select
                 id="method"
-                className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+                className="h-9 w-full rounded-[var(--ti-radius-sm)] border border-border bg-card px-3 text-sm shadow-[var(--ti-shadow)]"
                 value={form.method}
                 onChange={(e) => setForm((f) => ({ ...f, method: e.target.value as any }))}
               >

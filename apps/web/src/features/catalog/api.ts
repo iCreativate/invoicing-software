@@ -1,5 +1,7 @@
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getWorkspaceOwnerIdForClient } from '@/lib/auth/workspaceClient';
+import { isDemoUiActive } from '@/lib/demo/accounts';
+import { demoCatalogItems, demoReadOnlyError } from '@/lib/demo/fixtures';
 import type { CatalogItemType, CatalogListItem } from './types';
 
 function mapRow(r: Record<string, unknown>): CatalogListItem {
@@ -30,6 +32,7 @@ export function isCatalogTableMissing(err: unknown): boolean {
 }
 
 export async function fetchCatalogItems(): Promise<{ items: CatalogListItem[]; tableMissing: boolean }> {
+  if (isDemoUiActive()) return { items: demoCatalogItems(), tableMissing: false };
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
   const { data, error } = await supabase
@@ -91,6 +94,7 @@ function rowPayload(ownerId: string, input: CatalogItemInput) {
 }
 
 export async function createCatalogItem(input: CatalogItemInput): Promise<{ id: string }> {
+  if (isDemoUiActive()) throw demoReadOnlyError();
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
   const { data, error } = await supabase.from('catalog_items').insert(rowPayload(ownerId, input)).select('id').single();
@@ -104,6 +108,7 @@ export async function createCatalogItem(input: CatalogItemInput): Promise<{ id: 
 }
 
 export async function updateCatalogItem(id: string, input: CatalogItemInput): Promise<void> {
+  if (isDemoUiActive()) throw demoReadOnlyError();
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
   const { error } = await supabase
@@ -120,6 +125,7 @@ export async function updateCatalogItem(id: string, input: CatalogItemInput): Pr
 }
 
 export async function deleteCatalogItem(id: string): Promise<void> {
+  if (isDemoUiActive()) throw demoReadOnlyError();
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
   const { error } = await supabase.from('catalog_items').delete().eq('id', id).eq('owner_id', ownerId);

@@ -1,27 +1,38 @@
 -- One-time backfill: set owner_id on rows created before the column existed.
--- Run in Supabase SQL Editor after schema.sql (owner_id columns present).
+-- Skip on a fresh database — there is nothing to update.
 --
--- 1) Replace WORKSPACE_OWNER_UUID with your Supabase Auth user id (Dashboard → Authentication → Users),
---    or the business owner uuid you use for that workspace.
--- 2) Review counts in a transaction; uncomment COMMIT when satisfied.
+-- If you do have legacy rows:
+--   1) Copy your user id from Supabase → Authentication → Users
+--   2) Replace YOUR_AUTH_USER_UUID below
+--   3) Run this file
 
-begin;
+do $$
+declare
+  inv_null bigint;
+  quote_null bigint;
+begin
+  select count(*) into inv_null from public.invoices where owner_id is null;
+  select count(*) into quote_null from public.quotes where owner_id is null;
 
--- Preview how many rows would change:
--- select count(*) from public.invoices where owner_id is null;
--- select count(*) from public.quotes where owner_id is null;
+  if inv_null = 0 and quote_null = 0 then
+    raise notice 'Nothing to backfill (no invoices/quotes with null owner_id). Skip this file.';
+    return;
+  end if;
 
-update public.invoices
-set owner_id = 'WORKSPACE_OWNER_UUID'::uuid
-where owner_id is null;
+  raise exception
+    'This file still has a placeholder UUID. Replace YOUR_AUTH_USER_UUID with your Auth user id (Authentication → Users). % invoices and % quotes need owner_id.',
+    inv_null,
+    quote_null;
+end $$;
 
-update public.quotes
-set owner_id = 'WORKSPACE_OWNER_UUID'::uuid
-where owner_id is null;
-
--- Optional: other tables if you had legacy rows
--- update public.expenses set owner_id = 'WORKSPACE_OWNER_UUID'::uuid where owner_id is null;
--- update public.recurring_schedules set owner_id = 'WORKSPACE_OWNER_UUID'::uuid where owner_id is null;
-
-commit;
--- rollback;
+-- Uncomment after replacing YOUR_AUTH_USER_UUID:
+--
+-- begin;
+-- update public.invoices
+-- set owner_id = 'YOUR_AUTH_USER_UUID'::uuid
+-- where owner_id is null;
+--
+-- update public.quotes
+-- set owner_id = 'YOUR_AUTH_USER_UUID'::uuid
+-- where owner_id is null;
+-- commit;

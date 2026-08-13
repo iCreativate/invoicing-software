@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { canEditRecords, canManageTeam } from '@/lib/permissions/team';
+import { withTimeout } from '@/lib/demo/server';
 
 export type WorkspaceContext = {
   actorUserId: string;
@@ -11,34 +12,65 @@ export type WorkspaceContext = {
 
 /**
  * Resolves workspace: solo user acts as owner; invited team members use employees.owner_id.
+ * Prefers active membership; scopes by lower(email) to avoid ambiguous matches.
  */
 export async function getWorkspaceContext(supabase: SupabaseClient): Promise<WorkspaceContext | null> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user: { id: string; email?: string | null } | null = null;
+  try {
+    const result = await withTimeout(supabase.auth.getUser(), 10000);
+    user = result.data.user;
+  } catch {
+    return null;
+  }
   if (!user?.id) return null;
 
   const actorUserId = user.id;
   const actorEmail = user.email ?? null;
-  const email = actorEmail ?? '';
+  const email = (actorEmail ?? '').trim().toLowerCase();
 
-  const { data: emp, error } = await supabase.from('employees').select('owner_id,permission').eq('email', email).maybeSingle();
+  if (email) {
+    try {
+      const empRes = await withTimeout(
+        supabase
+          .from('employees')
+          .select('owner_id,permission,status')
+          .ilike('email', email)
+          .neq('status', 'inactive')
+          .limit(5),
+        10000
+      );
+      const { data: empRows, error } = empRes;
 
-  if (error) {
-    const msg = String((error as any).message ?? '').toLowerCase();
-    if (!msg.includes('permission') && !msg.includes('column') && !msg.includes('does not exist')) {
-      throw error;
+      if (error) {
+        const msg = String((error as { message?: string }).message ?? '').toLowerCase();
+        if (!msg.includes('permission') && !msg.includes('column') && !msg.includes('does not exist')) {
+          throw error;
+        }
+      } else {
+        const rows = (empRows ?? []) as { owner_id?: string | null; permission?: string | null; status?: string | null }[];
+        // Prefer membership where this user is not the owner row ambiguity: if multiple, prefer active then first.
+        const active = rows.find((r) => String(r.status ?? '').toLowerCase() === 'active') ?? rows[0];
+        if (active?.owner_id && String(active.owner_id) !== actorUserId) {
+          return {
+            actorUserId,
+            actorEmail,
+            workspaceOwnerId: String(active.owner_id),
+            permission: String(active.permission ?? 'member'),
+          };
+        }
+        // If employee row points at self as owner, treat as owner.
+        if (active?.owner_id && String(active.owner_id) === actorUserId) {
+          return {
+            actorUserId,
+            actorEmail,
+            workspaceOwnerId: actorUserId,
+            permission: 'owner',
+          };
+        }
+      }
+    } catch {
+      // Unreachable DB — treat as solo owner below.
     }
-  }
-
-  const empRow = emp as { owner_id?: string | null; permission?: string | null } | null;
-  if (empRow?.owner_id) {
-    return {
-      actorUserId,
-      actorEmail,
-      workspaceOwnerId: String(empRow.owner_id),
-      permission: String(empRow.permission ?? 'member'),
-    };
   }
 
   return {

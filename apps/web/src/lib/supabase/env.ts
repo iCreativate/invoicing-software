@@ -20,5 +20,26 @@ export function getSupabaseEnv(): { url: string; anonKey: string } {
     );
   }
 
+  // Fail fast on common misconfigurations that otherwise surface as `Failed to fetch`
+  // inside supabase-auth refresh flows.
+  if (!/^https:\/\/.+/i.test(url)) {
+    throw new Error(
+      [
+        'NEXT_PUBLIC_SUPABASE_URL must be an https URL (e.g. https://YOUR_PROJECT.supabase.co).',
+        `Get it from ${SUPABASE_API_SETTINGS}`,
+        `Received: ${JSON.stringify(url)}`,
+      ].join(' ')
+    );
+  }
+  if (!/\.supabase\.co\/?$/i.test(url)) {
+    throw new Error(
+      [
+        'NEXT_PUBLIC_SUPABASE_URL looks incorrect (expected *.supabase.co).',
+        `Get it from ${SUPABASE_API_SETTINGS}`,
+        `Received: ${JSON.stringify(url)}`,
+      ].join(' ')
+    );
+  }
+
   return { url, anonKey };
 }

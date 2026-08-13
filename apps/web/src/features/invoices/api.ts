@@ -1,16 +1,27 @@
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getWorkspaceOwnerIdForClient } from '@/lib/auth/workspaceClient';
+import { isDemoUiActive } from '@/lib/demo/accounts';
+import { demoInvoicesList } from '@/lib/demo/fixtures';
 import type { InvoiceListItem, InvoiceStatus } from './types';
 
 function coerceStatus(status: unknown): InvoiceStatus {
   const s = String(status ?? 'draft').toLowerCase();
-  if (s === 'paid' || s === 'partial' || s === 'sent' || s === 'overdue' || s === 'cancelled' || s === 'draft') {
+  if (
+    s === 'paid' ||
+    s === 'partial' ||
+    s === 'sent' ||
+    s === 'viewed' ||
+    s === 'overdue' ||
+    s === 'cancelled' ||
+    s === 'draft'
+  ) {
     return s;
   }
   return 'draft';
 }
 
 export async function fetchInvoicesList(): Promise<InvoiceListItem[]> {
+  if (isDemoUiActive()) return demoInvoicesList();
   const supabase = createSupabaseBrowserClient();
   const workspaceOwnerId = await getWorkspaceOwnerIdForClient();
 

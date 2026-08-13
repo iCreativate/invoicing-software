@@ -1,11 +1,49 @@
 import { Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import jwt, { SignOptions } from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
+import nodemailer from 'nodemailer';
 import { AppDataSource } from '../config/dataSource';
 import { User, UserRole } from '../entities/User';
 import { Company } from '../entities/Company';
 import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
+import { logger } from '../utils/logger';
+
+const RESET_TOKEN_BYTES = 32;
+const RESET_EXPIRY_MS = 60 * 60 * 1000;
+
+function hashPasswordResetToken(token: string): string {
+  return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+}
+
+async function sendPasswordResetEmail(to: string, resetUrl: string): Promise<void> {
+  const host = process.env.SMTP_HOST?.trim();
+  if (!host) {
+    logger.warn(`Password reset email skipped (SMTP_HOST not set). Link for ${to}: ${resetUrl}`);
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host,
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth:
+      process.env.SMTP_USER && process.env.SMTP_PASS
+        ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+        : undefined,
+  });
+
+  const from = process.env.SMTP_FROM?.trim() || process.env.SMTP_USER || 'noreply@localhost';
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject: 'Reset your Timely password',
+    text: `You requested a password reset.\n\n${resetUrl}\n\nIf you did not request this, you can ignore this email.`,
+    html: `<p>You requested a password reset.</p><p><a href="${resetUrl}">Set a new password</a></p><p>If you did not request this, you can ignore this email.</p>`,
+  });
+}
 
 export const register = async (
   req: Request,
@@ -131,6 +169,103 @@ export const login = async (
         },
         token,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const forgotPassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+
+    const genericMessage =
+      'If an account exists for that email, we sent password reset instructions.';
+
+    if (!email) {
+      res.json({ success: true, message: genericMessage });
+      return;
+    }
+
+    const userRepository = AppDataSource.getRepository(User);
+    const user = await userRepository
+      .createQueryBuilder('u')
+      .where('LOWER(u.email) = :email', { email })
+      .getOne();
+
+    if (user && user.isActive) {
+      const rawToken = crypto.randomBytes(RESET_TOKEN_BYTES).toString('hex');
+      user.passwordResetTokenHash = hashPasswordResetToken(rawToken);
+      user.passwordResetExpires = new Date(Date.now() + RESET_EXPIRY_MS);
+      await userRepository.save(user);
+
+      const frontend =
+        process.env.FRONTEND_URL?.replace(/\/$/, '') || 'http://localhost:3003';
+      const resetUrl = `${frontend}/reset-password?token=${encodeURIComponent(rawToken)}&email=${encodeURIComponent(user.email)}`;
+
+      try {
+        await sendPasswordResetEmail(user.email, resetUrl);
+      } catch (mailErr) {
+        logger.error({ err: mailErr, message: 'Failed to send password reset email' });
+      }
+    }
+
+    res.json({ success: true, message: genericMessage });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const resetPassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const email =
+      typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+
+    if (!email || !token || !password) {
+      throw new AppError('Email, token, and new password are required', 400);
+    }
+
+    if (password.length < 8) {
+      throw new AppError('Password must be at least 8 characters', 400);
+    }
+
+    const userRepository = AppDataSource.getRepository(User);
+    const user = await userRepository
+      .createQueryBuilder('u')
+      .where('LOWER(u.email) = :email', { email })
+      .getOne();
+
+    if (
+      !user ||
+      !user.passwordResetTokenHash ||
+      !user.passwordResetExpires ||
+      user.passwordResetExpires.getTime() < Date.now()
+    ) {
+      throw new AppError('Invalid or expired reset link. Request a new one.', 400);
+    }
+
+    if (hashPasswordResetToken(token) !== user.passwordResetTokenHash) {
+      throw new AppError('Invalid or expired reset link. Request a new one.', 400);
+    }
+
+    user.password = await bcrypt.hash(password, 10);
+    user.passwordResetTokenHash = null;
+    user.passwordResetExpires = null;
+    await userRepository.save(user);
+
+    res.json({
+      success: true,
+      message: 'Password updated. You can sign in with your new password.',
     });
   } catch (error) {
     next(error);

@@ -7,10 +7,11 @@ import { AppShell } from '@/components/layout/AppShell';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { routes } from '@/lib/routing/routes';
-import { fetchClientDetail, fetchClientInvoiceInsights } from '@/features/clients/api';
+import { fetchClientDetail, fetchClientInvoiceInsights, fetchClientInvoicesForScore } from '@/features/clients/api';
 import type { ClientDetail, ClientInvoiceInsights } from '@/features/clients/types';
 import { formatMoney } from '@/lib/format/money';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { computeTimelyPaymentScore, type TimelyPaymentScore } from '@/lib/clients/paymentScore';
 
 export default function ClientViewPage() {
   const params = useParams();
@@ -19,6 +20,7 @@ export default function ClientViewPage() {
   const [loading, setLoading] = useState(true);
   const [client, setClient] = useState<ClientDetail | null>(null);
   const [insights, setInsights] = useState<ClientInvoiceInsights | null>(null);
+  const [score, setScore] = useState<TimelyPaymentScore | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -27,10 +29,15 @@ export default function ClientViewPage() {
       try {
         setLoading(true);
         setError(null);
-        const [c, ins] = await Promise.all([fetchClientDetail(id), fetchClientInvoiceInsights(id)]);
+        const [c, ins, invs] = await Promise.all([
+          fetchClientDetail(id),
+          fetchClientInvoiceInsights(id),
+          fetchClientInvoicesForScore(id),
+        ]);
         if (!alive) return;
         setClient(c);
         setInsights(ins);
+        setScore(computeTimelyPaymentScore(invs));
       } catch (e: any) {
         if (!alive) return;
         setError(e?.message ?? 'Failed to load client.');
@@ -58,8 +65,8 @@ export default function ClientViewPage() {
         </div>
       }
     >
-      <div className="grid gap-4">
-        <Card className="p-5">
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
+        <Card className="flex min-h-0 flex-1 flex-col overflow-auto p-5">
           {error ? <div className="rounded-2xl bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
           {loading ? (
             <div className="space-y-3">
@@ -146,6 +153,30 @@ export default function ClientViewPage() {
               <span>Paid (zero balance): {insights.paidCount}</span>
               {insights.lastPaidAt ? <span>Last payment date: {insights.lastPaidAt}</span> : null}
             </div>
+          </Card>
+        ) : null}
+
+        {score && !loading ? (
+          <Card className="p-5">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold">Timely Payment Score™</div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Based only on this client&apos;s invoice history in your workspace.
+                </p>
+              </div>
+              <div className="ti-metric-display text-primary">{score.score}</div>
+            </div>
+            <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+              {score.factors.map((f) => (
+                <li key={f.key} className="flex justify-between gap-4 border-t border-border pt-2">
+                  <span>{f.label}</span>
+                  <span className="tabular-nums text-foreground">
+                    {f.value == null ? '—' : f.key === 'avg_days_to_pay' ? `${Math.round(f.value)}d` : `${Math.round(f.value * 100)}%`}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </Card>
         ) : null}
       </div>

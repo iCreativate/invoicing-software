@@ -1,4 +1,6 @@
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { isDemoUiActive } from '@/lib/demo/accounts';
+import { demoInvoiceDetail } from '@/lib/demo/fixtures';
 import type { InvoiceStatus } from './types';
 
 export type InvoiceDetail = {
@@ -18,13 +20,37 @@ export type InvoiceDetail = {
 
 function coerceStatus(status: unknown): InvoiceStatus {
   const s = String(status ?? 'draft').toLowerCase();
-  if (s === 'paid' || s === 'partial' || s === 'sent' || s === 'overdue' || s === 'cancelled' || s === 'draft') {
-    return s;
+  if (s === 'paid' || s === 'partial' || s === 'sent' || s === 'overdue' || s === 'cancelled' || s === 'draft' || s === 'viewed') {
+    return s as InvoiceStatus;
   }
   return 'draft';
 }
 
 export async function fetchInvoiceDetail(id: string): Promise<InvoiceDetail> {
+  if (isDemoUiActive()) {
+    const d = demoInvoiceDetail(id).invoice;
+    return {
+      id: String(d.id),
+      invoice_number: String(d.invoice_number ?? ''),
+      status: coerceStatus(d.status),
+      issue_date: String(d.issue_date ?? ''),
+      due_date: String(d.due_date ?? ''),
+      currency: String(d.currency ?? 'ZAR'),
+      subtotal_amount: Number(d.subtotal_amount ?? 0),
+      tax_amount: Number(d.tax_amount ?? 0),
+      total_amount: Number(d.total_amount ?? 0),
+      paid_amount: Number(d.paid_amount ?? 0),
+      balance_amount: Number(d.balance_amount ?? 0),
+      client: d.client
+        ? {
+            id: String(d.client.id),
+            name: String(d.client.name ?? ''),
+            email: d.client.email ? String(d.client.email) : null,
+          }
+        : null,
+    };
+  }
+
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase
     .from('invoices')
@@ -69,4 +95,3 @@ export async function fetchInvoiceDetail(id: string): Promise<InvoiceDetail> {
       : null,
   };
 }
-

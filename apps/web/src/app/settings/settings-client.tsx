@@ -43,7 +43,7 @@ export default function SettingsClient() {
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [rewards, setRewards] = useState<ReferralRewardRow[]>([]);
   const [origin, setOrigin] = useState('');
-  const [invoiceAccentHex, setInvoiceAccentHex] = useState('#2563eb');
+  const [invoiceAccentHex, setInvoiceAccentHex] = useState('#2F6F7E');
   const [invoiceHeaderHex, setInvoiceHeaderHex] = useState('#0f172a');
   const [emailTemplateInvoice, setEmailTemplateInvoice] = useState('');
   const [emailTemplateReminder, setEmailTemplateReminder] = useState('');
@@ -88,7 +88,7 @@ export default function SettingsClient() {
           setPreferredLocale(p.preferredLocale ?? 'en');
           setBaseCurrency(p.baseCurrency ?? 'ZAR');
           setReferralCode(p.referralCode ?? null);
-          setInvoiceAccentHex(p.invoiceAccentHex?.trim() || '#2563eb');
+          setInvoiceAccentHex(p.invoiceAccentHex?.trim() || '#2F6F7E');
           setInvoiceHeaderHex(p.invoiceHeaderHex?.trim() || '#0f172a');
           setEmailTemplateInvoice(p.emailTemplateInvoice ?? '');
           setEmailTemplateReminder(p.emailTemplateReminder ?? '');
@@ -194,8 +194,8 @@ export default function SettingsClient() {
 
   return (
     <AppShell title="Settings">
-      <div className="grid gap-4">
-        <Card className="p-5">
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
+        <Card className="flex min-h-0 flex-1 flex-col overflow-auto p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="text-sm font-semibold">Company profile</div>
@@ -211,13 +211,13 @@ export default function SettingsClient() {
           </div>
 
           {error ? (
-            <div className="mt-4 rounded-2xl bg-danger/10 p-3 text-sm text-danger">{error}</div>
+            <div className="mt-4 rounded-[var(--ti-radius)] bg-danger/10 p-3 text-sm text-danger">{error}</div>
           ) : null}
           {ok ? (
-            <div className="mt-4 rounded-2xl bg-success/10 p-3 text-sm text-success">{ok}</div>
+            <div className="mt-4 rounded-[var(--ti-radius)] bg-success/10 p-3 text-sm text-success">{ok}</div>
           ) : null}
           {!canEditWorkspace ? (
-            <div className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-950 dark:text-amber-100">
+            <div className="mt-4 rounded-[var(--ti-radius)] border border-warning/30 bg-warning/10 p-3 text-sm text-foreground">
               View-only access: your role cannot change workspace settings.
             </div>
           ) : null}
@@ -255,7 +255,7 @@ export default function SettingsClient() {
               </div>
             </div>
 
-            <div className="rounded-2xl bg-muted/20 p-4">
+            <div className="ti-surface rounded-[var(--ti-radius)] bg-muted/40 p-4">
               <div className="text-sm font-semibold">Logo</div>
               <div className="mt-1 text-sm text-muted-foreground">
                 Upload a square or wide PNG/SVG.
@@ -322,7 +322,7 @@ export default function SettingsClient() {
             </div>
           </div>
 
-          <div className="mt-4 rounded-2xl bg-muted/20 p-4">
+          <div className="mt-4 ti-surface rounded-[var(--ti-radius)] bg-muted/40 p-4">
             <div className="text-sm font-semibold">Banking details</div>
             <div className="mt-1 text-sm text-muted-foreground">
               Shown on invoices so clients can pay by EFT.
@@ -365,14 +365,14 @@ export default function SettingsClient() {
                 <input
                   type="color"
                   className="h-11 w-14 cursor-pointer rounded-lg border border-input bg-background p-1"
-                  value={pickerHex(invoiceAccentHex, '#2563eb')}
+                  value={pickerHex(invoiceAccentHex, '#2F6F7E')}
                   onChange={(e) => setInvoiceAccentHex(e.target.value)}
                   disabled={formDisabled}
                 />
                 <Input
                   value={invoiceAccentHex}
                   onChange={(e) => setInvoiceAccentHex(e.target.value)}
-                  placeholder="#2563eb"
+                  placeholder="#2F6F7E"
                   disabled={formDisabled}
                 />
               </div>
@@ -459,7 +459,7 @@ export default function SettingsClient() {
           </ul>
           <div className="mt-4">
             <Button asChild variant="secondary">
-              <Link href={routes.app.employees}>Manage team</Link>
+              <Link href={routes.app.team}>Manage team</Link>
             </Button>
           </div>
         </Card>

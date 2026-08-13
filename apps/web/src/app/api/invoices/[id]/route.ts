@@ -5,6 +5,8 @@ import { getWorkspaceContext, type WorkspaceContext } from '@/lib/auth/workspace
 import { calcInvoiceTotals, linesToPayload, type LineInput } from '@/lib/invoices/calcLines';
 import { fetchInvoiceTimelineRows, logInvoiceTimelineEvent, mergeInvoiceTimeline } from '@/lib/invoices/timelineServer';
 import { restoreInventoryForSentInvoice } from '@/lib/inventory/invoiceInventory';
+import { demoNotAvailableResponse, demoSuccessResponse } from '@/lib/demo/apiGate';
+import { demoInvoiceDetail } from '@/lib/demo/fixtures';
 
 const INVOICE_DETAIL_SELECT = `
       id,
@@ -55,6 +57,9 @@ async function loadInvoice(supabase: SupabaseClient, id: string, ctx: WorkspaceC
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    const demo = demoSuccessResponse(_request, demoInvoiceDetail(id));
+    if (demo) return demo;
+
     const supabase = await createSupabaseServerClient(_request);
     const ctx = await getWorkspaceContext(supabase);
     if (!ctx) return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });
@@ -106,6 +111,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const blocked = demoNotAvailableResponse(request);
+    if (blocked) return blocked;
+
     const { id } = await params;
     const supabase = await createSupabaseServerClient(request);
     const ctx = await getWorkspaceContext(supabase);
@@ -215,6 +223,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const blocked = demoNotAvailableResponse(_request);
+    if (blocked) return blocked;
+
     const { id } = await params;
     const supabase = await createSupabaseServerClient(_request);
     const ctx = await getWorkspaceContext(supabase);

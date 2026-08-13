@@ -8,9 +8,23 @@ import {
   isWhatsappEnvReady,
 } from '@/lib/integrations/messaging';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getWorkspaceContext } from '@/lib/auth/workspace';
+import { writeAuditLog } from '@/lib/audit/log';
+import { checkRateLimit, rateLimitResponse } from '@/lib/security/rateLimit';
 
 export async function POST(request: Request) {
   try {
+    const supabase = await createSupabaseServerClient(request);
+    const ctx = await getWorkspaceContext(supabase);
+    if (!ctx) return NextResponse.json({ success: false, error: 'Not signed in.' }, { status: 401 });
+
+    const rl = await checkRateLimit({
+      key: `send:reminder:${ctx.workspaceOwnerId}`,
+      limit: 20,
+      windowSec: 3600,
+    });
+    if (!rl.ok) return rateLimitResponse(rl.retryAfterSec);
+
     const body = await request.json();
     const channel = String(body.channel ?? '');
     const invoiceId = body.invoiceId ? String(body.invoiceId) : null;
@@ -36,9 +50,20 @@ export async function POST(request: Request) {
         html: `<p>${message.replaceAll('\n', '<br/>')}</p>`,
       });
       if (invoiceId) {
-        const supabase = await createSupabaseServerClient(request);
-        const { error: logErr } = await supabase.from('reminder_events').insert({ invoice_id: invoiceId, channel: 'email' });
+        const { error: logErr } = await supabase.from('reminder_events').insert({
+          invoice_id: invoiceId,
+          channel: 'email',
+          owner_id: ctx.workspaceOwnerId,
+        });
         void logErr;
+        await writeAuditLog(supabase, {
+          ownerId: ctx.workspaceOwnerId,
+          actorUserId: ctx.actorUserId,
+          action: 'reminder.sent',
+          entityType: 'invoice',
+          entityId: invoiceId,
+          meta: { channel: 'email', manual: true },
+        });
       }
       return NextResponse.json({ success: true });
     }
