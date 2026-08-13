@@ -17,7 +17,7 @@ import type { ClientListItem } from '@/features/clients/types';
 import type { InvoiceComposerDraft, InvoiceComposerItem } from './types';
 import { addDaysISO, calcTotals, makeEmptyItem, todayISO } from './utils';
 import { itemsToPayload, totalsForDraftSync, workingItemsForDraftSync } from './draftItems';
-import { Check, FilePlus2, Sparkles, Send, Printer, Wand2 } from 'lucide-react';
+import { Check, FilePlus2, Sparkles, Send, Printer, Trash2, Wand2 } from 'lucide-react';
 import { aiSuggestPricing, fetchItemSuggestions, rememberPrice, type ItemSuggestion } from '@/features/invoices/suggestions';
 import { InvoicePreview } from '@/components/invoice/InvoicePreview';
 import { SendStep } from './SendStep';
@@ -1159,217 +1159,224 @@ export function InvoiceComposerModal({
 
               {errors.items ? <div className="text-xs text-danger">{errors.items}</div> : null}
 
-              <div className="space-y-3">
-                <div className="hidden md:grid md:grid-cols-[1fr_120px_160px_120px] md:items-end md:gap-3 px-1">
-                  <div className="text-xs font-semibold text-muted-foreground">Description</div>
-                  <div className="text-xs font-semibold text-muted-foreground">Qty</div>
-                  <div className="text-xs font-semibold text-muted-foreground">Unit ({draft.currency})</div>
-                  <div className="text-xs font-semibold text-muted-foreground">VAT %</div>
+              <div className="space-y-2">
+                <div
+                  className={cn(
+                    'hidden px-4 md:grid md:grid-cols-[minmax(0,1fr)_4.75rem_7.25rem_4.5rem_8.5rem_2.5rem] md:items-center md:gap-3'
+                  )}
+                >
+                  <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Description</div>
+                  <div className="text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Qty</div>
+                  <div className="text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Unit ({draft.currency})
+                  </div>
+                  <div className="text-right text-xs font-semibold uppercase tracking-wider text-gray-500">VAT %</div>
+                  <div className="text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Line total</div>
+                  <div className="sr-only">Action</div>
                 </div>
-                {draft.items.map((it) => (
-                  <div key={it.id} className="rounded-2xl bg-muted/20 p-4">
-                    <div className="grid gap-3 md:grid-cols-[1fr_120px_160px_120px] md:items-start">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium md:sr-only">Description</label>
-                        {inventoryCatalog.length > 0 ? (
-                          <div className="space-y-1">
-                            <label className="text-xs font-medium text-muted-foreground" htmlFor={`inv-cat-${it.id}`}>
-                              Inventory catalog
-                            </label>
-                            <select
-                              id={`inv-cat-${it.id}`}
-                              className={cn(
-                                'h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground shadow-[var(--shadow-sm)]',
-                                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:border-ring/40'
-                              )}
-                              value={it.catalogItemId ?? ''}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                if (!v) {
-                                  updateItem(it.id, { catalogItemId: undefined });
-                                  return;
-                                }
-                                const cat = inventoryCatalog.find((x) => x.id === v);
-                                if (!cat) return;
-                                updateItem(it.id, {
-                                  catalogItemId: v,
-                                  description: cat.name,
-                                  unitPrice: cat.unitPrice,
-                                  vatRate: cat.defaultTaxRate ?? 15,
-                                });
-                              }}
-                            >
-                              <option value="">— Manual line (no stock link) —</option>
-                              {inventoryCatalog.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                  {c.name}
-                                  {c.sku ? ` (${c.sku})` : ''}
-                                  {c.stockQuantity != null ? ` · ${c.stockQuantity} on hand` : ''}
-                                </option>
-                              ))}
-                            </select>
-                            {it.catalogItemId ? (
-                              <p className="text-xs text-muted-foreground">
-                                On hand decreases by quantity when the invoice is sent.
-                              </p>
-                            ) : null}
-                          </div>
-                        ) : null}
-                        <div className="relative" ref={activeItemId === it.id ? suggestBoxRef : undefined}>
-                          <Input
-                            value={it.description}
-                            onFocus={() => setActiveItemId(it.id)}
-                            onChange={(e) => {
-                              setActiveItemId(it.id);
-                              updateItem(it.id, { description: e.target.value });
-                            }}
-                            placeholder="e.g. Consulting services"
-                            onKeyDown={(e) => {
-                              if (e.key === 'Escape') {
-                                e.preventDefault();
-                                setActiveItemId(null);
-                              }
-                            }}
-                          />
-                          {activeItemId === it.id && (suggestLoading || suggestions.length > 0) ? (
-                            <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20">
-                              <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[var(--shadow-lg)]">
-                                <div className="px-3 py-2 text-xs font-semibold text-muted-foreground">
-                                  {suggestLoading ? 'Suggestions…' : 'Suggestions'}
-                                </div>
-                                {suggestions.length ? (
-                                  <div className="max-h-52 overflow-auto px-1 pb-1">
-                                    {suggestions.map((s, idx) => (
-                                      <button
-                                        key={`${s.description}-${idx}`}
-                                        type="button"
-                                        className="w-full rounded-lg px-2 py-2 text-left text-sm transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-                                        onClick={() => {
-                                          updateItem(it.id, {
-                                            description: s.description,
-                                            unitPrice: s.unitPrice,
-                                            vatRate: s.vatRate,
-                                          });
-                                          setActiveItemId(null);
-                                        }}
-                                      >
-                                        <div className="flex items-center justify-between gap-2">
-                                          <div className="min-w-0">
-                                            <div className="truncate font-semibold text-foreground">{s.description}</div>
-                                            <div className="mt-0.5 text-xs text-muted-foreground">
-                                              {s.source.replace('_', ' ')} · VAT {s.vatRate}%
-                                            </div>
-                                          </div>
-                                          <div className="shrink-0 font-semibold tabular-nums text-foreground">
-                                            {formatMoney(s.unitPrice, draft.currency)}
-                                          </div>
-                                        </div>
-                                      </button>
-                                    ))}
-                                  </div>
-                                ) : null}
-                              </div>
+                {draft.items.map((it, itemIndex) => {
+                  const lineTotal = it.quantity * it.unitPrice * (1 + it.vatRate / 100);
+                  const suggestPrice = async () => {
+                    try {
+                      const desc = it.description.trim();
+                      if (!desc) return;
+                      const r = await aiSuggestPricing({ description: desc, clientId: draft.clientId || null });
+                      updateItem(it.id, {
+                        unitPrice: Number(r.unitPrice ?? it.unitPrice),
+                        vatRate: Number(r.vatRate ?? it.vatRate),
+                      });
+                    } catch {
+                      // ignore (AI not configured)
+                    }
+                  };
+                  return (
+                    <div key={it.id} className="rounded-lg border border-[#e5e7eb] bg-white p-3 md:px-4 md:py-3">
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_4.75rem_7.25rem_4.5rem_8.5rem_2.5rem] md:items-start">
+                        <div className="min-w-0 space-y-2">
+                          <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 md:sr-only">
+                            Description
+                          </label>
+                          {inventoryCatalog.length > 0 ? (
+                            <div>
+                              <label className="sr-only" htmlFor={`inv-cat-${it.id}`}>
+                                Inventory catalog
+                              </label>
+                              <select
+                                id={`inv-cat-${it.id}`}
+                                className={cn(
+                                  'h-10 w-full rounded-lg border border-[#e5e7eb] bg-white px-3 text-sm text-foreground',
+                                  'focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900'
+                                )}
+                                value={it.catalogItemId ?? ''}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (!v) {
+                                    updateItem(it.id, { catalogItemId: undefined });
+                                    return;
+                                  }
+                                  const cat = inventoryCatalog.find((x) => x.id === v);
+                                  if (!cat) return;
+                                  updateItem(it.id, {
+                                    catalogItemId: v,
+                                    description: cat.name,
+                                    unitPrice: cat.unitPrice,
+                                    vatRate: cat.defaultTaxRate ?? 15,
+                                  });
+                                }}
+                              >
+                                <option value="">Catalog — or type a custom line</option>
+                                {inventoryCatalog.map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.name}
+                                    {c.sku ? ` (${c.sku})` : ''}
+                                    {c.stockQuantity != null ? ` · ${c.stockQuantity} on hand` : ''}
+                                  </option>
+                                ))}
+                              </select>
+                              {it.catalogItemId ? (
+                                <p className="mt-1 text-xs text-muted-foreground">Stock drops by qty when sent.</p>
+                              ) : null}
                             </div>
                           ) : null}
-                        </div>
-                        {errors[`items.${draft.items.findIndex((x) => x.id === it.id)}.description`] ? (
-                          <div className="text-xs text-danger">
-                            {errors[`items.${draft.items.findIndex((x) => x.id === it.id)}.description`]}
+                          <div className="relative" ref={activeItemId === it.id ? suggestBoxRef : undefined}>
+                            <Input
+                              value={it.description}
+                              onFocus={() => setActiveItemId(it.id)}
+                              onChange={(e) => {
+                                setActiveItemId(it.id);
+                                updateItem(it.id, { description: e.target.value });
+                              }}
+                              placeholder="e.g. Consulting services"
+                              className="h-10 rounded-lg border-[#e5e7eb] bg-white shadow-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Escape') {
+                                  e.preventDefault();
+                                  setActiveItemId(null);
+                                }
+                              }}
+                            />
+                            {activeItemId === it.id && (suggestLoading || suggestions.length > 0) ? (
+                              <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20">
+                                <div className="overflow-hidden rounded-lg border border-[#e5e7eb] bg-white shadow-[var(--shadow-dropdown)]">
+                                  <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                                    {suggestLoading ? 'Suggestions…' : 'Suggestions'}
+                                  </div>
+                                  {suggestions.length ? (
+                                    <div className="max-h-52 overflow-auto px-1 pb-1">
+                                      {suggestions.map((s, idx) => (
+                                        <button
+                                          key={`${s.description}-${idx}`}
+                                          type="button"
+                                          className="w-full rounded-lg px-2 py-2 text-left text-sm transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
+                                          onClick={() => {
+                                            updateItem(it.id, {
+                                              description: s.description,
+                                              unitPrice: s.unitPrice,
+                                              vatRate: s.vatRate,
+                                            });
+                                            setActiveItemId(null);
+                                          }}
+                                        >
+                                          <div className="flex items-center justify-between gap-2">
+                                            <div className="min-w-0">
+                                              <div className="truncate font-semibold text-foreground">{s.description}</div>
+                                              <div className="mt-0.5 text-xs text-muted-foreground">
+                                                {s.source.replace('_', ' ')} · VAT {s.vatRate}%
+                                              </div>
+                                            </div>
+                                            <div className="shrink-0 font-semibold tabular-nums text-foreground">
+                                              {formatMoney(s.unitPrice, draft.currency)}
+                                            </div>
+                                          </div>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
-                        ) : null}
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium md:sr-only">Qty</label>
-                        <Input
-                          type="number"
-                          min={1}
-                          value={it.quantity}
-                          className="tabular-nums md:text-right"
-                          onChange={(e) => updateItem(it.id, { quantity: Number(e.target.value) })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium md:sr-only">Unit ({draft.currency})</label>
-                        <div className="flex items-center gap-2">
+                          {errors[`items.${itemIndex}.description`] ? (
+                            <div className="text-xs text-danger">{errors[`items.${itemIndex}.description`]}</div>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 md:sr-only">Qty</label>
+                          <Input
+                            type="number"
+                            min={1}
+                            inputMode="decimal"
+                            value={it.quantity}
+                            className="h-10 rounded-lg border-[#e5e7eb] bg-white text-right tabular-nums shadow-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900"
+                            onChange={(e) => updateItem(it.id, { quantity: Number(e.target.value) })}
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 md:sr-only">
+                            Unit ({draft.currency})
+                          </label>
                           <Input
                             type="number"
                             min={0}
                             step="0.01"
+                            inputMode="decimal"
                             value={it.unitPrice}
-                            className="tabular-nums md:text-right"
+                            className="h-10 rounded-lg border-[#e5e7eb] bg-white text-right tabular-nums shadow-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900"
                             onChange={(e) => updateItem(it.id, { unitPrice: Number(e.target.value) })}
                             onBlur={() => rememberPrice(it.description, it.unitPrice, it.vatRate)}
                           />
-                          <Button
+                          <button
                             type="button"
-                            variant="ghost"
-                            className="hidden md:inline-flex"
-                            onClick={async () => {
-                              try {
-                                const desc = it.description.trim();
-                                if (!desc) return;
-                                const r = await aiSuggestPricing({ description: desc, clientId: draft.clientId || null });
-                                updateItem(it.id, {
-                                  unitPrice: Number(r.unitPrice ?? it.unitPrice),
-                                  vatRate: Number(r.vatRate ?? it.vatRate),
-                                });
-                              } catch {
-                                // ignore (AI not configured)
-                              }
-                            }}
+                            className="text-xs font-medium text-gray-500 hover:text-slate-900"
+                            onClick={() => void suggestPrice()}
                           >
                             Suggest
-                          </Button>
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          className="md:hidden text-xs font-semibold text-primary hover:underline"
-                          onClick={async () => {
-                            try {
-                              const desc = it.description.trim();
-                              if (!desc) return;
-                              const r = await aiSuggestPricing({ description: desc, clientId: draft.clientId || null });
-                              updateItem(it.id, {
-                                unitPrice: Number(r.unitPrice ?? it.unitPrice),
-                                vatRate: Number(r.vatRate ?? it.vatRate),
-                              });
-                            } catch {
-                              // ignore (AI not configured)
-                            }
-                          }}
-                        >
-                          Suggest price (AI)
-                        </button>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium md:sr-only">VAT %</label>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={it.vatRate}
-                          className="tabular-nums md:text-right"
-                          onChange={(e) => updateItem(it.id, { vatRate: Number(e.target.value) })}
-                          onBlur={() => rememberPrice(it.description, it.unitPrice, it.vatRate)}
-                        />
-                      </div>
-                    </div>
 
-                    <div className="mt-3 flex items-center justify-between text-sm">
-                      <div className="text-muted-foreground">
-                        Line total:{' '}
-                        <span className="font-semibold text-foreground">
-                          {formatMoney(it.quantity * it.unitPrice + it.quantity * it.unitPrice * (it.vatRate / 100), draft.currency)}
-                        </span>
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 md:sr-only">VAT %</label>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            inputMode="decimal"
+                            value={it.vatRate}
+                            className="h-10 rounded-lg border-[#e5e7eb] bg-white text-right tabular-nums shadow-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900"
+                            onChange={(e) => updateItem(it.id, { vatRate: Number(e.target.value) })}
+                            onBlur={() => rememberPrice(it.description, it.unitPrice, it.vatRate)}
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between gap-3 md:h-10 md:justify-end">
+                          <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 md:sr-only">
+                            Line total
+                          </span>
+                          <span className="text-sm font-semibold tabular-nums text-foreground">
+                            {formatMoney(lineTotal, draft.currency)}
+                          </span>
+                        </div>
+
+                        <div className="flex md:h-10 md:items-center md:justify-center">
+                          {draft.items.length > 1 ? (
+                            <button
+                              type="button"
+                              className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-red-600 transition-colors hover:bg-red-50 hover:text-red-700"
+                              aria-label="Remove line item"
+                              onClick={() => removeItem(it.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          ) : (
+                            <span className="hidden h-10 w-10 md:block" aria-hidden />
+                          )}
+                        </div>
                       </div>
-                      {draft.items.length > 1 ? (
-                        <button type="button" className="text-sm font-semibold text-danger hover:underline" onClick={() => removeItem(it.id)}>
-                          Remove
-                        </button>
-                      ) : null}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="flex items-center justify-between pt-2">
