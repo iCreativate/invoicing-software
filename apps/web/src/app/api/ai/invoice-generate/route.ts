@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { generateText, Output } from 'ai';
 import { z } from 'zod';
-import { friendlyAnthropicError, getClaudeModel, isAnthropicConfigured } from '@/lib/ai/anthropic';
+import { getLanguageModel, isLlmConfigured } from '@/lib/ai/anthropic';
 import { invoiceGeneratorPrompt, systemPrompt } from '@/lib/ai/prompts';
+import { draftInvoiceFromDescription, type LocalInvoiceDraft } from '@/lib/ai/localInvoiceDraft';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getWorkspaceContext } from '@/lib/auth/workspace';
 import { checkRateLimit, rateLimitResponse } from '@/lib/security/rateLimit';
@@ -58,13 +59,6 @@ export async function POST(request: Request) {
     });
     if (!rl.ok) return rateLimitResponse(rl.retryAfterSec);
 
-    if (!isAnthropicConfigured()) {
-      return NextResponse.json(
-        { success: false, error: 'Invoice generator isn’t configured yet. Add ANTHROPIC_API_KEY on the server.' },
-        { status: 503 }
-      );
-    }
-
     const body = await request.json().catch(() => ({}));
     const input = String(body.input || '').trim();
     if (!input) return NextResponse.json({ success: false, error: 'Describe the work to generate an invoice.' }, { status: 400 });
@@ -86,11 +80,18 @@ export async function POST(request: Request) {
     const issueDefault = todayISO();
     const dueDefault = addDaysISO(30);
 
-    const result = await generateText({
-      model: getClaudeModel(),
-      system: systemPrompt,
-      output: Output.object({ schema: invoiceDraftSchema }),
-      prompt: `${invoiceGeneratorPrompt}
+    const local = (): LocalInvoiceDraft =>
+      draftInvoiceFromDescription(input, { knownClients, today: issueDefault });
+
+    let d: LocalInvoiceDraft = local();
+
+    if (isLlmConfigured()) {
+      try {
+        const result = await generateText({
+          model: getLanguageModel(),
+          system: systemPrompt,
+          output: Output.object({ schema: invoiceDraftSchema }),
+          prompt: `${invoiceGeneratorPrompt}
 
 Today: ${issueDefault}
 Default due date: ${dueDefault}
@@ -100,50 +101,51 @@ ${knownClients.length ? JSON.stringify(knownClients) : '(none loaded)'}
 User description:
 ${input}
 `,
-      temperature: 0.2,
-    });
+          temperature: 0.2,
+        });
 
-    const parsed = invoiceDraftSchema.safeParse(result.output);
-    if (!parsed.success) {
-      return NextResponse.json({ success: false, error: 'Couldn’t draft the invoice. Try a clearer description.' }, { status: 422 });
+        const parsed = invoiceDraftSchema.safeParse(result.output);
+        if (parsed.success) {
+          const items = parsed.data.items
+            .map((it) => ({
+              description: String(it.description ?? '').trim(),
+              quantity: Number.isFinite(it.quantity) && it.quantity > 0 ? it.quantity : 1,
+              unitPrice: Number.isFinite(it.unitPrice) ? it.unitPrice : 0,
+              vatRate: Number.isFinite(it.vatRate) ? it.vatRate : 15,
+            }))
+            .filter((it) => it.description.length > 0);
+          if (items.length) {
+            const knownIds = new Set(knownClients.map((c) => c.id));
+            const clientId = parsed.data.client?.id && knownIds.has(parsed.data.client.id) ? parsed.data.client.id : null;
+            d = {
+              client: {
+                id: clientId,
+                name: String(parsed.data.client?.name ?? '').trim(),
+                email: String(parsed.data.client?.email ?? '').trim(),
+                phone: String(parsed.data.client?.phone ?? '').trim(),
+              },
+              currency: String(parsed.data.currency ?? 'ZAR') || 'ZAR',
+              issueDate:
+                parsed.data.issueDate && isoDate.test(parsed.data.issueDate) ? parsed.data.issueDate : issueDefault,
+              dueDate: parsed.data.dueDate && isoDate.test(parsed.data.dueDate) ? parsed.data.dueDate : dueDefault,
+              items,
+              notes: parsed.data.notes ? String(parsed.data.notes).trim() : '',
+            };
+          }
+        }
+      } catch (e: unknown) {
+        await captureException(e, { route: 'ai.invoice-generate' });
+        d = local();
+      }
     }
 
-    const d = parsed.data;
-    const items = d.items
-      .map((it) => ({
-        description: String(it.description ?? '').trim(),
-        quantity: Number.isFinite(it.quantity) && it.quantity > 0 ? it.quantity : 1,
-        unitPrice: Number.isFinite(it.unitPrice) ? it.unitPrice : 0,
-        vatRate: Number.isFinite(it.vatRate) ? it.vatRate : 15,
-      }))
-      .filter((it) => it.description.length > 0);
-
-    if (!items.length) {
+    if (!d.items.length) {
       return NextResponse.json({ success: false, error: 'No line items found in that description.' }, { status: 422 });
     }
 
-    const knownIds = new Set(knownClients.map((c) => c.id));
-    const clientId = d.client?.id && knownIds.has(d.client.id) ? d.client.id : null;
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        client: {
-          id: clientId,
-          name: String(d.client?.name ?? '').trim(),
-          email: String(d.client?.email ?? '').trim(),
-          phone: String(d.client?.phone ?? '').trim(),
-        },
-        currency: String(d.currency ?? 'ZAR') || 'ZAR',
-        issueDate: d.issueDate && isoDate.test(d.issueDate) ? d.issueDate : issueDefault,
-        dueDate: d.dueDate && isoDate.test(d.dueDate) ? d.dueDate : dueDefault,
-        items,
-        notes: d.notes ? String(d.notes).trim() : '',
-      },
-    });
+    return NextResponse.json({ success: true, data: d });
   } catch (e: unknown) {
     await captureException(e, { route: 'ai.invoice-generate' });
-    const { message, status } = friendlyAnthropicError(e);
-    return NextResponse.json({ success: false, error: message }, { status });
+    return NextResponse.json({ success: false, error: 'Couldn’t draft the invoice. Try a shorter description.' }, { status: 500 });
   }
 }

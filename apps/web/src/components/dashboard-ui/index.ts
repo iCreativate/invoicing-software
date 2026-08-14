@@ -6,4 +6,3 @@ export { QuickActionCard } from './QuickActionCard';
 export { ActivityTimeline, type ActivityTimelineItem } from './ActivityTimeline';
 export { ReportCard } from './ReportCard';
 export { ConfirmDialog } from './ConfirmDialog';
-export { MobileNav } from './MobileNav';

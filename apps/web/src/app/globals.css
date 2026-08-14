@@ -310,23 +310,44 @@
     align-items: center;
     flex-shrink: 0;
     min-height: 3.25rem;
-    gap: 0.75rem;
-    padding: 0 1.25rem;
+    gap: 0.5rem;
+    padding: 0.25rem max(0.75rem, env(safe-area-inset-right)) 0.25rem max(0.5rem, env(safe-area-inset-left));
     border-bottom: 1px solid var(--tl-line);
     background: var(--tl-bg);
+  }
+  @media (min-width: 768px) {
+    .topbar {
+      gap: 0.75rem;
+      padding: 0 1.25rem;
+    }
   }
   .page-content {
     flex: 1 1 0%;
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .page-container {
     width: 100%;
     max-width: 1440px;
     margin-left: auto;
     margin-right: auto;
-    padding: 1.25rem;
+    padding: 1rem max(1rem, env(safe-area-inset-right)) 1.25rem max(1rem, env(safe-area-inset-left));
+  }
+  @media (min-width: 768px) {
+    .page-container {
+      padding: 1.25rem;
+    }
+  }
+  .page-content img,
+  .page-content video,
+  .page-content canvas,
+  .page-content svg {
+    max-width: 100%;
+  }
+  .page-content table {
+    max-width: 100%;
   }
 
   /* ---- Cards ---- */

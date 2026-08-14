@@ -13,7 +13,6 @@ import { getBrowserUserSafe } from '@/lib/supabase/browserAuth';
 import { isDemoUiActive } from '@/lib/demo/accounts';
 import { ProfileBootstrap } from '@/components/profile/ProfileBootstrap';
 import { CommandPalette } from '@/components/shell/CommandPalette';
-import { MobileNav } from '@/components/dashboard-ui/MobileNav';
 import { APP_NAV_GROUPS, APP_NAV_MORE, type AppNavItem } from '@/lib/navigation/app-nav';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
 import {
@@ -218,6 +217,7 @@ export function AppShell({
   fullWidth?: boolean;
   hideHeader?: boolean;
 }) {
+  const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -228,6 +228,24 @@ export function AppShell({
   useEffect(() => {
     setChromeReady(true);
   }, []);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [mobileOpen]);
   const showQuickCreate = chromeReady && caps.status === 'ready' && caps.canEdit;
 
   useEffect(() => {
@@ -320,41 +338,48 @@ export function AppShell({
 
       <div className="main-area">
         <header className="topbar ti-no-print pt-[env(safe-area-inset-top)]">
-            <div className="flex shrink-0 items-center gap-1 md:hidden">
+            <div className="flex min-w-0 shrink-0 items-center gap-1 md:hidden">
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="h-10 w-10"
                 aria-label="Open menu"
+                aria-expanded={mobileOpen}
                 onClick={() => setMobileOpen(true)}
               >
-                <Menu className="h-4 w-4" />
+                <Menu className="h-5 w-5" />
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                aria-label="Search"
-                onClick={() => window.dispatchEvent(new Event('ti-cmdk-open'))}
+              <Link
+                href={routes.app.dashboard}
+                className="truncate text-[12px] font-semibold tracking-[0.16em] text-[#101418]"
               >
-                <Search className="h-4 w-4" />
-              </Button>
+                TIMELY
+              </Link>
             </div>
 
             <div className="flex min-w-0 flex-1 items-center">
               <CommandPalette />
             </div>
 
-            <div className="flex shrink-0 items-center justify-end gap-1.5">
+            <div className="flex shrink-0 items-center justify-end gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 md:hidden"
+                aria-label="Search"
+                onClick={() => window.dispatchEvent(new Event('ti-cmdk-open'))}
+              >
+                <Search className="h-4 w-4" />
+              </Button>
               {hideHeader && actions ? (
                 <div className="hidden items-center gap-1.5 sm:flex">{actions}</div>
               ) : null}
               {showQuickCreate ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="primary" size="sm" className="gap-1.5" aria-label="Quick create">
+                    <Button type="button" variant="primary" size="sm" className="h-10 w-10 px-0 sm:h-8 sm:w-auto sm:gap-1.5 sm:px-3" aria-label="Quick create">
                       <Plus className="h-3.5 w-3.5" />
                       <span className="hidden lg:inline">Create</span>
                     </Button>
@@ -377,7 +402,7 @@ export function AppShell({
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="Notifications">
+                  <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0 md:h-8 md:w-8" aria-label="Notifications">
                     <Bell className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -392,7 +417,7 @@ export function AppShell({
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="ghost" size="sm" className="max-w-[160px] gap-2 px-1.5">
+                  <Button type="button" variant="ghost" size="sm" className="h-10 max-w-[160px] gap-2 px-1.5 md:h-8">
                     <div className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
                       {(userEmail?.[0] ?? 'U').toUpperCase()}
                     </div>
@@ -430,7 +455,7 @@ export function AppShell({
           </div>
         ) : null}
 
-        <main className="page-content pb-[max(5.5rem,env(safe-area-inset-bottom))] md:pb-0">
+        <main className="page-content pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className={cn('page-container', !fullWidth && 'max-w-6xl')}>
             {!hideHeader ? (
               <div className="page-header mb-5 flex-col sm:flex-row sm:items-end ti-no-print">
@@ -444,7 +469,6 @@ export function AppShell({
           </div>
         </main>
       </div>
-      <MobileNav />
     </div>
   );
 }

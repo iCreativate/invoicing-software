@@ -527,7 +527,7 @@ export default function DashboardClient({
         </section>
       </div>
 
-      <div className="fixed bottom-5 right-5 z-50 sm:hidden ti-no-print">
+      <div className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-[max(1.25rem,env(safe-area-inset-right))] z-40 sm:hidden ti-no-print">
         <InvoiceComposerLauncher label="" icon className="h-14 w-14 rounded-full shadow-[var(--ti-shadow-lift)]" />
       </div>
     </AppShell>

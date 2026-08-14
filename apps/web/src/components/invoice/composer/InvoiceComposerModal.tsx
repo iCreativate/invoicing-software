@@ -14,7 +14,8 @@ import { fetchClientsList, createClient, searchClients } from '@/features/client
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { cn } from '@/lib/utils/cn';
 import type { ClientListItem } from '@/features/clients/types';
-import type { InvoiceComposerDraft, InvoiceComposerItem } from './types';
+import type { InvoiceComposerDraft, InvoiceComposerItem, InvoiceComposerTemplate } from './types';
+import { INVOICE_TEMPLATE_PRESETS } from '@/lib/invoices/templates';
 import { addDaysISO, calcTotals, makeEmptyItem, todayISO } from './utils';
 import { itemsToPayload, totalsForDraftSync, workingItemsForDraftSync } from './draftItems';
 import { Check, FilePlus2, Sparkles, Send, Printer, Trash2, Wand2 } from 'lucide-react';
@@ -847,7 +848,7 @@ export function InvoiceComposerModal({
         <div className="rounded-2xl bg-danger/10 p-3 text-sm text-danger ti-no-print">{submitError}</div>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_min(360px,100%)]">
         <Card className="p-5">
           <div className="mb-5 rounded-lg border border-[#e5e7eb] bg-[#f6f4f0] p-4 ti-no-print">
             <div className="flex items-start gap-3">
@@ -885,7 +886,7 @@ export function InvoiceComposerModal({
             />
             <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-xs text-[#8b9199]">
-                VAT 15% unless you say otherwise. ⌘ Enter to generate.
+                VAT 15% unless you say otherwise. Uses Groq/Claude when configured. ⌘ Enter to generate.
               </div>
               <Button
                 type="button"
@@ -1088,14 +1089,15 @@ export function InvoiceComposerModal({
                   <select
                     className="h-11 w-full rounded-xl bg-white/70 px-3 text-sm shadow-[var(--shadow-sm)] dark:bg-white/5"
                     value={draft.template}
-                    onChange={(e) => setDraft((d) => ({ ...d, template: e.target.value as any }))}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, template: e.target.value as InvoiceComposerTemplate }))
+                    }
                   >
-                    <option value="modern">Modern</option>
-                    <option value="classic">Classic</option>
-                    <option value="minimal">Minimal</option>
-                    <option value="bold">Bold</option>
-                    <option value="elegant">Elegant</option>
-                    <option value="corporate">Corporate (Blue)</option>
+                    {INVOICE_TEMPLATE_PRESETS.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -1492,6 +1494,36 @@ export function InvoiceComposerModal({
                 </div>
               </div>
 
+              <div className="rounded-lg border border-[#e5e7eb] bg-white p-4 ti-no-print">
+                <div className="text-sm font-semibold">Invoice template</div>
+                <div className="mt-1 text-sm text-muted-foreground">Applies to the PDF and the client view.</div>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {INVOICE_TEMPLATE_PRESETS.map((t) => {
+                    const selected = draft.template === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setDraft((d) => ({ ...d, template: t.id }))}
+                        className={cn(
+                          'rounded-lg border bg-white p-3 text-left transition-shadow',
+                          selected
+                            ? 'border-[#1a3a4a] ring-2 ring-[#1a3a4a]/20'
+                            : 'border-[#e5e7eb] hover:border-[#1a3a4a]/40'
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="h-2.5 w-10 rounded-full" style={{ backgroundColor: t.accentHex }} />
+                          {selected ? <Check className="h-3.5 w-3.5 text-[#1a3a4a]" /> : null}
+                        </div>
+                        <div className="mt-2 text-sm font-semibold text-[#101418]">{t.label}</div>
+                        <div className="mt-0.5 text-xs text-[#5a6169]">{t.description}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="rounded-2xl bg-muted/20 p-4">
                 <div className="flex items-center justify-between ti-no-print">
                   <div className="text-sm font-semibold">PDF preview</div>
@@ -1660,7 +1692,7 @@ export function InvoiceComposerModal({
 
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
-      <ModalContent className="max-w-5xl p-6">
+      <ModalContent className="max-w-5xl p-4 sm:p-6">
         <ModalHeader className="mb-4">
           <ModalTitle className="text-xl font-semibold tracking-tight">New invoice</ModalTitle>
           <ModalDescription className="text-sm text-muted-foreground">

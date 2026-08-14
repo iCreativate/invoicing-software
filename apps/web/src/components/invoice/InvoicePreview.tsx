@@ -5,6 +5,8 @@ import { formatMoney } from '@/lib/format/money';
 import type { InvoiceComposerDraft } from '@/components/invoice/composer/types';
 import { InvoiceQrFooter } from '@/components/invoice/InvoiceQrFooter';
 import { getTimelyInvoicesMarketingUrl } from '@/lib/invoice/platformUrls';
+import { getInvoiceTemplate } from '@/lib/invoices/templates';
+import { cn } from '@/lib/utils/cn';
 
 export function InvoicePreview({
   companyName = 'TimelyInvoices',
@@ -57,23 +59,35 @@ export function InvoicePreview({
   const vat = draft.items.reduce((s, i) => s + i.quantity * i.unitPrice * (i.vatRate / 100), 0);
   const total = subtotal + vat;
 
-  const template = draft.template ?? 'modern';
-  const isCorporate = template === 'corporate';
-  const headerTone = isCorporate
-    ? 'bg-white text-zinc-900'
-    : template === 'bold'
-      ? 'bg-zinc-900 text-white'
-      : template === 'elegant'
-        ? 'bg-gradient-to-r from-[var(--ti-brand,#1A3A4A)] to-[var(--ti-brand-accent,#2F6F7E)] text-white'
-        : 'bg-zinc-50 text-zinc-900';
+  const preset = getInvoiceTemplate(draft.template);
+  const chrome = preset.chrome;
+  const isCorporate = preset.id === 'corporate';
+  const onDarkHeader = /text-white|text-\[#f6f4f0\]|text-\[#fdf6ef\]/.test(chrome.header);
 
   const invoiceNo = (draft as any).invoiceNumber ? String((draft as any).invoiceNumber) : '—';
   const logoSrc = companyLogoPath ? companyLogoImgSrc(companyLogoPath) : null;
 
   return (
-    <div className="rounded-2xl bg-white text-zinc-900 shadow-[var(--shadow-md)] overflow-hidden">
-      <div className={headerTone}>
+    <div className={cn('overflow-hidden rounded-2xl text-zinc-900 shadow-[var(--shadow-md)]', chrome.page, chrome.serif && 'font-serif')}>
+      {chrome.leftRail ? <div className={chrome.leftRail} aria-hidden /> : null}
+      <div className={cn(chrome.header, chrome.leftRail && 'pl-4')}>
         <div className="p-6">
+          {chrome.letterhead ? (
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-3">
+                {logoSrc ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoSrc} alt="Company logo" className="h-12 w-32 object-contain" />
+                ) : (
+                  <div className="text-base font-semibold tracking-wide">{companyName}</div>
+                )}
+              </div>
+              <div className={cn('mt-3', chrome.invoiceTitle)}>Invoice</div>
+              <div className={cn('mt-2 text-xs', chrome.headerMuted)}>
+                No. {invoiceNo} · Issued {draft.issueDate} · Due {draft.dueDate}
+              </div>
+            </div>
+          ) : (
           <div className="flex items-start justify-between gap-6">
             <div>
               <div className="flex items-center gap-3">
@@ -82,13 +96,13 @@ export function InvoicePreview({
                   <img
                     src={logoSrc}
                     alt="Company logo"
-                    className={isCorporate ? 'h-12 w-32 object-contain' : 'h-12 w-32 object-contain'}
+                    className="h-12 w-32 object-contain"
                   />
                 ) : null}
                 {!logoSrc ? <div className="text-sm font-semibold">{companyName}</div> : null}
               </div>
               {!isCorporate ? (
-                <div className={template === 'bold' || template === 'elegant' ? 'mt-1 text-xs text-white/80' : 'mt-1 text-xs text-zinc-600'}>
+                <div className={cn('mt-1 text-xs', chrome.headerMuted)}>
                   Professional invoice
                 </div>
               ) : null}
@@ -113,12 +127,12 @@ export function InvoicePreview({
               </div>
             ) : (
               <div className="text-right">
-                <div className={template === 'minimal' ? 'text-xl font-semibold tracking-tight' : 'text-2xl font-semibold tracking-tight'}>
+                <div className={chrome.invoiceTitle}>
                   INVOICE
                 </div>
-                <div className={template === 'bold' || template === 'elegant' ? 'mt-1 text-xs text-white/80' : 'mt-1 text-xs text-zinc-600'}>
-                  <span className={template === 'bold' || template === 'elegant' ? 'text-white/80' : 'text-zinc-600'}>
-                    No: <span className={template === 'bold' || template === 'elegant' ? 'text-white' : 'text-zinc-900'}>{invoiceNo}</span>
+                <div className={cn('mt-1 text-xs', chrome.headerMuted)}>
+                  <span>
+                    No: <span className={onDarkHeader ? 'text-white' : 'text-zinc-900'}>{invoiceNo}</span>
                   </span>
                   <span className="mx-2">·</span>
                   Issue: {draft.issueDate} · Due: {draft.dueDate}
@@ -126,10 +140,11 @@ export function InvoicePreview({
               </div>
             )}
           </div>
+          )}
         </div>
       </div>
 
-      <div className="p-6">
+      <div className={cn('p-6', chrome.leftRail && 'pl-8')}>
         <div className="grid gap-6 sm:grid-cols-2">
           <div>
             <div className="text-xs font-semibold text-zinc-600">{isCorporate ? 'Invoice To:' : 'Bill to'}</div>
@@ -168,29 +183,26 @@ export function InvoicePreview({
 
         <div className="mt-6 overflow-hidden rounded-xl border border-zinc-200">
           <table className="w-full text-sm">
-            <thead
-              className={
-                isCorporate
-                  ? 'text-xs text-white'
-                  : template === 'bold' || template === 'elegant'
-                    ? 'bg-zinc-900 text-xs text-white'
-                    : 'bg-zinc-50 text-xs text-zinc-600'
-              }
-            >
-              <tr className={isCorporate ? 'bg-transparent' : ''}>
-                <th className={isCorporate ? 'bg-blue-600 px-4 py-3 text-left font-semibold' : 'px-4 py-3 text-left font-semibold'}>
+            <thead className={cn('text-xs', chrome.tableHead)}>
+              <tr>
+                <th className={cn('px-4 py-3 text-left font-semibold', isCorporate && 'bg-blue-600')}>
                   Item description
                 </th>
-                <th className={isCorporate ? 'bg-blue-600 px-4 py-3 text-right font-semibold' : 'px-4 py-3 text-right font-semibold'}>
+                <th className={cn('px-4 py-3 text-right font-semibold', isCorporate && 'bg-blue-600')}>
                   Quantity
                 </th>
-                <th className={isCorporate ? 'bg-blue-600 px-4 py-3 text-right font-semibold' : 'px-4 py-3 text-right font-semibold'}>
+                <th className={cn('px-4 py-3 text-right font-semibold', isCorporate && 'bg-blue-600')}>
                   Unit Price
                 </th>
-                <th className={isCorporate ? 'bg-blue-600 px-4 py-3 text-right font-semibold' : 'px-4 py-3 text-right font-semibold'}>
+                <th className={cn('px-4 py-3 text-right font-semibold', isCorporate && 'bg-blue-600')}>
                   VAT
                 </th>
-                <th className={isCorporate ? 'bg-fuchsia-600 px-4 py-3 text-right font-semibold' : 'px-4 py-3 text-right font-semibold'}>
+                <th
+                  className={cn(
+                    'px-4 py-3 text-right font-semibold',
+                    chrome.tableHeadLast ?? (isCorporate ? 'bg-fuchsia-600' : '')
+                  )}
+                >
                   Total Price
                 </th>
               </tr>
@@ -276,17 +288,17 @@ export function InvoicePreview({
           <div className="mt-6 flex justify-end">
             <div className="w-full max-w-sm space-y-2 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-zinc-600">Subtotal</span>
-                <span className="font-semibold">{formatMoney(subtotal, draft.currency)}</span>
+                <span className={chrome.totalsMuted}>Subtotal</span>
+                <span className={cn('font-semibold', chrome.totals)}>{formatMoney(subtotal, draft.currency)}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-zinc-600">VAT</span>
-                <span className="font-semibold">{formatMoney(vat, draft.currency)}</span>
+                <span className={chrome.totalsMuted}>VAT</span>
+                <span className={cn('font-semibold', chrome.totals)}>{formatMoney(vat, draft.currency)}</span>
               </div>
               <div className="h-px bg-zinc-200" />
               <div className="flex items-center justify-between text-base">
-                <span className="font-semibold">Total</span>
-                <span className="font-semibold">{formatMoney(total, draft.currency)}</span>
+                <span className={cn('font-semibold', chrome.totals)}>Total</span>
+                <span className={cn('font-semibold', chrome.totals)}>{formatMoney(total, draft.currency)}</span>
               </div>
             </div>
           </div>

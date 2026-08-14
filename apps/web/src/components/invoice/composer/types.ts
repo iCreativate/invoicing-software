@@ -1,4 +1,6 @@
-export type InvoiceComposerTemplate = 'modern' | 'classic' | 'minimal' | 'bold' | 'elegant' | 'corporate';
+import type { InvoiceTemplateId } from '@/lib/invoices/templates';
+
+export type InvoiceComposerTemplate = InvoiceTemplateId;
 
 export type InvoiceComposerStatus = 'draft' | 'sent';
 

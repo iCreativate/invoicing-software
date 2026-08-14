@@ -80,9 +80,6 @@ export const APP_NAV_GROUPS: AppNavGroup[] = [
   },
 ];
 
-/** Flattened primary list for mobile / command palette. */
-export const APP_NAV_PRIMARY: AppNavItem[] = APP_NAV_GROUPS.flatMap((g) => g.items);
-
 /** Secondary / operations (sidebar “More”). */
 export const APP_NAV_MORE: AppNavItem[] = [
   { href: routes.app.productsServices, label: 'Products / services', icon: Package },
@@ -92,13 +89,4 @@ export const APP_NAV_MORE: AppNavItem[] = [
   { href: routes.app.payroll, label: 'Payroll', icon: WalletCards },
   { href: routes.app.timeTracking, label: 'Time tracking', icon: Clock },
   { href: routes.app.profile, label: 'Profile', icon: User },
-];
-
-/** First items shown on mobile bottom bar; rest open from “More”. */
-export const APP_NAV_MOBILE_PINNED: AppNavItem[] = [
-  APP_NAV_PRIMARY[0]!,
-  APP_NAV_PRIMARY[1]!,
-  APP_NAV_PRIMARY[5]!, // Clients
-  APP_NAV_PRIMARY[6]!, // Collections
-  APP_NAV_PRIMARY[7]!, // Cashflow
 ];
