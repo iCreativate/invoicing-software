@@ -5,9 +5,10 @@ import { useParams } from 'next/navigation';
 import { InvoicePreview } from '@/components/invoice/InvoicePreview';
 import { invoiceApiToPreviewDraft } from '@/features/invoices/previewMap';
 import { fetchMyCompanyProfile, subscriptionShowsPoweredBy } from '@/features/company/api';
+import { mapCompanyProfileToPreviewDetails } from '@/features/company/previewDetails';
 import { buildPublicInvoiceViewUrl } from '@/lib/invoice/platformUrls';
 import { Button } from '@/components/ui/Button';
-import { Printer } from 'lucide-react';
+import { Download } from 'lucide-react';
 
 export default function InvoicePrintPage() {
   const params = useParams();
@@ -64,30 +65,15 @@ export default function InvoicePrintPage() {
       <div className="mx-auto max-w-4xl print:max-w-none">
         <div className="mb-4 flex justify-end print:hidden">
           <Button type="button" variant="secondary" onClick={() => window.print()}>
-            <Printer className="h-4 w-4" />
-            Print / PDF
+            <Download className="h-4 w-4" />
+            Download PDF
           </Button>
         </div>
         <div className="ti-print-area">
           <InvoicePreview
             companyName={company?.companyName ?? 'TimelyInvoices'}
             companyLogoPath={company?.logoUrl ?? null}
-            companyDetails={
-              company
-                ? {
-                    email: company.email,
-                    phone: company.phone,
-                    address: company.address,
-                    website: company.website,
-                    vatNumber: company.vatNumber,
-                    bankName: company.bankName,
-                    accountName: company.accountName,
-                    accountNumber: company.accountNumber,
-                    branchCode: company.branchCode,
-                    accountType: company.accountType,
-                  }
-                : null
-            }
+            companyDetails={mapCompanyProfileToPreviewDetails(company)}
             draft={draft}
             client={{
               name: String(client.name ?? '—'),

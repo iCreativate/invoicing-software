@@ -103,7 +103,7 @@ export async function POST(request: Request) {
         owner_id: ownerId,
         title: 'Plan upgraded',
         body: `Your TimelyInvoices ${plan} subscription is active.`,
-        href: '/billing',
+        href: '/settings/billing',
         entity_type: 'billing',
         entity_id: ownerId,
       });

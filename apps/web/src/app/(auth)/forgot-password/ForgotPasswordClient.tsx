@@ -6,7 +6,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getPublicAppOrigin } from '@/lib/app-url';
 import { routes } from '@/lib/routing/routes';
 import { AuthShell } from '@/components/auth/AuthShell';
-import { Card } from '@/components/ui/Card';
+import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 
@@ -35,58 +35,55 @@ export function ForgotPasswordClient({ initialEmail }: { initialEmail: string })
 
   return (
     <AuthShell
-      title="Reset your password"
-      subtitle="Enter the email you use for TimelyInvoices. We will send you a link to choose a new password."
+      title={sent ? 'Check your email' : 'Reset your password'}
+      subtitle={sent ? undefined : 'We’ll send a link to choose a new password.'}
     >
-      <Card className="border-border/80 bg-card/80 p-6 shadow-[var(--shadow-lg)] backdrop-blur-xl motion-safe:animate-[ti-fade-up_0.45s_ease-out_both] sm:p-8">
-        {sent ? (
-          <div className="space-y-4 text-center">
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              If an account exists for <span className="font-medium text-foreground">{email.trim()}</span>, you will receive an
-              email with a link to reset your password. Check your inbox and spam folder.
-            </p>
-            <Link href={routes.auth.login}>
-              <Button variant="secondary" className="w-full">
-                Back to sign in
-              </Button>
-            </Link>
-          </div>
-        ) : (
-          <form onSubmit={onSubmit} className="space-y-5" aria-describedby={error ? 'forgot-error' : undefined}>
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="email">
-                Email
-              </label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="h-11"
-              />
-            </div>
-
-            {error ? (
-              <div id="forgot-error" className="rounded-xl border border-danger/25 bg-danger/10 p-3 text-sm text-danger" role="alert">
-                {error}
-              </div>
-            ) : null}
-
-            <Button type="submit" disabled={submitting} className="h-12 w-full text-base shadow-[var(--shadow-md)]">
-              {submitting ? 'Sending link…' : 'Send reset link'}
-            </Button>
-          </form>
-        )}
-
-        <div className="mt-6 border-t border-border/60 pt-6 text-center text-sm text-muted-foreground">
-          <Link href={routes.auth.login} className="font-semibold text-foreground underline-offset-4 hover:underline">
-            ← Back to sign in
-          </Link>
+      {sent ? (
+        <div className="space-y-6">
+          <p className="text-sm leading-relaxed text-[var(--tl-ink-2)]" role="status">
+            If an account exists for <span className="font-medium text-[var(--tl-ink)]">{email.trim()}</span>, you’ll
+            receive an email shortly. Check your inbox and spam folder.
+          </p>
+          <Button asChild className="h-11 w-full" variant="secondary">
+            <Link href={routes.auth.login}>Back to sign in</Link>
+          </Button>
         </div>
-      </Card>
+      ) : (
+        <form onSubmit={onSubmit} className="space-y-5" aria-describedby={error ? 'forgot-error' : undefined}>
+          <Field label="Email" htmlFor="email">
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              autoFocus
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="h-11"
+            />
+          </Field>
+
+          {error ? (
+            <div id="forgot-error" className="ti-error" role="alert">
+              <div className="font-medium">Couldn&apos;t send reset link</div>
+              <p className="ti-error-body">{error}</p>
+            </div>
+          ) : null}
+
+          <Button type="submit" loading={submitting} className="h-11 w-full">
+            Send reset link
+          </Button>
+        </form>
+      )}
+
+      {sent ? null : (
+        <p className="mt-8 text-sm text-[var(--tl-ink-2)]">
+          <Link href={routes.auth.login} className="font-medium text-[var(--tl-ink)] underline-offset-4 hover:underline">
+            Back to sign in
+          </Link>
+        </p>
+      )}
     </AuthShell>
   );
 }

@@ -1,6 +1,6 @@
 export { GlassCard } from './GlassCard';
-export { PageHeader } from './PageHeader';
-export { EmptyState } from './EmptyState';
+export { EmptyState, ErrorState } from './EmptyState';
+export { PageHeader, SectionHeader } from './PageHeader';
 export { StatCard } from './StatCard';
 export { QuickActionCard } from './QuickActionCard';
 export { ActivityTimeline, type ActivityTimelineItem } from './ActivityTimeline';

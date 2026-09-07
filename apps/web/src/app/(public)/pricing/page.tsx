@@ -9,7 +9,7 @@ import { PLANS, type PlanId } from '@/lib/billing/entitlements';
 
 export const metadata: Metadata = {
   title: 'Pricing — TimelyInvoices',
-  description: 'Simple ZAR pricing for South African businesses. Starter free, Pro R299, Business R799.',
+  description: 'Simple ZAR pricing for South African businesses. Starter free, Pro R59, Business R799.',
 };
 
 const WHATSAPP_HREF =

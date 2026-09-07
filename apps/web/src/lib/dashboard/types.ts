@@ -75,7 +75,7 @@ export type DashboardSummary = {
     /** Sum of expenses recorded this calendar month (ZAR workspace). */
     expensesThisMonth: number;
   };
-  /** Last six calendar months: cash collected vs expenses. */
+  /** Last twelve calendar months: cash collected vs expenses. */
   monthlyIncomeVsExpense: { label: string; income: number; expense: number }[];
   /** Short narrative for the AI insight card (deterministic from metrics). */
   aiCashflowInsight: string;

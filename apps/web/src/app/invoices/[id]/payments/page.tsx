@@ -3,44 +3,32 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { z } from 'zod';
+import { ArrowLeft, Banknote, CheckCircle2, Receipt, Wallet } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
-import { Card } from '@/components/ui/Card';
+import { AppPageHero } from '@/components/layout/AppPageHero';
+import { PageSummary } from '@/components/layout/PageLayout';
+import { MoneyKpiCard, MoneyKpiGrid } from '@/components/money/MoneyKpiCard';
+import { RecordPaymentForm } from '@/components/payments/RecordPaymentForm';
+import { AdminAlertBanner, AdminPanel } from '@/components/workspace/workspace-ui';
+import { EmptyState } from '@/components/dashboard-ui/EmptyState';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Amount } from '@/components/ui/Text';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { routes } from '@/lib/routing/routes';
 import { formatMoney } from '@/lib/format/money';
 import { fetchInvoiceDetail, type InvoiceDetail } from '@/features/invoices/detailApi';
 import { fetchInvoicePayments, recordPayment } from '@/features/payments/api';
-import type { PaymentListItem, PaymentMethod } from '@/features/payments/types';
+import type { PaymentListItem } from '@/features/payments/types';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
+import { formatPaymentDate, methodLabel } from '@/lib/payments/labels';
+import { notifyError, notifySuccess } from '@/lib/notify';
+import { cn } from '@/lib/utils/cn';
 
-const PaymentSchema = z.object({
-  amount: z.coerce.number().positive('Amount must be > 0'),
-  method: z.enum(['bank_transfer', 'card', 'cash', 'cheque', 'mobile_money', 'paystack', 'flutterwave']),
-  paymentDate: z.string().min(1, 'Payment date is required'),
-  notes: z.string().optional(),
-});
-
-function todayISO() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function methodLabel(m: PaymentMethod) {
-  const map: Record<PaymentMethod, string> = {
-    bank_transfer: 'EFT',
-    card: 'Card',
-    cash: 'Cash',
-    cheque: 'Cheque',
-    mobile_money: 'Mobile money',
-    paystack: 'Paystack',
-    flutterwave: 'Flutterwave',
-  };
-  return map[m] ?? 'Bank transfer';
+function paymentStatusClass(status: string) {
+  if (status === 'completed') return 'ti-status-paid';
+  if (status === 'failed') return 'ti-status-overdue';
+  return 'ti-status-sent';
 }
 
 export default function InvoicePaymentsPage() {
@@ -53,15 +41,8 @@ export default function InvoicePaymentsPage() {
   const [payments, setPayments] = useState<PaymentListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const [form, setForm] = useState<z.infer<typeof PaymentSchema>>({
-    amount: 0,
-    method: 'bank_transfer',
-    paymentDate: todayISO(),
-    notes: '',
-  });
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const load = async () => {
     const [inv, list] = await Promise.all([fetchInvoiceDetail(invoiceId), fetchInvoicePayments(invoiceId)]);
@@ -92,175 +73,218 @@ export default function InvoicePaymentsPage() {
 
   const currency = invoice?.currency ?? 'ZAR';
   const totalPaid = useMemo(() => payments.reduce((sum, p) => sum + p.amount, 0), [payments]);
+  const paidPct =
+    invoice && invoice.total_amount > 0
+      ? Math.min(100, Math.round((invoice.paid_amount / invoice.total_amount) * 100))
+      : 0;
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormErrors({});
-    setSubmitting(true);
-    try {
-      const parsed = PaymentSchema.safeParse(form);
-      if (!parsed.success) {
-        const next: Record<string, string> = {};
-        for (const issue of parsed.error.issues) {
-          next[issue.path.join('.')] = issue.message;
-        }
-        setFormErrors(next);
-        return;
-      }
-
-      if (!invoice) throw new Error('Invoice not loaded');
-
-      await recordPayment({
-        invoiceId,
-        amount: parsed.data.amount,
+  const fixedInvoice = invoice
+    ? {
+        id: invoice.id,
+        invoice_number: invoice.invoice_number,
+        client_name: invoice.client?.name ?? null,
         currency: invoice.currency,
-        method: parsed.data.method as PaymentMethod,
-        paymentDate: parsed.data.paymentDate,
-        notes: parsed.data.notes,
-      });
+        balance_amount: invoice.balance_amount,
+        total_amount: invoice.total_amount,
+        paid_amount: invoice.paid_amount,
+        due_date: invoice.due_date,
+        status: invoice.status,
+      }
+    : undefined;
 
-      setForm((f) => ({ ...f, amount: 0, notes: '' }));
+  const onSubmit = async (data: {
+    invoiceId: string;
+    amount: number;
+    currency: string;
+    method: Parameters<typeof recordPayment>[0]['method'];
+    paymentDate: string;
+    notes: string | null;
+  }) => {
+    setFormError(null);
+    try {
+      setSubmitting(true);
+      await recordPayment({
+        ...data,
+        notes: data.notes ?? undefined,
+      });
       await load();
+      notifySuccess('Payment recorded.');
     } catch (e: any) {
-      setError(e?.message ?? 'Failed to record payment.');
+      const msg = e?.message ?? 'Failed to record payment.';
+      setFormError(msg);
+      notifyError(msg);
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <AppShell
-      title="Payments"
-      actions={
-        <div className="flex items-center gap-2">
-          <Link href={`${routes.app.invoices}/${invoiceId}`}>
-            <Button variant="secondary">Back to invoice</Button>
-          </Link>
-        </div>
-      }
-    >
-      <div className="flex min-h-0 w-full flex-1 flex-col gap-4 lg:grid lg:grid-cols-[1fr_360px]">
-        <Card className="p-4">
-          {error ? (
-            <div className="mb-4 rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{error}</div>
-          ) : null}
-
-          {loading ? (
-            <div className="text-sm text-zinc-600 dark:text-zinc-300">Loading…</div>
-          ) : (
-            <>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <div className="text-sm font-semibold">
-                    {invoice?.invoice_number ? `Invoice ${invoice.invoice_number}` : 'Invoice'}
-                  </div>
-                  <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                    Total paid (from payments): <span className="font-semibold">{formatMoney(totalPaid, currency)}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 space-y-2">
-                {payments.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">
-                    No payments recorded yet.
-                  </div>
-                ) : (
-                  payments.map((p) => (
-                    <div key={p.id} className="rounded-[var(--ti-radius)] border border-border p-4 text-sm">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="font-semibold">{formatMoney(p.amount, p.currency)}</div>
-                          <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                            {p.payment_date || '—'} · {methodLabel(p.method)} · {p.status}
-                          </div>
-                          {p.notes ? <div className="mt-2 text-sm text-muted-foreground">{p.notes}</div> : null}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </>
-          )}
-        </Card>
-
-        <Card className="p-4">
-          <div className="text-sm font-semibold">Record payment</div>
-          {!allowRecord ? (
-            <p className="mt-2 text-sm text-muted-foreground">
-              Recording payments requires editor or billing access. Viewers are read-only; ask an owner or admin to change your
-              role under Team.
-            </p>
-          ) : null}
-          <form onSubmit={onSubmit} className={allowRecord ? 'mt-4 space-y-4' : 'hidden'}>
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="amount">
-                Amount
-              </label>
-              <Input
-                id="amount"
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.amount}
-                onChange={(e) => setForm((f) => ({ ...f, amount: Number(e.target.value) }))}
-              />
-              {formErrors.amount ? <div className="text-xs text-red-700">{formErrors.amount}</div> : null}
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="method">
-                Method
-              </label>
-              <select
-                id="method"
-                className="h-9 w-full rounded-[var(--ti-radius-sm)] border border-border bg-card px-3 text-sm shadow-[var(--ti-shadow)]"
-                value={form.method}
-                onChange={(e) => setForm((f) => ({ ...f, method: e.target.value as any }))}
-              >
-                <option value="bank_transfer">Bank transfer</option>
-                <option value="card">Card</option>
-                <option value="cash">Cash</option>
-                <option value="cheque">Cheque</option>
-                <option value="mobile_money">Mobile money</option>
-                <option value="paystack">Paystack</option>
-                <option value="flutterwave">Flutterwave</option>
-              </select>
-              {formErrors.method ? <div className="text-xs text-red-700">{formErrors.method}</div> : null}
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="paymentDate">
-                Payment date
-              </label>
-              <Input
-                id="paymentDate"
-                type="date"
-                value={form.paymentDate}
-                onChange={(e) => setForm((f) => ({ ...f, paymentDate: e.target.value }))}
-              />
-              {formErrors.paymentDate ? <div className="text-xs text-red-700">{formErrors.paymentDate}</div> : null}
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="notes">
-                Notes (optional)
-              </label>
-              <Input id="notes" value={form.notes ?? ''} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
-            </div>
-
-            <Button type="submit" disabled={submitting || loading}>
-              {submitting ? 'Saving…' : 'Record payment'}
+    <AppShell hideHeader title="Payments">
+      <div className="ti-page-enter flex w-full flex-col gap-4 md:gap-5">
+        <AppPageHero
+          kicker="Invoice"
+          title={invoice?.invoice_number ? `Payments · ${invoice.invoice_number}` : 'Payments'}
+          description="Record payments and track what’s been collected on this invoice."
+          image="payments"
+          compact
+          actions={
+            <Button asChild variant="secondary" size="sm">
+              <Link href={`${routes.app.invoices}/${invoiceId}`}>
+                <ArrowLeft className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                Back to invoice
+              </Link>
             </Button>
+          }
+        />
 
-            <div className="text-xs text-zinc-500 dark:text-zinc-400">
-              This expects Supabase tables: `payments` and invoice columns `paid_amount`, `balance_amount`, `paid_date`.
+        {error ? (
+          <AdminAlertBanner tone="error">
+            <div className="font-medium">Couldn&apos;t load invoice payments</div>
+            <p className="mt-1">{error}</p>
+          </AdminAlertBanner>
+        ) : null}
+
+        {loading ? (
+          <div className="space-y-4">
+            <Skeleton className="h-24 w-full rounded-[var(--tl-radius-sm)]" />
+            <Skeleton className="h-64 w-full rounded-[var(--tl-radius-sm)]" />
+          </div>
+        ) : (
+          <>
+            <PageSummary>
+              <MoneyKpiGrid cols={4} aria-label="Invoice payment summary">
+                <MoneyKpiCard
+                  icon={Receipt}
+                  label="Invoice total"
+                  value={formatMoney(invoice?.total_amount ?? 0, currency)}
+                  trend={invoice?.client?.name ?? '—'}
+                />
+                <MoneyKpiCard
+                  icon={CheckCircle2}
+                  label="Collected"
+                  value={formatMoney(totalPaid, currency)}
+                  trend={`${paidPct}% of invoice`}
+                  trendUp={totalPaid > 0}
+                />
+                <MoneyKpiCard
+                  icon={Wallet}
+                  label="Balance due"
+                  value={formatMoney(invoice?.balance_amount ?? 0, currency)}
+                  trend={invoice?.balance_amount === 0 ? 'Fully paid' : 'Outstanding'}
+                  trendDown={(invoice?.balance_amount ?? 0) > 0}
+                />
+                <MoneyKpiCard
+                  icon={Banknote}
+                  label="Payments"
+                  value={String(payments.length)}
+                  trend={payments.length === 1 ? '1 recorded' : `${payments.length} recorded`}
+                />
+              </MoneyKpiGrid>
+            </PageSummary>
+
+            <div className="grid min-h-0 w-full flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] lg:gap-5">
+              <AdminPanel
+                kicker="History"
+                title={`${payments.length} payment${payments.length === 1 ? '' : 's'}`}
+                description="All payments recorded against this invoice."
+                className="min-h-0"
+              >
+                {payments.length === 0 ? (
+                  <EmptyState
+                    kicker="No payments yet"
+                    title="Nothing recorded on this invoice."
+                    description="Use the form to log the first payment — partial payments are supported."
+                  />
+                ) : (
+                  <>
+                    <div className="space-y-3 md:hidden">
+                      {payments.map((p) => (
+                        <div key={p.id} className="ti-invoice-card" data-tone="paid">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <Amount className="ti-invoice-amount">{formatMoney(p.amount, p.currency)}</Amount>
+                              <div className="ti-invoice-meta mt-1">
+                                {formatPaymentDate(p.payment_date)} · {methodLabel(p.method)}
+                              </div>
+                            </div>
+                            <span className={cn('ti-status capitalize', paymentStatusClass(p.status))}>{p.status}</span>
+                          </div>
+                          {p.notes ? <p className="mt-2 text-[13px] text-[var(--tl-ink-2)]">{p.notes}</p> : null}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="hidden overflow-auto md:block">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="hover:bg-transparent">
+                            <TableHead>Date</TableHead>
+                            <TableHead>Method</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Amount</TableHead>
+                            <TableHead>Reference</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {payments.map((p) => (
+                            <TableRow key={p.id} data-tone="paid">
+                              <TableCell>
+                                <div className="ti-invoice-due">{formatPaymentDate(p.payment_date)}</div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="ti-invoice-meta">{methodLabel(p.method)}</div>
+                              </TableCell>
+                              <TableCell>
+                                <span className={cn('ti-status capitalize', paymentStatusClass(p.status))}>
+                                  {p.status}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <Amount className="ti-invoice-amount text-right">{formatMoney(p.amount, p.currency)}</Amount>
+                              </TableCell>
+                              <TableCell>
+                                <div className="max-w-[14rem] truncate ti-invoice-meta">{p.notes ?? '—'}</div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </>
+                )}
+              </AdminPanel>
+
+              <AdminPanel
+                kicker="Record"
+                title="New payment"
+                description={
+                  allowRecord
+                    ? 'Log EFT, card, cash, or other methods. Balances update immediately.'
+                    : 'Recording payments requires editor or billing access.'
+                }
+                className="lg:sticky lg:top-4 lg:self-start"
+              >
+                {!allowRecord ? (
+                  <AdminAlertBanner tone="info">
+                    Viewers are read-only. Ask an owner or admin to change your role under Team.
+                  </AdminAlertBanner>
+                ) : fixedInvoice && fixedInvoice.balance_amount <= 0 ? (
+                  <AdminAlertBanner tone="success">
+                    This invoice is fully paid. No further payments are needed.
+                  </AdminAlertBanner>
+                ) : (
+                  <RecordPaymentForm
+                    fixedInvoice={fixedInvoice}
+                    submitting={submitting}
+                    error={formError}
+                    onSubmit={onSubmit}
+                  />
+                )}
+              </AdminPanel>
             </div>
-          </form>
-        </Card>
+          </>
+        )}
       </div>
     </AppShell>
   );
 }
-

@@ -24,6 +24,7 @@ export type ClientInvoiceInsights = {
   outstanding: number;
   paidCount: number;
   overdueCount: number;
+  overdueAmount: number;
   avgDaysToPay: number | null;
   lastPaidAt: string | null;
 };

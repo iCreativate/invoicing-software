@@ -1,4 +1,4 @@
-import type { InvoiceListItem } from '@/features/invoices/types';
+import type { InvoiceListItem, InvoiceStatus } from '@/features/invoices/types';
 import type { ClientListItem, ClientDetail, ClientInvoiceInsights } from '@/features/clients/types';
 import type { QuoteListItem, QuoteDetail } from '@/features/quotes/types';
 import type { ExpenseRow } from '@/features/expenses/types';
@@ -33,14 +33,314 @@ export const DEMO_INVOICE_IDS = {
   ti43: '00000000-0000-0000-0000-000000000004',
 } as const;
 
+const DEMO_CLIENTS_BASE: ClientListItem[] = [
+  { id: DEMO_CLIENT_IDS.acme, name: 'Acme Studio', email: 'accounts@acmestudio.co.za', companyName: 'Acme Studio (Pty) Ltd' },
+  { id: DEMO_CLIENT_IDS.brightline, name: 'Brightline Logistics', email: 'ap@brightline.co.za', companyName: 'Brightline Logistics' },
+  { id: DEMO_CLIENT_IDS.sky, name: 'Sky & Co', email: 'hello@skyandco.co.za', companyName: 'Sky & Co' },
+  { id: DEMO_CLIENT_IDS.evergreen, name: 'Evergreen Consulting', email: 'billing@evergreen.co.za', companyName: 'Evergreen Consulting' },
+  { id: DEMO_CLIENT_IDS.pulse, name: 'Pulse Media', email: 'finance@pulsemedia.co.za', companyName: 'Pulse Media' },
+];
+
+/** Session-only clients created from invoice/quote composer in demo mode. */
+const demoClientsCreated: ClientListItem[] = [];
+
 export function demoClientsList(): ClientListItem[] {
-  return [
-    { id: DEMO_CLIENT_IDS.acme, name: 'Acme Studio', email: 'accounts@acmestudio.co.za', companyName: 'Acme Studio (Pty) Ltd' },
-    { id: DEMO_CLIENT_IDS.brightline, name: 'Brightline Logistics', email: 'ap@brightline.co.za', companyName: 'Brightline Logistics' },
-    { id: DEMO_CLIENT_IDS.sky, name: 'Sky & Co', email: 'hello@skyandco.co.za', companyName: 'Sky & Co' },
-    { id: DEMO_CLIENT_IDS.evergreen, name: 'Evergreen Consulting', email: 'billing@evergreen.co.za', companyName: 'Evergreen Consulting' },
-    { id: DEMO_CLIENT_IDS.pulse, name: 'Pulse Media', email: 'finance@pulsemedia.co.za', companyName: 'Pulse Media' },
-  ];
+  return [...DEMO_CLIENTS_BASE, ...demoClientsCreated];
+}
+
+export function demoCreateClient(input: {
+  name: string;
+  email?: string;
+  companyName?: string;
+}): { id: string } {
+  const id =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `demo-client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  demoClientsCreated.push({
+    id,
+    name: input.name,
+    email: input.email ?? null,
+    companyName: input.companyName ?? null,
+  });
+  return { id };
+}
+
+type DemoLineInput = { description: string; quantity: number; unitPrice: number; vatRate: number };
+
+function demoNewId(prefix: string) {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function demoClientLabel(clientId: string) {
+  return demoClientsList().find((c) => c.id === clientId)?.name ?? 'Client';
+}
+
+function demoLineTotals(items: DemoLineInput[]) {
+  let subtotal = 0;
+  let tax = 0;
+  const rows = items.map((it) => {
+    const line = it.quantity * it.unitPrice;
+    const vat = line * (it.vatRate / 100);
+    subtotal += line;
+    tax += vat;
+    return { subtotal: line, tax: vat, total: line + vat };
+  });
+  return { subtotal, tax, total: subtotal + tax, rows };
+}
+
+/** Session-only quotes created from the composer in demo mode. */
+const demoQuotesSession: QuoteDetail[] = [];
+
+/** Session-only invoices created from the composer in demo mode. */
+type DemoInvoiceSessionRecord = {
+  id: string;
+  invoice_number: string;
+  client_id: string;
+  status: InvoiceStatus;
+  issue_date: string;
+  due_date: string;
+  currency: string;
+  template_id: string;
+  subtotal_amount: number;
+  tax_amount: number;
+  total_amount: number;
+  paid_amount: number;
+  balance_amount: number;
+  notes: string | null;
+  public_share_id: string;
+  items: Array<{
+    id: string;
+    description: string;
+    quantity: number;
+    unit_price: number;
+    tax_rate: number;
+    line_total: number;
+    catalog_item_id: string | null;
+  }>;
+};
+
+const demoInvoicesSession: DemoInvoiceSessionRecord[] = [];
+
+function demoOrigin() {
+  if (typeof window !== 'undefined') return window.location.origin.replace(/\/$/, '');
+  return String(process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '') || 'http://localhost:3000';
+}
+
+export function demoCreateQuote(input: {
+  clientId: string;
+  issueDate: string;
+  validUntil: string;
+  currency: string;
+  vatRate: number;
+  notes?: string;
+  quoteNumber?: string | null;
+  items: DemoLineInput[];
+}): { id: string; quoteNumber: string } {
+  const id = demoNewId('demo-quote');
+  const quoteNumber =
+    input.quoteNumber && String(input.quoteNumber).trim().length
+      ? String(input.quoteNumber).trim()
+      : `QT-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
+  const { subtotal, tax, total } = demoLineTotals(input.items);
+  const client = demoClientDetail(input.clientId);
+  const quote: QuoteDetail = {
+    id,
+    quoteNumber,
+    status: 'draft',
+    issueDate: input.issueDate,
+    validUntil: input.validUntil,
+    currency: input.currency,
+    vatRate: input.vatRate,
+    subtotalAmount: subtotal,
+    taxAmount: tax,
+    totalAmount: total,
+    notes: input.notes ?? null,
+    clientId: input.clientId,
+    clientName: client?.name ?? demoClientLabel(input.clientId),
+    clientEmail: client?.email ?? null,
+    clientPhone: client?.phone ?? null,
+    clientAddress: client?.address ?? null,
+    clientCompanyName: client?.companyName ?? null,
+    convertedInvoiceId: null,
+    publicShareId: `demo-quote-${id.slice(0, 8)}`,
+    viewedAt: null,
+    acceptedAt: null,
+    declinedAt: null,
+    items: input.items.map((it, idx) => {
+      const line = it.quantity * it.unitPrice;
+      const vat = line * (it.vatRate / 100);
+      return {
+        id: `${id}-item-${idx}`,
+        description: it.description,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        vatRate: it.vatRate,
+        lineTotal: line + vat,
+      };
+    }),
+  };
+  demoQuotesSession.unshift(quote);
+  return { id, quoteNumber };
+}
+
+export function demoUpdateQuote(
+  id: string,
+  input: {
+    clientId: string;
+    issueDate: string;
+    validUntil: string;
+    currency: string;
+    vatRate: number;
+    notes?: string | null;
+    quoteNumber?: string | null;
+    items: DemoLineInput[];
+  }
+): { id: string } {
+  const idx = demoQuotesSession.findIndex((q) => q.id === id);
+  if (idx < 0) throw new Error('Quote not found.');
+  const { subtotal, tax, total } = demoLineTotals(input.items);
+  const client = demoClientDetail(input.clientId);
+  const prev = demoQuotesSession[idx]!;
+  demoQuotesSession[idx] = {
+    ...prev,
+    quoteNumber: input.quoteNumber?.trim() ? String(input.quoteNumber).trim() : prev.quoteNumber,
+    issueDate: input.issueDate,
+    validUntil: input.validUntil,
+    currency: input.currency,
+    vatRate: input.vatRate,
+    notes: input.notes ?? null,
+    clientId: input.clientId,
+    clientName: client?.name ?? demoClientLabel(input.clientId),
+    clientEmail: client?.email ?? null,
+    clientPhone: client?.phone ?? null,
+    clientAddress: client?.address ?? null,
+    clientCompanyName: client?.companyName ?? null,
+    subtotalAmount: subtotal,
+    taxAmount: tax,
+    totalAmount: total,
+    items: input.items.map((it, itemIdx) => {
+      const line = it.quantity * it.unitPrice;
+      const vat = line * (it.vatRate / 100);
+      return {
+        id: `${id}-item-${itemIdx}`,
+        description: it.description,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        vatRate: it.vatRate,
+        lineTotal: line + vat,
+      };
+    }),
+  };
+  return { id };
+}
+
+export function demoEnsureQuoteShareLink(quoteId: string): { shareId: string; shareUrl: string } {
+  const session = demoQuotesSession.find((q) => q.id === quoteId);
+  if (session) {
+    if (!session.publicShareId) session.publicShareId = `demo-quote-${quoteId.slice(0, 8)}`;
+    if (session.status === 'draft') session.status = 'sent';
+    const shareId = session.publicShareId;
+    return { shareId, shareUrl: `${demoOrigin()}/quotes/${quoteId}` };
+  }
+  const q = demoQuoteDetail(quoteId);
+  if (!q) throw new Error('Quote not found.');
+  const shareId = q.publicShareId ?? `demo-quote-${quoteId.slice(-4)}`;
+  return { shareId, shareUrl: `${demoOrigin()}/quote/${shareId}` };
+}
+
+export function demoSaveInvoice(input: {
+  invoiceId: string | null;
+  clientId: string;
+  issueDate: string;
+  dueDate: string;
+  currency: string;
+  templateId: string;
+  invoiceNumber: string | null;
+  notes?: string | null;
+  publicShareId?: string | null;
+  items: DemoLineInput[];
+}): { id: string; invoiceNumber: string; publicShareId: string } {
+  const { subtotal, tax, total } = demoLineTotals(input.items);
+  const invoiceNumber =
+    input.invoiceNumber && String(input.invoiceNumber).trim().length
+      ? String(input.invoiceNumber).trim()
+      : `TI-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
+  const items = input.items.map((it, idx) => {
+    const line = it.quantity * it.unitPrice;
+    const vat = line * (it.vatRate / 100);
+    return {
+      id: `demo-item-${idx}`,
+      description: it.description,
+      quantity: it.quantity,
+      unit_price: it.unitPrice,
+      tax_rate: it.vatRate,
+      line_total: line + vat,
+      catalog_item_id: null,
+    };
+  });
+
+  if (input.invoiceId) {
+    const idx = demoInvoicesSession.findIndex((inv) => inv.id === input.invoiceId);
+    if (idx < 0) throw new Error('Invoice not found.');
+    const prev = demoInvoicesSession[idx]!;
+    const publicShareId = input.publicShareId?.trim() || prev.public_share_id;
+    demoInvoicesSession[idx] = {
+      ...prev,
+      client_id: input.clientId,
+      invoice_number: invoiceNumber,
+      issue_date: input.issueDate,
+      due_date: input.dueDate,
+      currency: input.currency,
+      template_id: input.templateId,
+      subtotal_amount: subtotal,
+      tax_amount: tax,
+      total_amount: total,
+      balance_amount: total - prev.paid_amount,
+      notes: input.notes ?? null,
+      public_share_id: publicShareId,
+      items: items.map((it, itemIdx) => ({ ...it, id: `${input.invoiceId}-item-${itemIdx}` })),
+    };
+    return { id: input.invoiceId, invoiceNumber, publicShareId };
+  }
+
+  const id = demoNewId('demo-invoice');
+  const publicShareId = input.publicShareId?.trim() || `demo-share-${id.slice(0, 8)}`;
+  demoInvoicesSession.unshift({
+    id,
+    invoice_number: invoiceNumber,
+    client_id: input.clientId,
+    status: 'draft',
+    issue_date: input.issueDate,
+    due_date: input.dueDate,
+    currency: input.currency,
+    template_id: input.templateId,
+    subtotal_amount: subtotal,
+    tax_amount: tax,
+    total_amount: total,
+    paid_amount: 0,
+    balance_amount: total,
+    notes: input.notes ?? null,
+    public_share_id: publicShareId,
+    items: items.map((it, itemIdx) => ({ ...it, id: `${id}-item-${itemIdx}` })),
+  });
+  return { id, invoiceNumber, publicShareId };
+}
+
+export function demoSendInvoice(invoiceId: string): { shareId: string; shareUrl: string } {
+  const session = demoInvoicesSession.find((inv) => inv.id === invoiceId);
+  if (session) {
+    session.status = 'sent';
+    if (!session.public_share_id) session.public_share_id = `demo-share-${invoiceId.slice(0, 8)}`;
+    return {
+      shareId: session.public_share_id,
+      shareUrl: `${demoOrigin()}/invoices/${invoiceId}`,
+    };
+  }
+  const detail = demoInvoiceDetail(invoiceId);
+  const shareId = String(detail.invoice.public_share_id ?? `demo-share-${invoiceId.slice(-4)}`);
+  return { shareId, shareUrl: `${demoOrigin()}/invoice/${shareId}` };
 }
 
 export function demoClientDetail(id: string): ClientDetail | null {
@@ -64,20 +364,35 @@ export function demoClientInsights(id: string): ClientInvoiceInsights {
   const lifetimeBilled = inv.reduce((s, i) => s + i.total_amount, 0);
   const lifetimeCollected = inv.reduce((s, i) => s + i.paid_amount, 0);
   const outstanding = inv.reduce((s, i) => s + i.balance_amount, 0);
+  const overdue = inv.filter((i) => i.status === 'overdue');
   return {
     invoiceCount: inv.length || 2,
     lifetimeBilled: lifetimeBilled || 184500,
     lifetimeCollected: lifetimeCollected || 172400,
     outstanding: outstanding || 12100,
     paidCount: inv.filter((i) => i.status === 'paid').length || 1,
-    overdueCount: inv.filter((i) => i.status === 'overdue').length,
+    overdueCount: overdue.length,
+    overdueAmount: overdue.reduce((s, i) => s + i.balance_amount, 0),
     avgDaysToPay: 17,
     lastPaidAt: daysAgo(4),
   };
 }
 
 export function demoInvoicesList(): InvoiceListItem[] {
-  return [
+  const session = demoInvoicesSession.map((inv) => ({
+    id: inv.id,
+    invoice_number: inv.invoice_number,
+    client_name: demoClientLabel(inv.client_id),
+    client_id: inv.client_id,
+    status: inv.status,
+    issue_date: inv.issue_date,
+    due_date: inv.due_date,
+    currency: inv.currency,
+    total_amount: inv.total_amount,
+    paid_amount: inv.paid_amount,
+    balance_amount: inv.balance_amount,
+  }));
+  const base: InvoiceListItem[] = [
     {
       id: DEMO_INVOICE_IDS.ti41,
       invoice_number: 'TI-00041',
@@ -131,9 +446,58 @@ export function demoInvoicesList(): InvoiceListItem[] {
       balance_amount: 4200,
     },
   ];
+  return [...session, ...base];
 }
 
 export function demoInvoiceDetail(id: string) {
+  const session = demoInvoicesSession.find((inv) => inv.id === id);
+  if (session) {
+    const client = demoClientDetail(session.client_id)!;
+    return {
+      invoice: {
+        id: session.id,
+        owner_id: 'demo-owner',
+        client_id: session.client_id,
+        invoice_number: session.invoice_number,
+        status: session.status,
+        issue_date: session.issue_date,
+        due_date: session.due_date,
+        currency: session.currency,
+        template_id: session.template_id,
+        vat_rate: 15,
+        subtotal_amount: session.subtotal_amount,
+        tax_amount: session.tax_amount,
+        total_amount: session.total_amount,
+        paid_amount: session.paid_amount,
+        balance_amount: session.balance_amount,
+        paid_date: session.paid_amount > 0 ? today() : null,
+        sent_at: session.status !== 'draft' ? daysAgo(0) + 'T10:00:00.000Z' : null,
+        notes: session.notes,
+        public_share_id: session.public_share_id,
+        created_at: today() + 'T10:00:00.000Z',
+        updated_at: today() + 'T10:00:00.000Z',
+        client: {
+          id: client.id,
+          name: client.name,
+          email: client.email,
+          phone: client.phone,
+          address: client.address,
+          company_name: client.companyName,
+          website: client.website,
+          company_registration: client.companyRegistration,
+          vat_number: client.vatNumber,
+        },
+        items: session.items,
+      },
+      timeline: [
+        { type: 'created', at: today() + 'T10:00:00.000Z', label: 'Invoice created' },
+        ...(session.status !== 'draft'
+          ? [{ type: 'sent', at: today() + 'T11:00:00.000Z', label: 'Sent to client' }]
+          : []),
+      ],
+    };
+  }
+
   const list = demoInvoicesList().find((i) => i.id === id) ?? demoInvoicesList()[0]!;
   const client = demoClientDetail(list.client_id!)!;
   return {
@@ -193,7 +557,18 @@ export function demoInvoiceDetail(id: string) {
 }
 
 export function demoQuotesList(): QuoteListItem[] {
-  return [
+  const session = demoQuotesSession.map((q) => ({
+    id: q.id,
+    quoteNumber: q.quoteNumber,
+    status: q.status,
+    issueDate: q.issueDate,
+    validUntil: q.validUntil,
+    currency: q.currency,
+    totalAmount: q.totalAmount,
+    clientName: q.clientName,
+    convertedInvoiceId: q.convertedInvoiceId,
+  }));
+  const base: QuoteListItem[] = [
     {
       id: '20000000-0000-0000-0000-000000000001',
       quoteNumber: 'QT-2026-10021',
@@ -217,10 +592,49 @@ export function demoQuotesList(): QuoteListItem[] {
       convertedInvoiceId: DEMO_INVOICE_IDS.ti41,
     },
   ];
+  return [...session, ...base];
 }
 
 export function demoQuoteDetail(id: string): QuoteDetail | null {
-  const q = demoQuotesList().find((x) => x.id === id) ?? demoQuotesList()[0]!;
+  const session = demoQuotesSession.find((q) => q.id === id);
+  if (session) return session;
+
+  const q =
+    [
+      {
+        id: '20000000-0000-0000-0000-000000000001',
+        quoteNumber: 'QT-2026-10021',
+        status: 'sent',
+        issueDate: daysAgo(5),
+        validUntil: daysFromNow(25),
+        currency: 'ZAR',
+        totalAmount: 18500,
+        clientName: 'Acme Studio',
+        convertedInvoiceId: null,
+      },
+      {
+        id: '20000000-0000-0000-0000-000000000002',
+        quoteNumber: 'QT-2026-10018',
+        status: 'accepted',
+        issueDate: daysAgo(20),
+        validUntil: daysAgo(5),
+        currency: 'ZAR',
+        totalAmount: 9200,
+        clientName: 'Pulse Media',
+        convertedInvoiceId: DEMO_INVOICE_IDS.ti41,
+      },
+    ].find((x) => x.id === id) ??
+    ({
+      id: '20000000-0000-0000-0000-000000000001',
+      quoteNumber: 'QT-2026-10021',
+      status: 'sent',
+      issueDate: daysAgo(5),
+      validUntil: daysFromNow(25),
+      currency: 'ZAR',
+      totalAmount: 18500,
+      clientName: 'Acme Studio',
+      convertedInvoiceId: null,
+    } as const);
   const subtotal = Math.round(q.totalAmount / 1.15);
   return {
     id: q.id,
@@ -235,6 +649,11 @@ export function demoQuoteDetail(id: string): QuoteDetail | null {
     totalAmount: q.totalAmount,
     notes: 'Sample quote for demo mode.',
     clientId: DEMO_CLIENT_IDS.acme,
+    clientName: q.clientName,
+    clientEmail: 'accounts@acme.demo',
+    clientPhone: null,
+    clientAddress: null,
+    clientCompanyName: q.clientName,
     convertedInvoiceId: q.convertedInvoiceId,
     publicShareId: `demo-quote-${q.id.slice(-4)}`,
     viewedAt: daysAgo(2),

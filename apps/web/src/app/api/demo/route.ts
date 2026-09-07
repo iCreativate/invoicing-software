@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { demoModeEnabled } from '@/lib/demo/accounts';
 
 function demoCookieOpts() {
   return {
@@ -29,6 +30,9 @@ function applyDemoCookies(request: Request, res: NextResponse) {
 }
 
 export async function GET(request: Request) {
+  if (!demoModeEnabled()) {
+    return NextResponse.json({ success: false, error: 'Sample mode is disabled.' }, { status: 403 });
+  }
   const url = new URL(request.url);
   const next = url.searchParams.get('next') || '/dashboard';
   const dest = new URL(next.startsWith('/') ? next : '/dashboard', url.origin);
@@ -38,6 +42,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (!demoModeEnabled()) {
+    return NextResponse.json({ success: false, error: 'Sample mode is disabled.' }, { status: 403 });
+  }
   const res = NextResponse.json({ success: true });
   applyDemoCookies(request, res);
   return res;

@@ -1,64 +1,101 @@
-import { Reveal } from '@/components/landing/landingMotion';
-import { formatZarDisplay } from '@/components/landing/formatZar';
+'use client';
 
-const EVENTS = [
-  { label: 'Invoice sent', done: true },
-  { label: 'Invoice opened', done: true },
-  { label: 'Due tomorrow', done: false },
-  { label: 'Reminder scheduled', done: false },
-  { label: 'Payment received', done: true, highlight: true },
-];
+import { useEffect, useState } from 'react';
+import { formatZarDisplay } from '@/components/landing/formatZar';
+import { cn } from '@/lib/utils/cn';
+
+const STEPS = [
+  { label: 'Created', detail: 'INV-1042 drafted', done: false },
+  { label: 'Sent', detail: 'Delivered to client', done: false },
+  { label: 'Viewed', detail: 'Opened on mobile', done: false },
+  { label: 'Due', detail: 'Payment due Friday', done: false },
+  { label: 'Paid', detail: formatZarDisplay(8500), done: true },
+] as const;
 
 export function CollectionsSection() {
-  return (
-    <section className="mx-auto max-w-[var(--tl-max)] px-[var(--tl-pad)] py-20 sm:py-28">
-      <div className="grid gap-14 lg:grid-cols-[1fr_0.85fr] lg:items-start lg:gap-20">
-        <Reveal>
-          <p className="tl-label">Collections</p>
-          <h2 className="tl-h2 mt-3 max-w-lg">Stop chasing payments.</h2>
-          <p className="tl-body mt-5 max-w-md">
-            See where every invoice sits — sent, viewed, due, reminded — and let Timely follow up before balances age.
-          </p>
-        </Reveal>
+  const [step, setStep] = useState(0);
 
-        <Reveal delayMs={70}>
-          <div className="border-t border-[var(--tl-line)] pt-2">
-            <ol>
-              {EVENTS.map((e, i) => (
-                <li
-                  key={e.label}
-                  className="flex items-center justify-between gap-4 border-b border-[var(--tl-line)] py-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={
-                        e.done
-                          ? 'flex h-5 w-5 items-center justify-center rounded-full bg-[var(--tl-success)] text-[10px] text-white'
-                          : 'h-5 w-5 rounded-full border border-[var(--tl-line-strong)]'
-                      }
-                      aria-hidden
-                    >
-                      {e.done ? '✓' : ''}
-                    </span>
-                    <span className={e.highlight ? 'font-medium text-[var(--tl-ink)]' : 'text-[var(--tl-ink-2)]'}>
-                      {e.label}
-                    </span>
-                  </div>
-                  {i === EVENTS.length - 1 ? (
-                    <span className="tl-num text-sm font-semibold text-[var(--tl-success)]">Paid</span>
-                  ) : null}
-                </li>
-              ))}
-            </ol>
-            <div className="mt-10">
-              <p className="tl-label">Invoice INV-10421</p>
-              <p className="tl-num mt-2 text-4xl font-semibold tracking-tight sm:text-5xl">
-                {formatZarDisplay(18500)}
-              </p>
-              <p className="mt-2 text-sm text-[var(--tl-success)]">Paid</p>
-            </div>
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (mq.matches) {
+      setStep(STEPS.length - 1);
+      return;
+    }
+    const id = window.setInterval(() => setStep((s) => (s + 1) % STEPS.length), 1600);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return (
+    <section id="payments" className="tl-section">
+      <div className="tl-container">
+        <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-20">
+          <div className="max-w-md">
+            <h2 className="tl-h2">Stop chasing payments.</h2>
+            <p className="mt-5 text-xl font-semibold leading-snug tracking-tight text-[var(--tl-ink)]">
+              Know what&apos;s paid. Know what&apos;s late.
+            </p>
+            <p className="tl-body mt-6">
+              Timely tracks every invoice so you don&apos;t have to remember who owes you what.
+            </p>
           </div>
-        </Reveal>
+
+          <div className="rounded-[var(--tl-radius)] border border-[var(--tl-line)] bg-[var(--tl-surface)] p-8 shadow-[var(--tl-shadow)] sm:p-10">
+            <p className="tl-label">Invoice lifecycle</p>
+            <ol className="mt-8">
+              {STEPS.map((s, i) => {
+                const active = i <= step;
+                const current = i === step;
+                return (
+                  <li key={s.label} className="relative flex gap-5 pb-7 last:pb-0">
+                    {i < STEPS.length - 1 ? (
+                      <span
+                        className={cn(
+                          'absolute left-3.5 top-8 h-[calc(100%-1.25rem)] w-px',
+                          i < step ? 'bg-[var(--tl-accent)]' : 'bg-[var(--tl-line)]'
+                        )}
+                        aria-hidden
+                      />
+                    ) : null}
+                    <span
+                      className={cn(
+                        'relative z-10 mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border text-[11px] font-bold',
+                        s.done && active
+                          ? 'border-[var(--tl-success)] bg-[var(--tl-success)] text-white'
+                          : current
+                            ? 'border-[var(--tl-accent)] bg-[var(--tl-accent)] text-white'
+                            : active
+                              ? 'border-[var(--tl-accent)] bg-[var(--tl-accent-soft)] text-[var(--tl-accent)]'
+                              : 'border-[var(--tl-line)] bg-[var(--tl-bg)] text-[var(--tl-ink-3)]'
+                      )}
+                    >
+                      {s.done && active ? '✓' : i + 1}
+                    </span>
+                    <div className="min-w-0 flex-1 pt-0.5">
+                      <p
+                        className={cn(
+                          'text-[15px] font-semibold',
+                          active ? 'text-[var(--tl-ink)]' : 'text-[var(--tl-ink-3)]'
+                        )}
+                      >
+                        {s.label}
+                      </p>
+                      <p
+                        className={cn(
+                          'mt-1 text-[13px]',
+                          s.done && current
+                            ? 'tl-num font-semibold text-[var(--tl-success)]'
+                            : 'text-[var(--tl-ink-3)]'
+                        )}
+                      >
+                        {s.detail}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        </div>
       </div>
     </section>
   );

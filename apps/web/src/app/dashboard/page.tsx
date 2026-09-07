@@ -2,7 +2,8 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getWorkspaceContext } from '@/lib/auth/workspace';
-import { buildDemoDashboardSummary, emptyDashboardSummary, getDashboardSummary } from '@/lib/dashboard/summary';
+import { demoModeEnabled } from '@/lib/demo/accounts';
+import { emptyDashboardSummary, getDashboardSummary } from '@/lib/dashboard/summary';
 import { isMissingRelationError, isTransientDbError, withTimeoutRetry } from '@/lib/demo/server';
 import DashboardClient from './DashboardClient';
 
@@ -17,7 +18,8 @@ function isDemoCookieStore(store: Awaited<ReturnType<typeof cookies>>) {
 export default async function DashboardPage() {
   const cookieStore = await cookies();
 
-  if (isDemoCookieStore(cookieStore)) {
+  if (demoModeEnabled() && isDemoCookieStore(cookieStore)) {
+    const { buildDemoDashboardSummary } = await import('@/lib/dashboard/summary');
     return <DashboardClient userEmail="demo@timelyinvoices.app" summary={buildDemoDashboardSummary()} />;
   }
 

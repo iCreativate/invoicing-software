@@ -3,10 +3,16 @@
 import { companyLogoImgSrc } from '@/lib/company/logoUrl';
 import { formatMoney } from '@/lib/format/money';
 import type { InvoiceComposerDraft } from '@/components/invoice/composer/types';
-import { InvoiceQrFooter } from '@/components/invoice/InvoiceQrFooter';
 import { getTimelyInvoicesMarketingUrl } from '@/lib/invoice/platformUrls';
 import { getInvoiceTemplate } from '@/lib/invoices/templates';
 import { cn } from '@/lib/utils/cn';
+import {
+  hasBankingDetails,
+  type InvoicePreviewCompanyDetails,
+} from '@/features/company/previewDetails';
+import { BankingDetailsSection, type InvoicePreviewClient } from '@/components/invoice/preview/shared';
+import { ReferencePreviewLayout } from '@/components/invoice/preview/ReferenceLayouts';
+import { InvoiceQrFooter, getQrVariantForTemplate } from '@/components/invoice/InvoiceQrFooter';
 
 export function InvoicePreview({
   companyName = 'TimelyInvoices',
@@ -15,44 +21,31 @@ export function InvoicePreview({
   draft,
   client,
   showPoweredBy = false,
-  /** Full URL to the public invoice page; if missing, the QR opens the TimelyInvoices marketing site. */
   invoiceViewUrl = null,
+  documentKind = 'invoice',
 }: {
   companyName?: string;
   companyLogoPath?: string | null;
-  companyDetails?: {
-    email?: string | null;
-    phone?: string | null;
-    address?: string | null;
-    website?: string | null;
-    vatNumber?: string | null;
-    bankName?: string | null;
-    accountName?: string | null;
-    accountNumber?: string | null;
-    branchCode?: string | null;
-    accountType?: string | null;
-  } | null;
+  companyDetails?: InvoicePreviewCompanyDetails | null;
   draft: InvoiceComposerDraft;
-  client: {
-    name: string;
-    email?: string | null;
-    phone?: string | null;
-    address?: string | null;
-    companyName?: string | null;
-    website?: string | null;
-    companyRegistration?: string | null;
-    vatNumber?: string | null;
-  };
-  /** Free plan branding on PDFs and public shares. */
+  client: InvoicePreviewClient;
   showPoweredBy?: boolean;
   invoiceViewUrl?: string | null;
+  documentKind?: 'invoice' | 'quote';
 }) {
+  const isQuote = documentKind === 'quote';
+  const docLabel = isQuote ? 'Quote' : 'Invoice';
+  const docLabelUpper = isQuote ? 'QUOTE' : 'INVOICE';
+  const dueLabel = isQuote ? 'Valid until' : 'Due';
+  const dueLabelLong = isQuote ? 'Valid until' : 'Due Date';
   const marketingUrl = getTimelyInvoicesMarketingUrl();
   const trimmedView = invoiceViewUrl?.trim() ?? '';
   const qrTargetUrl = trimmedView.length > 0 ? trimmedView : marketingUrl;
   const qrHeadline =
     trimmedView.length > 0
-      ? 'Scan to open this invoice on TimelyInvoices (view, pay, or save as PDF).'
+      ? isQuote
+        ? 'Scan to open this quote on TimelyInvoices (view or save as PDF).'
+        : 'Scan to open this invoice on TimelyInvoices (view, pay, or save as PDF).'
       : 'Scan to open TimelyInvoices — run your invoicing online and export PDFs anytime.';
 
   const subtotal = draft.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
@@ -61,14 +54,47 @@ export function InvoicePreview({
 
   const preset = getInvoiceTemplate(draft.template);
   const chrome = preset.chrome;
+  const layout = chrome.layout ?? 'standard';
+
+  const invoiceNo = draft.invoiceNumber ? String(draft.invoiceNumber) : '—';
+  const logoSrc = companyLogoPath ? companyLogoImgSrc(companyLogoPath) : null;
+  const showBanking = hasBankingDetails(companyDetails);
+
+  const layoutProps = {
+    companyName,
+    companyLogoPath,
+    companyDetails,
+    draft,
+    client,
+    showPoweredBy,
+    invoiceViewUrl,
+    documentKind,
+    subtotal,
+    vat,
+    total,
+    invoiceNo,
+    logoSrc,
+    showBanking,
+    isQuote,
+    docLabel,
+    docLabelUpper,
+    dueLabel,
+    dueLabelLong,
+    qrTargetUrl,
+    qrHeadline,
+    accentHex: preset.accentHex,
+    templateLayout: layout,
+  };
+
+  if (layout !== 'standard') {
+    return <ReferencePreviewLayout {...layoutProps} layout={layout} />;
+  }
+
   const isCorporate = preset.id === 'corporate';
   const onDarkHeader = /text-white|text-\[#f6f4f0\]|text-\[#fdf6ef\]/.test(chrome.header);
 
-  const invoiceNo = (draft as any).invoiceNumber ? String((draft as any).invoiceNumber) : '—';
-  const logoSrc = companyLogoPath ? companyLogoImgSrc(companyLogoPath) : null;
-
   return (
-    <div className={cn('overflow-hidden rounded-2xl text-zinc-900 shadow-[var(--shadow-md)]', chrome.page, chrome.serif && 'font-serif')}>
+    <div className={cn('text-[var(--tl-ink)]', chrome.page, chrome.serif && 'font-serif')}>
       {chrome.leftRail ? <div className={chrome.leftRail} aria-hidden /> : null}
       <div className={cn(chrome.header, chrome.leftRail && 'pl-4')}>
         <div className="p-6">
@@ -82,64 +108,58 @@ export function InvoicePreview({
                   <div className="text-base font-semibold tracking-wide">{companyName}</div>
                 )}
               </div>
-              <div className={cn('mt-3', chrome.invoiceTitle)}>Invoice</div>
+              <div className={cn('mt-3', chrome.invoiceTitle)}>{docLabel}</div>
               <div className={cn('mt-2 text-xs', chrome.headerMuted)}>
-                No. {invoiceNo} · Issued {draft.issueDate} · Due {draft.dueDate}
+                No. {invoiceNo} · Issued {draft.issueDate} · {dueLabel} {draft.dueDate}
               </div>
             </div>
           ) : (
-          <div className="flex items-start justify-between gap-6">
-            <div>
-              <div className="flex items-center gap-3">
-                {logoSrc ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={logoSrc}
-                    alt="Company logo"
-                    className="h-12 w-32 object-contain"
-                  />
+            <div className="flex items-start justify-between gap-6">
+              <div>
+                <div className="flex items-center gap-3">
+                  {logoSrc ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={logoSrc} alt="Company logo" className="h-12 w-32 object-contain" />
+                  ) : null}
+                  {!logoSrc ? <div className="text-sm font-semibold">{companyName}</div> : null}
+                </div>
+                {!isCorporate ? (
+                  <div className={cn('mt-1 text-xs', chrome.headerMuted)}>
+                    {isQuote ? 'Professional quote' : 'Professional invoice'}
+                  </div>
                 ) : null}
-                {!logoSrc ? <div className="text-sm font-semibold">{companyName}</div> : null}
               </div>
-              {!isCorporate ? (
-                <div className={cn('mt-1 text-xs', chrome.headerMuted)}>
-                  Professional invoice
-                </div>
-              ) : null}
-            </div>
 
-            {isCorporate ? (
-              <div className="text-right">
-                <div className="inline-flex items-center justify-center rounded-xl bg-[var(--ti-brand,#1A3A4A)] px-8 py-3 text-xl font-semibold tracking-wide text-white">
-                  INVOICE
-                </div>
-                <div className="mt-3 space-y-1 text-xs text-zinc-600">
-                  <div>
-                    <span className="font-semibold text-zinc-700">INVOICE NO.:</span> {invoiceNo}
+              {isCorporate ? (
+                <div className="text-right">
+                  <div className="inline-flex items-center justify-center rounded-xl bg-[var(--ti-brand,#1A3A4A)] px-8 py-3 text-xl font-semibold tracking-wide text-white">
+                    {docLabelUpper}
                   </div>
-                  <div>
-                    <span className="font-semibold text-zinc-700">Invoice Date:</span> {draft.issueDate}
+                  <div className="mt-3 space-y-1 text-xs text-zinc-600">
+                    <div>
+                      <span className="font-semibold text-zinc-700">{docLabelUpper} NO.:</span> {invoiceNo}
+                    </div>
+                    <div>
+                      <span className="font-semibold text-zinc-700">{docLabel} Date:</span> {draft.issueDate}
+                    </div>
+                    <div>
+                      <span className="font-semibold text-zinc-700">{dueLabelLong}:</span> {draft.dueDate}
+                    </div>
                   </div>
-                  <div>
-                    <span className="font-semibold text-zinc-700">Due Date:</span> {draft.dueDate}
+                </div>
+              ) : (
+                <div className="text-right">
+                  <div className={chrome.invoiceTitle}>{docLabelUpper}</div>
+                  <div className={cn('mt-1 text-xs', chrome.headerMuted)}>
+                    <span>
+                      No: <span className={onDarkHeader ? 'text-white' : 'text-zinc-900'}>{invoiceNo}</span>
+                    </span>
+                    <span className="mx-2">·</span>
+                    Issue: {draft.issueDate} · {dueLabel}: {draft.dueDate}
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="text-right">
-                <div className={chrome.invoiceTitle}>
-                  INVOICE
-                </div>
-                <div className={cn('mt-1 text-xs', chrome.headerMuted)}>
-                  <span>
-                    No: <span className={onDarkHeader ? 'text-white' : 'text-zinc-900'}>{invoiceNo}</span>
-                  </span>
-                  <span className="mx-2">·</span>
-                  Issue: {draft.issueDate} · Due: {draft.dueDate}
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -147,7 +167,9 @@ export function InvoicePreview({
       <div className={cn('p-6', chrome.leftRail && 'pl-8')}>
         <div className="grid gap-6 sm:grid-cols-2">
           <div>
-            <div className="text-xs font-semibold text-zinc-600">{isCorporate ? 'Invoice To:' : 'Bill to'}</div>
+            <div className="text-xs font-semibold text-zinc-600">
+              {isCorporate ? `${docLabel} To:` : isQuote ? 'Quote to' : 'Bill to'}
+            </div>
             <div className={isCorporate ? 'mt-3 rounded-xl bg-zinc-50 p-4' : ''}>
               {client.companyName ? (
                 <>
@@ -162,10 +184,7 @@ export function InvoicePreview({
                 {client.email ? <div>E: {client.email}</div> : null}
                 {client.website ? (
                   <div>
-                    W:{' '}
-                    <span className="break-all">
-                      {client.website.replace(/^https?:\/\//i, '')}
-                    </span>
+                    W: <span className="break-all">{client.website.replace(/^https?:\/\//i, '')}</span>
                   </div>
                 ) : null}
                 {client.companyRegistration ? <div>Reg: {client.companyRegistration}</div> : null}
@@ -185,18 +204,10 @@ export function InvoicePreview({
           <table className="w-full text-sm">
             <thead className={cn('text-xs', chrome.tableHead)}>
               <tr>
-                <th className={cn('px-4 py-3 text-left font-semibold', isCorporate && 'bg-blue-600')}>
-                  Item description
-                </th>
-                <th className={cn('px-4 py-3 text-right font-semibold', isCorporate && 'bg-blue-600')}>
-                  Quantity
-                </th>
-                <th className={cn('px-4 py-3 text-right font-semibold', isCorporate && 'bg-blue-600')}>
-                  Unit Price
-                </th>
-                <th className={cn('px-4 py-3 text-right font-semibold', isCorporate && 'bg-blue-600')}>
-                  VAT
-                </th>
+                <th className={cn('px-4 py-3 text-left font-semibold', isCorporate && 'bg-blue-600')}>Item description</th>
+                <th className={cn('px-4 py-3 text-right font-semibold', isCorporate && 'bg-blue-600')}>Quantity</th>
+                <th className={cn('px-4 py-3 text-right font-semibold', isCorporate && 'bg-blue-600')}>Unit Price</th>
+                <th className={cn('px-4 py-3 text-right font-semibold', isCorporate && 'bg-blue-600')}>VAT</th>
                 <th
                   className={cn(
                     'px-4 py-3 text-right font-semibold',
@@ -207,66 +218,27 @@ export function InvoicePreview({
                 </th>
               </tr>
             </thead>
-          <tbody>
-            {draft.items.map((it) => {
-              const line = it.quantity * it.unitPrice;
-              const lineVat = line * (it.vatRate / 100);
-              return (
-                <tr key={it.id} className="border-t border-zinc-200">
-                  <td className="px-4 py-3 font-medium">{it.description || '—'}</td>
-                  <td className="px-4 py-3 text-right">{it.quantity}</td>
-                  <td className="px-4 py-3 text-right">{formatMoney(it.unitPrice, draft.currency)}</td>
-                  <td className="px-4 py-3 text-right">{it.vatRate}%</td>
-                  <td className="px-4 py-3 text-right font-semibold">
-                    {formatMoney(line + lineVat, draft.currency)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
+            <tbody>
+              {draft.items.map((it) => {
+                const line = it.quantity * it.unitPrice;
+                const lineVat = line * (it.vatRate / 100);
+                return (
+                  <tr key={it.id} className="border-t border-zinc-200">
+                    <td className="px-4 py-3 font-medium">{it.description || '—'}</td>
+                    <td className="px-4 py-3 text-right">{it.quantity}</td>
+                    <td className="px-4 py-3 text-right">{formatMoney(it.unitPrice, draft.currency)}</td>
+                    <td className="px-4 py-3 text-right">{it.vatRate}%</td>
+                    <td className="px-4 py-3 text-right font-semibold">{formatMoney(line + lineVat, draft.currency)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
           </table>
         </div>
 
         {isCorporate ? (
-          <div className="mt-6 grid gap-4 sm:grid-cols-[1fr_360px] sm:items-start">
-            <div>
-              {companyDetails?.bankName ||
-              companyDetails?.accountNumber ||
-              companyDetails?.accountName ||
-              companyDetails?.branchCode ||
-              companyDetails?.accountType ? (
-                <div className="rounded-xl bg-zinc-50 p-4">
-                  <div className="text-xs font-semibold text-zinc-600">Banking Details</div>
-                  <div className="mt-3 border-l-4 border-blue-600 pl-4 text-sm">
-                    {companyDetails?.bankName ? <div className="font-semibold">{companyDetails.bankName}</div> : null}
-                    <div className="mt-2 space-y-1 text-xs text-zinc-700">
-                      {companyDetails?.accountName ? (
-                        <div>
-                          <span className="font-semibold">Account Name:</span> {companyDetails.accountName}
-                        </div>
-                      ) : null}
-                      {companyDetails?.accountNumber ? (
-                        <div>
-                          <span className="font-semibold">Account Number:</span> {companyDetails.accountNumber}
-                        </div>
-                      ) : null}
-                      {companyDetails?.branchCode ? (
-                        <div>
-                          <span className="font-semibold">Branch Code:</span> {companyDetails.branchCode}
-                        </div>
-                      ) : null}
-                      {companyDetails?.accountType ? (
-                        <div>
-                          <span className="font-semibold">Account Type:</span> {companyDetails.accountType}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="rounded-xl bg-blue-600 p-5 text-white">
+          <div className="mt-6 flex justify-end">
+            <div className="w-full max-w-sm rounded-xl bg-blue-600 p-5 text-white">
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-white/90">Sub Total:</span>
@@ -304,51 +276,16 @@ export function InvoicePreview({
           </div>
         )}
 
-      {companyDetails?.bankName ||
-      companyDetails?.accountNumber ||
-      companyDetails?.accountName ||
-      companyDetails?.branchCode ||
-      companyDetails?.accountType ? (
-        <div className={isCorporate ? 'hidden' : 'mt-8 rounded-2xl bg-zinc-50 p-5'}>
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold text-zinc-600">Banking details</div>
-            <div className="text-[11px] font-semibold text-zinc-500">EFT</div>
+        {draft.notes?.trim() ? (
+          <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50/80 p-4">
+            <div className="text-xs font-semibold text-zinc-600">Notes</div>
+            <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700">{draft.notes.trim()}</p>
           </div>
+        ) : null}
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {companyDetails?.bankName ? (
-              <div className="rounded-xl bg-white p-3 ring-1 ring-zinc-200">
-                <div className="text-[11px] font-semibold text-zinc-500">Bank</div>
-                <div className="mt-1 text-sm font-semibold">{companyDetails.bankName}</div>
-              </div>
-            ) : null}
-            {companyDetails?.accountName ? (
-              <div className="rounded-xl bg-white p-3 ring-1 ring-zinc-200">
-                <div className="text-[11px] font-semibold text-zinc-500">Account name</div>
-                <div className="mt-1 text-sm font-semibold">{companyDetails.accountName}</div>
-              </div>
-            ) : null}
-            {companyDetails?.accountNumber ? (
-              <div className="rounded-xl bg-white p-3 ring-1 ring-zinc-200">
-                <div className="text-[11px] font-semibold text-zinc-500">Account number</div>
-                <div className="mt-1 text-sm font-semibold tabular-nums">{companyDetails.accountNumber}</div>
-              </div>
-            ) : null}
-            {companyDetails?.branchCode ? (
-              <div className="rounded-xl bg-white p-3 ring-1 ring-zinc-200">
-                <div className="text-[11px] font-semibold text-zinc-500">Branch code</div>
-                <div className="mt-1 text-sm font-semibold tabular-nums">{companyDetails.branchCode}</div>
-              </div>
-            ) : null}
-            {companyDetails?.accountType ? (
-              <div className="rounded-xl bg-white p-3 ring-1 ring-zinc-200 sm:col-span-2">
-                <div className="text-[11px] font-semibold text-zinc-500">Account type</div>
-                <div className="mt-1 text-sm font-semibold">{companyDetails.accountType}</div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+        {showBanking && companyDetails ? (
+          <BankingDetailsSection companyDetails={companyDetails} variant={isCorporate ? 'corporate' : 'cards'} />
+        ) : null}
 
         {isCorporate ? (
           <div className="mt-10">
@@ -365,8 +302,13 @@ export function InvoicePreview({
           </div>
         ) : null}
 
-        <div className="px-1">
-          <InvoiceQrFooter qrTargetUrl={qrTargetUrl} headline={qrHeadline} />
+        <div className="px-6 pb-6">
+          <InvoiceQrFooter
+            qrTargetUrl={qrTargetUrl}
+            headline={qrHeadline}
+            variant={getQrVariantForTemplate('standard')}
+            accentColor={preset.accentHex}
+          />
         </div>
 
         {showPoweredBy ? (
@@ -378,4 +320,3 @@ export function InvoicePreview({
     </div>
   );
 }
-

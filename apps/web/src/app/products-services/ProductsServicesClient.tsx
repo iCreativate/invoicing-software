@@ -2,13 +2,20 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AppShell } from '@/components/layout/AppShell';
-import { PageBody, PageMain } from '@/components/layout/PageLayout';
-import { Card } from '@/components/ui/Card';
+import { MONEY_INVOICE_SUBNAV, MoneySubNav, MoneyWorkspace } from '@/components/money/MoneyWorkspace';
+import { MoneyKpiCard, MoneyKpiGrid } from '@/components/money/MoneyKpiCard';
+import { Surface } from '@/components/ui/Card';
+import { SectionHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Badge } from '@/components/ui/badge';
+import { Input, Select, Textarea } from '@/components/ui/Input';
+import { Field } from '@/components/ui/Field';
+import { Amount } from '@/components/ui/Text';
+import { PageSummary } from '@/components/layout/PageLayout';
+import { EmptyState } from '@/components/dashboard-ui/EmptyState';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { Tabs } from '@/components/ui/Tabs';
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalDescription } from '@/components/ui/modal';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { routes } from '@/lib/routing/routes';
 import { formatMoney } from '@/lib/format/money';
 import { cn } from '@/lib/utils/cn';
@@ -20,7 +27,7 @@ import {
 } from '@/features/catalog/api';
 import type { CatalogItemType, CatalogListItem } from '@/features/catalog/types';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
-import { Package, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Search, Trash2, Layers, Briefcase, Package, Tag } from 'lucide-react';
 import { notifyError, notifySuccess } from '@/lib/notify';
 
 type FilterKey = 'all' | CatalogItemType;
@@ -33,10 +40,23 @@ const TYPE_LABEL: Record<CatalogItemType, string> = {
   inventory: 'Inventory',
 };
 
-function typeBadgeVariant(t: CatalogItemType): 'primary' | 'outline' | 'success' {
-  if (t === 'service') return 'primary';
-  if (t === 'inventory') return 'success';
-  return 'outline';
+const FILTER_TABS: { value: FilterKey; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'service', label: 'Services' },
+  { value: 'product', label: 'Products' },
+  { value: 'inventory', label: 'Inventory' },
+];
+
+function typeTone(t: CatalogItemType): 'open' | 'paid' | 'draft' {
+  if (t === 'service') return 'open';
+  if (t === 'inventory') return 'paid';
+  return 'draft';
+}
+
+function typeStatusClass(t: CatalogItemType) {
+  if (t === 'service') return 'ti-status-sent';
+  if (t === 'inventory') return 'ti-status-paid';
+  return 'ti-status-draft';
 }
 
 function parseOptNumber(s: string): number | null {
@@ -129,6 +149,15 @@ export default function ProductsServicesClient() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const metrics = useMemo(() => {
+    const services = items.filter((i) => i.itemType === 'service').length;
+    const products = items.filter((i) => i.itemType === 'product').length;
+    const inventory = items.filter((i) => i.itemType === 'inventory').length;
+    const avgPrice =
+      items.length === 0 ? 0 : items.reduce((sum, i) => sum + i.unitPrice, 0) / items.length;
+    return { services, products, inventory, avgPrice, total: items.length };
+  }, [items]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -230,88 +259,143 @@ export default function ProductsServicesClient() {
     }
   };
 
-  const filterBtn = (key: FilterKey, label: string) => (
-    <Button
-      type="button"
-      size="sm"
-      variant={filter === key ? 'primary' : 'secondary'}
-      className="h-9"
-      onClick={() => setFilter(key)}
-    >
-      {label}
-    </Button>
-  );
-
   return (
-    <AppShell
-      title="Products & services"
+    <MoneyWorkspace
+      title="Products"
+      description="Services, products, and stock you reuse on invoices."
       actions={
         canMutate ? (
-          <Button variant="primary" onClick={openCreate}>
+          <Button variant="primary" size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4" />
             Add item
           </Button>
         ) : (
-          <Button asChild variant="primary">
+          <Button asChild variant="primary" size="sm">
             <Link href={`${routes.app.invoices}/new`}>New invoice</Link>
           </Button>
         )
       }
+      subNav={<MoneySubNav items={MONEY_INVOICE_SUBNAV} />}
     >
-      <PageBody>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 md:gap-5">
         {tableMissing ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
-            <p className="font-semibold">Database table required</p>
-            <p className="mt-1 text-amber-900/90 dark:text-amber-100/90">
-              Run the SQL in <code className="rounded bg-amber-100/80 px-1 py-0.5 text-xs dark:bg-amber-900/50">apps/web/supabase/catalog-items.sql</code> in the
-              Supabase SQL editor, then refresh this page.
-            </p>
+          <div className="ti-invoice-draft-banner">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[var(--tl-ink)]">Database table required</p>
+              <p className="ti-small mt-1">
+                Run <code className="text-[12px]">apps/web/supabase/catalog-items.sql</code> in the Supabase
+                SQL editor, then refresh.
+              </p>
+            </div>
           </div>
         ) : null}
 
-        {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
-            {error}
-          </div>
-        ) : null}
+        <PageSummary>
+          <MoneyKpiGrid>
+            <MoneyKpiCard
+              icon={Layers}
+              label="Catalog"
+              value={metrics.total}
+              trend="Items ready to bill"
+              active={filter === 'all'}
+              onClick={() => setFilter('all')}
+            />
+            <MoneyKpiCard
+              icon={Briefcase}
+              label="Services"
+              value={metrics.services}
+              trend="Time & fixed fees"
+              active={filter === 'service'}
+              onClick={() => setFilter('service')}
+            />
+            <MoneyKpiCard
+              icon={Package}
+              label="Products"
+              value={metrics.products}
+              trend="Sellable lines"
+              active={filter === 'product'}
+              onClick={() => setFilter('product')}
+            />
+            <MoneyKpiCard
+              icon={Tag}
+              label="Avg price"
+              value={formatMoney(metrics.avgPrice, CURRENCY)}
+              trend={`${metrics.inventory} inventory SKU${metrics.inventory === 1 ? '' : 's'}`}
+              active={filter === 'inventory'}
+              onClick={() => setFilter('inventory')}
+            />
+          </MoneyKpiGrid>
+        </PageSummary>
 
-        <PageMain>
-        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
-          <div className="flex shrink-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="text-sm font-semibold">Catalog</div>
-              <div className="mt-1 text-sm text-muted-foreground">
-                {loading ? 'Loading…' : `${filtered.length} item(s)`} — services, sellable products, and stock.
-              </div>
-            </div>
-            <div className="w-full max-w-md">
-              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, SKU, description…" />
+        <Surface variant="elevated" className="ti-panel ti-invoice-ledger flex min-h-0 flex-1 flex-col">
+          <div className="ti-panel-head">
+            <SectionHeader
+              kicker="Catalog"
+              title={`${filtered.length} item${filtered.length === 1 ? '' : 's'}`}
+              description={
+                filter === 'all'
+                  ? 'Services, products, and stock for invoice lines.'
+                  : `Showing ${FILTER_TABS.find((t) => t.value === filter)?.label.toLowerCase()}.`
+              }
+            />
+          </div>
+
+          <div className="ti-invoice-toolbar mt-1">
+            <Tabs
+              items={FILTER_TABS.map((t) => ({ value: t.value, label: t.label }))}
+              value={filter}
+              onChange={(v) => setFilter(v as FilterKey)}
+            />
+            <div className="relative sm:min-w-[16rem]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--tl-ink-3)]" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search name, SKU, description"
+                className="pl-9"
+                aria-label="Search catalog"
+              />
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            {filterBtn('all', 'All')}
-            {filterBtn('service', 'Services')}
-            {filterBtn('product', 'Products')}
-            {filterBtn('inventory', 'Inventory')}
-          </div>
+          {error ? (
+            <div className="ti-error mt-4" role="alert">
+              <div className="font-medium">Couldn’t load catalog</div>
+              <p className="ti-error-body">{error}</p>
+            </div>
+          ) : null}
+
+          {loading ? (
+            <div className="mt-5 space-y-0" aria-busy="true" aria-label="Loading catalog">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-6 border-b border-border py-4">
+                  <Skeleton className="h-4 w-40 flex-1" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-5 w-24" />
+                </div>
+              ))}
+            </div>
+          ) : null}
 
           {!loading && !tableMissing && filtered.length === 0 ? (
-            <div className="mt-6 rounded-2xl border border-dashed border-border p-8 text-center">
-              <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary">
-                <Package className="h-6 w-6" />
-              </div>
-              <p className="mt-3 text-sm font-medium text-foreground">No items yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {items.length === 0
-                  ? 'Add services, products, or inventory rows to reuse on invoices and quotes.'
-                  : 'Nothing matches this filter or search.'}
-              </p>
-              {canMutate && items.length === 0 ? (
-                <Button className="mt-4" variant="primary" onClick={openCreate}>
-                  Add your first item
-                </Button>
-              ) : null}
+            <div className="mt-6">
+              <EmptyState
+                kicker={items.length === 0 ? 'Empty catalog' : 'No matches'}
+                title={items.length === 0 ? 'Add your first billable item.' : 'Nothing matches these filters.'}
+                description={
+                  items.length === 0
+                    ? 'Services, products, and inventory reuse cleanly on invoices and quotes.'
+                    : 'Try a different type or search term.'
+                }
+                action={
+                  canMutate && items.length === 0 ? (
+                    <Button variant="primary" onClick={openCreate}>
+                      Add item
+                    </Button>
+                  ) : null
+                }
+              />
             </div>
           ) : null}
 
@@ -319,118 +403,143 @@ export default function ProductsServicesClient() {
             <>
               <div className="mt-4 space-y-3 md:hidden">
                 {filtered.map((row) => (
-                  <Card key={row.id} className="border border-border p-4 shadow-none">
-                    <div className="flex items-start justify-between gap-2">
+                  <div key={row.id} className="ti-invoice-card" data-tone={typeTone(row.itemType)}>
+                    <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="font-semibold text-foreground">{row.name}</div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <Badge variant={typeBadgeVariant(row.itemType)}>{TYPE_LABEL[row.itemType]}</Badge>
-                          {row.sku ? (
-                            <span className="text-xs text-muted-foreground">SKU {row.sku}</span>
-                          ) : null}
-                        </div>
-                        <div className="mt-2 text-sm text-muted-foreground">
-                          {formatMoney(row.unitPrice, CURRENCY)}
-                          {row.unit ? ` / ${row.unit}` : ''}
-                          {row.itemType !== 'service' && row.stockQuantity != null ? (
-                            <span className="ml-2">· On hand {row.stockQuantity}</span>
-                          ) : null}
-                        </div>
+                        <div className="ti-invoice-client">{row.name}</div>
+                        {row.description ? (
+                          <div className="ti-invoice-meta line-clamp-2">{row.description}</div>
+                        ) : null}
+                        {row.sku ? <div className="ti-invoice-meta">SKU {row.sku}</div> : null}
                       </div>
-                      {canMutate ? (
-                        <div className="flex shrink-0 gap-1">
-                          <Button type="button" size="sm" variant="secondary" className="h-9 px-2" onClick={() => openEdit(row)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="danger"
-                            className="h-9 px-2"
-                            onClick={() => void onDelete(row.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                      <span className={cn('ti-status', typeStatusClass(row.itemType))}>
+                        {TYPE_LABEL[row.itemType]}
+                      </span>
+                    </div>
+                    <div className="flex items-end justify-between gap-3">
+                      <div>
+                        <div className="ti-meta">Price</div>
+                        <div className="ti-invoice-amount mt-1">{formatMoney(row.unitPrice, CURRENCY)}</div>
+                        {row.unit ? <div className="ti-invoice-amount-sub text-left">per {row.unit}</div> : null}
+                      </div>
+                      {row.itemType !== 'service' ? (
+                        <div className="text-right">
+                          <div className="ti-meta">Stock</div>
+                          <div className="ti-invoice-due mt-1">
+                            {row.stockQuantity != null ? `${row.stockQuantity} on hand` : '—'}
+                          </div>
                         </div>
                       ) : null}
                     </div>
-                  </Card>
+                    {canMutate ? (
+                      <div className="flex items-center justify-end gap-2 border-t border-[var(--tl-line)] pt-3">
+                        <Button type="button" size="sm" variant="secondary" onClick={() => openEdit(row)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                          Edit
+                        </Button>
+                        <Button type="button" size="sm" variant="danger" onClick={() => void onDelete(row.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
                 ))}
               </div>
 
               <div className="mt-4 hidden min-h-0 flex-1 overflow-auto md:block">
-                <table className="w-full min-w-[720px] border-separate border-spacing-0">
-                  <thead>
-                    <tr className="text-left text-xs font-semibold text-muted-foreground">
-                      <th className="border-b border-border px-3 py-2">Name</th>
-                      <th className="border-b border-border px-3 py-2">Type</th>
-                      <th className="border-b border-border px-3 py-2">SKU</th>
-                      <th className="border-b border-border px-3 py-2 text-right">Price</th>
-                      <th className="border-b border-border px-3 py-2 text-right">Stock / cost</th>
-                      <th className="border-b border-border px-3 py-2 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Item</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>SKU</TableHead>
+                      <TableHead className="text-right">Price</TableHead>
+                      <TableHead className="text-right">Stock / cost</TableHead>
+                      <TableHead className="w-36 text-right">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {filtered.map((row) => (
-                      <tr key={row.id} className="text-sm">
-                        <td className="border-b border-border px-3 py-3">
-                          <div className="font-medium text-foreground">{row.name}</div>
+                      <TableRow key={row.id} className="group" data-tone={typeTone(row.itemType)}>
+                        <TableCell>
+                          <div className="ti-invoice-client">{row.name}</div>
                           {row.description ? (
-                            <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{row.description}</div>
+                            <div className="ti-invoice-meta line-clamp-2 max-w-md">{row.description}</div>
                           ) : null}
-                        </td>
-                        <td className="border-b border-border px-3 py-3">
-                          <Badge variant={typeBadgeVariant(row.itemType)}>{TYPE_LABEL[row.itemType]}</Badge>
-                        </td>
-                        <td className="border-b border-border px-3 py-3 text-muted-foreground">{row.sku ?? '—'}</td>
-                        <td className="border-b border-border px-3 py-3 text-right tabular-nums">
-                          {formatMoney(row.unitPrice, CURRENCY)}
-                          {row.unit ? <span className="text-muted-foreground"> / {row.unit}</span> : null}
-                        </td>
-                        <td className="border-b border-border px-3 py-3 text-right text-muted-foreground">
+                        </TableCell>
+                        <TableCell>
+                          <span className={cn('ti-status', typeStatusClass(row.itemType))}>
+                            {TYPE_LABEL[row.itemType]}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="ti-invoice-meta !mt-0 font-mono text-[12.5px]">
+                            {row.sku ?? '—'}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="ti-invoice-amount">{formatMoney(row.unitPrice, CURRENCY)}</div>
+                          {row.unit ? <div className="ti-invoice-amount-sub">per {row.unit}</div> : null}
+                        </TableCell>
+                        <TableCell className="text-right">
                           {row.itemType === 'service' ? (
-                            '—'
+                            <span className="ti-invoice-meta !mt-0">—</span>
                           ) : (
                             <>
-                              {row.stockQuantity != null ? `${row.stockQuantity} on hand` : '—'}
+                              <div className="ti-invoice-due">
+                                {row.stockQuantity != null ? `${row.stockQuantity} on hand` : '—'}
+                              </div>
                               {row.costPrice != null ? (
-                                <span className="block text-xs">Cost {formatMoney(row.costPrice, CURRENCY)}</span>
+                                <div className="ti-invoice-due-meta">
+                                  Cost {formatMoney(row.costPrice, CURRENCY)}
+                                </div>
                               ) : null}
                             </>
                           )}
-                        </td>
-                        <td className="border-b border-border px-3 py-3 text-right">
+                        </TableCell>
+                        <TableCell className="text-right">
                           {canMutate ? (
-                            <div className="inline-flex gap-2">
-                              <Button type="button" size="sm" variant="secondary" className="h-9" onClick={() => openEdit(row)}>
+                            <div className="flex items-center justify-end gap-1 opacity-100 xl:opacity-0 xl:transition-opacity xl:duration-[var(--ti-duration-hover)] xl:group-hover:opacity-100 xl:group-focus-within:opacity-100">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 px-2.5 text-[12.5px]"
+                                onClick={() => openEdit(row)}
+                              >
                                 Edit
                               </Button>
-                              <Button type="button" size="sm" variant="danger" className="h-9" onClick={() => void onDelete(row.id)}>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 px-2.5 text-[12.5px] text-[var(--tl-danger)]"
+                                onClick={() => void onDelete(row.id)}
+                              >
                                 Delete
                               </Button>
                             </div>
                           ) : (
-                            '—'
+                            <span className="ti-invoice-meta !mt-0">—</span>
                           )}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </>
           ) : null}
-        </Card>
-        </PageMain>
 
-        <aside className="rounded-xl border border-border bg-card px-4 py-4 sm:px-6" aria-label="Catalog help">
-          <p className="text-sm text-muted-foreground">
-            On invoices, choose an inventory row under line items to link the line; when you send the invoice, on-hand
-            quantity decreases by the line quantity. Services and products are for pricing reference unless linked the
-            same way later.
+          <p className="ti-small mt-5 border-t border-[var(--tl-line)] pt-4 text-[var(--tl-ink-3)]">
+            Link inventory on invoice lines to decrease on-hand quantity when you send. Services and products are
+            pricing references unless linked the same way.
           </p>
-        </aside>
-      </PageBody>
+        </Surface>
+      </div>
 
       <Modal open={modalOpen} onOpenChange={setModalOpen}>
         <ModalContent className="max-w-lg">
@@ -442,19 +551,14 @@ export default function ProductsServicesClient() {
           </ModalHeader>
           <form onSubmit={onSubmitForm} className="mt-2 space-y-4">
             {formError ? (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{formError}</div>
+              <div className="ti-error" role="alert">
+                <p className="ti-error-body">{formError}</p>
+              </div>
             ) : null}
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="itemType">
-                Type
-              </label>
-              <select
+            <Field label="Type" htmlFor="itemType">
+              <Select
                 id="itemType"
-                className={cn(
-                  'h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground shadow-[var(--shadow-sm)]',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:border-ring/40'
-                )}
                 value={form.itemType}
                 onChange={(e) =>
                   setForm((f) => ({
@@ -467,96 +571,73 @@ export default function ProductsServicesClient() {
                 <option value="service">Service</option>
                 <option value="product">Product</option>
                 <option value="inventory">Inventory</option>
-              </select>
-            </div>
+              </Select>
+            </Field>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="name">
-                Name <span className="text-muted-foreground">(required)</span>
-              </label>
+            <Field label="Name" htmlFor="name" hint="Required">
               <Input
                 id="name"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="e.g. Website hosting — annual"
               />
-            </div>
+            </Field>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="description">
-                Description
-              </label>
-              <textarea
+            <Field label="Description" htmlFor="description">
+              <Textarea
                 id="description"
                 rows={3}
-                className={cn(
-                  'w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground shadow-[var(--shadow-sm)]',
-                  'placeholder:text-muted-foreground',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:border-ring/40'
-                )}
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 placeholder="Shown when you copy this to a line item later."
               />
-            </div>
+            </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="sku">
-                  SKU
-                </label>
+              <Field label="SKU" htmlFor="sku">
                 <Input
                   id="sku"
                   value={form.sku}
                   onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
                   placeholder="Optional"
                 />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="unit">
-                  Unit
-                </label>
+              </Field>
+              <Field label="Unit" htmlFor="unit">
                 <Input
                   id="unit"
                   value={form.unit}
                   onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))}
                   placeholder="e.g. hour, ea, kg"
                 />
-              </div>
+              </Field>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="unitPrice">
-                  Unit price ({CURRENCY})
-                </label>
+              <Field label={`Unit price (${CURRENCY})`} htmlFor="unitPrice">
                 <Input
                   id="unitPrice"
                   inputMode="decimal"
                   value={form.unitPrice}
                   onChange={(e) => setForm((f) => ({ ...f, unitPrice: e.target.value }))}
                 />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="defaultTaxRate">
-                  Default VAT %
-                </label>
+              </Field>
+              <Field label="Default VAT %" htmlFor="defaultTaxRate">
                 <Input
                   id="defaultTaxRate"
                   inputMode="decimal"
                   value={form.defaultTaxRate}
                   onChange={(e) => setForm((f) => ({ ...f, defaultTaxRate: e.target.value }))}
-                  placeholder="Leave blank to use invoice rate"
+                  placeholder="Leave blank for invoice rate"
                 />
-              </div>
+              </Field>
             </div>
 
             {form.itemType !== 'service' ? (
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="stockQuantity">
-                    {form.itemType === 'inventory' ? 'Quantity on hand' : 'On hand (optional)'}
-                  </label>
+                <Field
+                  label={form.itemType === 'inventory' ? 'Quantity on hand' : 'On hand (optional)'}
+                  htmlFor="stockQuantity"
+                >
                   <Input
                     id="stockQuantity"
                     inputMode="decimal"
@@ -564,11 +645,8 @@ export default function ProductsServicesClient() {
                     onChange={(e) => setForm((f) => ({ ...f, stockQuantity: e.target.value }))}
                     placeholder={form.itemType === 'inventory' ? '0' : 'Track stock'}
                   />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="costPrice">
-                    Unit cost ({CURRENCY})
-                  </label>
+                </Field>
+                <Field label={`Unit cost (${CURRENCY})`} htmlFor="costPrice">
                   <Input
                     id="costPrice"
                     inputMode="decimal"
@@ -576,7 +654,7 @@ export default function ProductsServicesClient() {
                     onChange={(e) => setForm((f) => ({ ...f, costPrice: e.target.value }))}
                     placeholder="Optional"
                   />
-                </div>
+                </Field>
               </div>
             ) : null}
 
@@ -591,6 +669,6 @@ export default function ProductsServicesClient() {
           </form>
         </ModalContent>
       </Modal>
-    </AppShell>
+    </MoneyWorkspace>
   );
 }

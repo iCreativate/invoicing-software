@@ -24,7 +24,7 @@ export function PageBody({
   maxWidthClassName?: string;
 }) {
   return (
-    <div className={cn('flex w-full flex-1 flex-col gap-5', maxWidthClassName, className)}>
+    <div className={cn('ti-page-enter flex w-full flex-1 flex-col gap-4 md:gap-5', maxWidthClassName, className)}>
       {children}
     </div>
   );

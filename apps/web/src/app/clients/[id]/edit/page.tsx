@@ -5,7 +5,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { z } from 'zod';
 import { AppShell } from '@/components/layout/AppShell';
-import { Card } from '@/components/ui/Card';
+import { AppPageHero } from '@/components/layout/AppPageHero';
+import { Surface } from '@/components/ui/Card';
+import { SectionHeader } from '@/components/ui/PageHeader';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { routes } from '@/lib/routing/routes';
@@ -112,80 +114,88 @@ export default function ClientEditPage() {
 
   return (
     <RedirectIfReadOnly href={`${routes.app.clients}/${id}`}>
-      <AppShell
-        title="Edit client"
-        actions={
-          <div className="flex items-center gap-2">
-            <Link href={`${routes.app.clients}/${id}`}>
-              <Button variant="secondary">Cancel</Button>
-            </Link>
-            <Button type="submit" form="client-edit-form" disabled={!canSave}>
-              {submitting ? 'Saving…' : 'Save'}
-            </Button>
-          </div>
-        }
-      >
-        <Card className="p-5">
-          {submitError ? <div className="mb-4 rounded-2xl bg-danger/10 p-3 text-sm text-danger">{submitError}</div> : null}
-          {ok ? <div className="mb-4 rounded-2xl bg-success/10 p-3 text-sm text-success">{ok}</div> : null}
+      <AppShell hideHeader title="Edit client">
+        <div className="ti-page-enter flex w-full flex-col gap-4">
+          <AppPageHero
+            kicker="People"
+            title="Edit client"
+            description="Update contact and company details."
+            image="clients"
+            compact
+            actions={
+              <div className="flex items-center gap-2">
+                <Link href={`${routes.app.clients}/${id}`}>
+                  <Button variant="secondary">Cancel</Button>
+                </Link>
+                <Button type="submit" form="client-edit-form" disabled={!canSave}>
+                  {submitting ? 'Saving…' : 'Save'}
+                </Button>
+              </div>
+            }
+          />
+          <Surface variant="elevated" className="p-5 sm:p-6">
+            <SectionHeader kicker="Edit client" description="Update contact and company details." />
+            {submitError ? <div className="mt-4 rounded-2xl bg-danger/10 p-3 text-sm text-danger">{submitError}</div> : null}
+            {ok ? <div className="mt-4 rounded-2xl bg-success/10 p-3 text-sm text-success">{ok}</div> : null}
 
-          <form id="client-edit-form" onSubmit={onSave} className="grid gap-6 sm:max-w-xl">
-            <div className="space-y-3">
-              <div className="text-sm font-semibold">Contact</div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Name</label>
-                <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} disabled={loading} />
-                {errors.name ? <div className="text-xs text-danger">{errors.name}</div> : null}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Email (optional)</label>
-                <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} disabled={loading} />
-                {errors.email ? <div className="text-xs text-danger">{errors.email}</div> : null}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Phone (optional)</label>
-                <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} disabled={loading} />
-              </div>
-            </div>
-
-            <div className="space-y-3 border-t border-border pt-4">
-              <div className="text-sm font-semibold">Company</div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Company / trading name (optional)</label>
-                <Input value={form.companyName} onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))} disabled={loading} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Website (optional)</label>
-                <Input type="url" value={form.website} onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))} disabled={loading} />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
+            <form id="client-edit-form" onSubmit={onSave} className="mt-4 grid gap-6 sm:max-w-xl">
+              <div className="space-y-3">
+                <div className="text-sm font-semibold">Contact</div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Registration / CK (optional)</label>
-                  <Input
-                    value={form.companyRegistration}
-                    onChange={(e) => setForm((f) => ({ ...f, companyRegistration: e.target.value }))}
-                    disabled={loading}
-                  />
+                  <label className="text-sm font-medium">Name</label>
+                  <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} disabled={loading} />
+                  {errors.name ? <div className="text-xs text-danger">{errors.name}</div> : null}
                 </div>
+
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">VAT number (optional)</label>
-                  <Input value={form.vatNumber} onChange={(e) => setForm((f) => ({ ...f, vatNumber: e.target.value }))} disabled={loading} />
+                  <label className="text-sm font-medium">Email (optional)</label>
+                  <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} disabled={loading} />
+                  {errors.email ? <div className="text-xs text-danger">{errors.email}</div> : null}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Phone (optional)</label>
+                  <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} disabled={loading} />
                 </div>
               </div>
-            </div>
 
-            <div className="space-y-2 border-t border-border pt-4">
-              <label className="text-sm font-medium">Address (optional)</label>
-              <Input value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} disabled={loading} />
-            </div>
+              <div className="space-y-3 border-t border-border pt-4">
+                <div className="text-sm font-semibold">Company</div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Company / trading name (optional)</label>
+                  <Input value={form.companyName} onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))} disabled={loading} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Website (optional)</label>
+                  <Input type="url" value={form.website} onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))} disabled={loading} />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Registration / CK (optional)</label>
+                    <Input
+                      value={form.companyRegistration}
+                      onChange={(e) => setForm((f) => ({ ...f, companyRegistration: e.target.value }))}
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">VAT number (optional)</label>
+                    <Input value={form.vatNumber} onChange={(e) => setForm((f) => ({ ...f, vatNumber: e.target.value }))} disabled={loading} />
+                  </div>
+                </div>
+              </div>
 
-            <div className="pt-2 text-xs text-muted-foreground">
-              Tip: keep client names consistent so AI pricing suggestions work better.
-            </div>
-          </form>
-        </Card>
+              <div className="space-y-2 border-t border-border pt-4">
+                <label className="text-sm font-medium">Address (optional)</label>
+                <Input value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} disabled={loading} />
+              </div>
+
+              <div className="pt-2 text-xs text-muted-foreground">
+                Tip: keep client names consistent so AI pricing suggestions work better.
+              </div>
+            </form>
+          </Surface>
+        </div>
       </AppShell>
     </RedirectIfReadOnly>
   );

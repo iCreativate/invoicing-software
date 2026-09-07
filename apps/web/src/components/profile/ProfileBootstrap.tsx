@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { isDemoUiActive } from '@/lib/demo/accounts';
-import { purgeBrowserSupabaseAuth, shouldUseInertSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { demoModeEnabled, isDemoUiActive } from '@/lib/demo/accounts';
+import { clearSupabaseBrowserInert, purgeBrowserSupabaseAuth, shouldUseInertSupabaseBrowserClient } from '@/lib/supabase/browser';
 
 /** Runs once per full page load to attach referral attribution from signup metadata. */
 export function ProfileBootstrap() {
@@ -10,6 +10,10 @@ export function ProfileBootstrap() {
   useEffect(() => {
     if (ran.current) return;
     ran.current = true;
+    if (!demoModeEnabled()) {
+      clearSupabaseBrowserInert();
+      void fetch('/api/demo/logout', { method: 'POST' });
+    }
     // Sample / unreachable modes must not leave GoTrue trying to refresh stale tokens.
     if (isDemoUiActive() || shouldUseInertSupabaseBrowserClient()) {
       purgeBrowserSupabaseAuth();

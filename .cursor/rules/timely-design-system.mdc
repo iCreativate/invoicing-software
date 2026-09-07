@@ -1,0 +1,30 @@
+---
+description: Timely design system — use tokens and UI primitives; do not invent page-level visual language.
+globs: apps/web/**/*.{ts,tsx,css}
+alwaysApply: true
+---
+
+# Timely design system
+
+Landing and app share one system. Presentation must come from `apps/web/src/theme/tokens.ts`, `apps/web/src/app/globals.css`, and `apps/web/src/components/ui`.
+
+**Palette:** warm canvas `#F1F0EC`, surfaces `#FFFFFF`, ink `#0B0F14`, navy `#0F141C`, accent blue `#2563EB`, indigo/violet for AI, emerald for paid/success. Do not invent colours, type sizes, radii, shadows, or motion on a page. Do not wrap every section in a card. White cards must clearly lift off the warm canvas via `--shadow-elevated`.
+
+**Type:** `Text` / `.ti-display` `.ti-h1` `.ti-h2` `.ti-h3` `.ti-body` `.ti-small` `.ti-caption` `.ti-financial-display` `.ti-financial-value` `.ti-meta`. Financial figures use `Amount` or `.ti-amount` (tabular mono).
+
+**Surfaces:** `Surface` variants `primary | secondary | elevated | dark | interactive | flush`. Prefer soft border + layered elevation (`--shadow-elevated`). Flush + typography + dividers when a card is unnecessary. Do not wrap every section in a card.
+
+**Page uniqueness:** Dashboard may use navy `.ti-kpi-card` strips. Other pages should feel distinct — use soft `.ti-stat-card` metrics, flush financial heroes, or list-first shells. Do not clone the dashboard layout onto Money / Insights / list pages.
+
+**Controls:** `Button` (`primary secondary tertiary ghost danger success`, `loading`) — **primary actions use navy** (`--tl-navy`), not accent blue; blue is for links, focus rings, and charts. `Input`, `Select`, `Textarea`, `Field`, `Badge`, `Tabs` / `SectionTabs`, `Table`, dropdown, `Modal`, `Tooltip`, `EmptyState`, `ErrorState`, `Skeleton`, `PageHeader`, `SectionHeader`. Toasts via `notifySuccess` / `notifyError` only. Buttons use pill radius.
+
+**Motion:** 120 / 180 / 280 / 400ms and `--ti-ease`. No decorative animation.
+
+```tsx
+// ❌
+<div className="rounded-2xl bg-white shadow-xl p-6"><p className="text-3xl">{total}</p></div>
+
+// ✅
+<SectionHeader kicker="Outstanding" />
+<Amount display>{formatMoney(total, currency)}</Amount>
+```

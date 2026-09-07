@@ -126,6 +126,13 @@ export async function GET(request: Request) {
   }
 }
 
+function optionalText(body: Record<string, unknown>, key: string): string | null | undefined {
+  if (!(key in body)) return undefined;
+  if (body[key] == null) return null;
+  const s = String(body[key]).trim();
+  return s.length ? s : null;
+}
+
 export async function PATCH(request: Request) {
   try {
     const blocked = demoNotAvailableResponse(request);
@@ -140,7 +147,9 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ success: false, error: 'Invalid JSON body.' }, { status: 400 });
     }
 
-    const companyName = body.companyName != null ? String(body.companyName).trim() : '';
+    const existing = await loadProfile(supabase, ctx.workspaceOwnerId);
+    const companyName =
+      body.companyName !== undefined ? String(body.companyName ?? '').trim() : String(existing?.company_name ?? '');
     if (companyName.length < 2) {
       return NextResponse.json({ success: false, error: 'companyName is required (min 2 characters).' }, { status: 400 });
     }
@@ -148,37 +157,35 @@ export async function PATCH(request: Request) {
     const payload: Record<string, unknown> = {
       owner_id: ctx.workspaceOwnerId,
       company_name: companyName,
-      email: body.email != null ? String(body.email) || null : null,
-      phone: body.phone != null ? String(body.phone) || null : null,
-      address: body.address != null ? String(body.address) || null : null,
-      website: body.website != null ? String(body.website) || null : null,
-      vat_number: body.vatNumber != null ? String(body.vatNumber) || null : null,
-      logo_url: body.logoUrl !== undefined ? (body.logoUrl == null ? null : String(body.logoUrl)) : undefined,
-      bank_name: body.bankName != null ? String(body.bankName) || null : null,
-      account_name: body.accountName != null ? String(body.accountName) || null : null,
-      account_number: body.accountNumber != null ? String(body.accountNumber) || null : null,
-      branch_code: body.branchCode != null ? String(body.branchCode) || null : null,
-      account_type: body.accountType != null ? String(body.accountType) || null : null,
     };
+
+    const textFields: [string, string][] = [
+      ['email', 'email'],
+      ['phone', 'phone'],
+      ['address', 'address'],
+      ['website', 'website'],
+      ['vatNumber', 'vat_number'],
+      ['bankName', 'bank_name'],
+      ['accountName', 'account_name'],
+      ['accountNumber', 'account_number'],
+      ['branchCode', 'branch_code'],
+      ['accountType', 'account_type'],
+    ];
+    for (const [jsKey, col] of textFields) {
+      const v = optionalText(body, jsKey);
+      if (v !== undefined) payload[col] = v;
+    }
+    if ('logoUrl' in body) payload.logo_url = body.logoUrl == null ? null : String(body.logoUrl);
 
     // subscription_plan is server-managed (billing provider / admin). Ignore client attempts to spoof.
     if (body.preferredLocale !== undefined) payload.preferred_locale = String(body.preferredLocale);
     if (body.baseCurrency !== undefined) payload.base_currency = String(body.baseCurrency).toUpperCase();
 
-    const brandingPayload: Record<string, unknown> = {
-      ...payload,
-      invoice_accent_hex: body.invoiceAccentHex != null ? String(body.invoiceAccentHex) || null : null,
-      invoice_header_hex: body.invoiceHeaderHex != null ? String(body.invoiceHeaderHex) || null : null,
-      email_template_invoice: body.emailTemplateInvoice != null ? String(body.emailTemplateInvoice) || null : null,
-      email_template_reminder: body.emailTemplateReminder != null ? String(body.emailTemplateReminder) || null : null,
-    };
-
-    for (const k of Object.keys(brandingPayload)) {
-      if (brandingPayload[k] === undefined) delete brandingPayload[k];
-    }
-    for (const k of Object.keys(payload)) {
-      if (payload[k] === undefined) delete payload[k];
-    }
+    const brandingPayload: Record<string, unknown> = { ...payload };
+    if ('invoiceAccentHex' in body) brandingPayload.invoice_accent_hex = optionalText(body, 'invoiceAccentHex') ?? null;
+    if ('invoiceHeaderHex' in body) brandingPayload.invoice_header_hex = optionalText(body, 'invoiceHeaderHex') ?? null;
+    if ('emailTemplateInvoice' in body) brandingPayload.email_template_invoice = optionalText(body, 'emailTemplateInvoice') ?? null;
+    if ('emailTemplateReminder' in body) brandingPayload.email_template_reminder = optionalText(body, 'emailTemplateReminder') ?? null;
 
     let { data, error }: { data: any; error: any } = await supabase
       .from('company_profiles')

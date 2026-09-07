@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { generateText } from 'ai';
 import { getClaudeModel } from '@/lib/ai/anthropic';
+import { parseLlmJson } from '@/lib/ai/parseLlmJson';
 
 export async function POST(request: Request) {
   try {
@@ -17,7 +18,7 @@ export async function POST(request: Request) {
       temperature: 0.1,
     });
 
-    const json = JSON.parse(text);
+    const json = parseLlmJson<{ category?: string }>(text);
     const category = String(json.category ?? 'uncategorized').toLowerCase().replace(/\s+/g, '_');
     return NextResponse.json({ success: true, category });
   } catch (e: any) {

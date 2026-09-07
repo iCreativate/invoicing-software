@@ -1,31 +1,18 @@
-import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils/cn';
 
 export type InvoiceStatus = 'draft' | 'sent' | 'viewed' | 'partial' | 'paid' | 'overdue' | 'cancelled';
 
+const LABEL: Record<InvoiceStatus, string> = {
+  draft: 'Draft',
+  sent: 'Sent',
+  viewed: 'Viewed',
+  partial: 'Partially paid',
+  paid: 'Paid',
+  overdue: 'Overdue',
+  cancelled: 'Cancelled',
+};
+
 export function StatusBadge({ status }: { status: InvoiceStatus }) {
   const normalized = (status || 'draft').toLowerCase() as InvoiceStatus;
-  const label: Record<InvoiceStatus, string> = {
-    draft: 'Draft',
-    sent: 'Sent',
-    viewed: 'Viewed',
-    partial: 'Partially paid',
-    paid: 'Paid',
-    overdue: 'Overdue',
-    cancelled: 'Cancelled',
-  };
-
-  const variant: 'success' | 'partial' | 'danger' | 'primary' | 'outline' | 'default' =
-    normalized === 'paid'
-      ? 'success'
-      : normalized === 'partial'
-        ? 'partial'
-        : normalized === 'overdue'
-          ? 'danger'
-          : normalized === 'sent' || normalized === 'viewed'
-            ? 'primary'
-            : normalized === 'cancelled'
-              ? 'outline'
-              : 'default';
-
-  return <Badge variant={variant}>{label[normalized] ?? 'Draft'}</Badge>;
+  return <span className={cn('ti-status', `ti-status-${normalized}`)}>{LABEL[normalized] ?? 'Draft'}</span>;
 }

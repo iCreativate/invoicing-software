@@ -32,6 +32,11 @@ export type QuoteDetail = {
   totalAmount: number;
   notes: string | null;
   clientId: string;
+  clientName: string | null;
+  clientEmail: string | null;
+  clientPhone: string | null;
+  clientAddress: string | null;
+  clientCompanyName: string | null;
   convertedInvoiceId: string | null;
   publicShareId: string | null;
   viewedAt: string | null;

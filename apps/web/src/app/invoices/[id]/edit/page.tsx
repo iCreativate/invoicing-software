@@ -17,7 +17,7 @@ export default function EditInvoicePage() {
 
   return (
     <RedirectIfReadOnly href={id ? `${routes.app.invoices}/${id}` : routes.app.invoices}>
-      <AppShell title="Edit invoice" fullWidth>
+      <AppShell title="Edit invoice" fullWidth hideHeader>
         <div className="w-full">
           <InvoiceComposerModal open={true} onOpenChange={() => {}} mode="page" editInvoiceId={id || null} />
         </div>

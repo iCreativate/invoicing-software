@@ -13,7 +13,11 @@ import { getBrowserUserSafe } from '@/lib/supabase/browserAuth';
 import { isDemoUiActive } from '@/lib/demo/accounts';
 import { ProfileBootstrap } from '@/components/profile/ProfileBootstrap';
 import { CommandPalette } from '@/components/shell/CommandPalette';
-import { APP_NAV_GROUPS, APP_NAV_MORE, type AppNavItem } from '@/lib/navigation/app-nav';
+import { AskTimelyDrawer } from '@/components/ai/AskTimelyDrawer';
+import { APP_NAV_GROUPS, type AppNavItem } from '@/lib/navigation/app-nav';
+import { isNavItemActive } from '@/lib/navigation/nav-active';
+import { MoneySidebarMenu } from '@/components/money/MoneyPageSwitcher';
+import { AdminSidebarMenu } from '@/components/settings/AdminPageSwitcher';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
 import {
   DropdownMenu,
@@ -36,9 +40,8 @@ function NavLink({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+  const active = isNavItemActive(pathname ?? '', item.href);
   const Icon = item.icon;
-  const ai = item.href === routes.app.insights;
   return (
     <Link
       href={item.href}
@@ -50,17 +53,13 @@ function NavLink({
       )}
       aria-current={active ? 'page' : undefined}
     >
-      <Icon className={cn('h-4 w-4 shrink-0 opacity-75', active && 'opacity-100')} />
+      <Icon className={cn('h-4 w-4 shrink-0 opacity-80', active && 'opacity-100 text-[var(--tl-accent)]')} />
       {!collapsed ? (
         <span className="flex min-w-0 flex-1 items-center gap-2">
           <span className="truncate">{item.label}</span>
-          {ai ? (
-            <span className="rounded-badge bg-white/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#f6f4f0]">
-              AI
-            </span>
-          ) : null}
         </span>
       ) : null}
+      {!collapsed && active ? <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[var(--tl-ink-3)]" aria-hidden /> : null}
     </Link>
   );
 }
@@ -83,7 +82,6 @@ function SidebarNav({
   const isDemo = Boolean(userEmailLabel?.includes('demo@'));
   const workspaceName = isDemo ? 'Demo Business' : 'Timely';
   const planLabel = isDemo ? 'Demo' : 'Free';
-  const userName = userEmailLabel?.split('@')[0] || 'Account';
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -128,11 +126,11 @@ function SidebarNav({
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href={routes.app.settings} onClick={onCloseMobile}>
-                  Settings
+                  Workspace
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href={routes.app.billing} onClick={onCloseMobile}>
+                <Link href={routes.app.settingsBilling} onClick={onCloseMobile}>
                   Billing · {planLabel}
                 </Link>
               </DropdownMenuItem>
@@ -168,37 +166,43 @@ function SidebarNav({
             ) : group.id !== 'overview' ? (
               <div className="mx-2 my-2 h-px bg-sidebar-border" />
             ) : null}
-            {group.items.map((item) => (
-              <NavLink key={item.href} item={item} collapsed={navCollapsed} onNavigate={onCloseMobile} />
-            ))}
+            {group.items.map((item) =>
+              item.href === routes.app.money ? (
+                <MoneySidebarMenu
+                  key={item.href}
+                  collapsed={navCollapsed}
+                  onNavigate={onCloseMobile}
+                />
+              ) : item.href === routes.app.settings ? (
+                <AdminSidebarMenu
+                  key={item.href}
+                  collapsed={navCollapsed}
+                  onNavigate={onCloseMobile}
+                />
+              ) : (
+                <NavLink key={item.href} item={item} collapsed={navCollapsed} onNavigate={onCloseMobile} />
+              )
+            )}
           </div>
-        ))}
-        {showLabels ? <div className="nav-section">More</div> : <div className="mx-2 my-2 h-px bg-sidebar-border" />}
-        {APP_NAV_MORE.map((item) => (
-          <NavLink key={item.href} item={item} collapsed={navCollapsed} onNavigate={onCloseMobile} />
         ))}
       </nav>
 
-      <div className="border-t border-sidebar-border p-3">
-        <Link
-          href={routes.app.profile}
-          onClick={onCloseMobile}
+      <div className="mt-auto border-t border-sidebar-border p-3">
+        <button
+          type="button"
+          onClick={() => {
+            onCloseMobile();
+            window.dispatchEvent(new Event('ti-sidebar-logout'));
+          }}
           className={cn(
-            'flex items-center gap-2.5 rounded-md px-1 py-0.5 hover:bg-sidebar-hover',
-            !showLabels && 'justify-center px-0'
+            'nav-item w-full',
+            !showLabels && 'justify-center px-2'
           )}
-          title={showLabels ? undefined : userName}
+          title={showLabels ? undefined : 'Log out'}
         >
-          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10 text-[11px] font-semibold text-[#f6f4f0]">
-            {(userEmailLabel ?? 'U').charAt(0).toUpperCase()}
-          </div>
-          {showLabels ? (
-            <div className="min-w-0">
-              <div className="truncate text-[13px] font-medium text-sidebar-text-active">{userName}</div>
-              <div className="truncate text-[11px] text-sidebar-text">{planLabel}</div>
-            </div>
-          ) : null}
-        </Link>
+          <LogOut className="h-4 w-4 shrink-0 opacity-80" />
+          {showLabels ? <span className="truncate">Logout</span> : null}
+        </button>
       </div>
     </div>
   );
@@ -284,7 +288,7 @@ export function AppShell({
     });
   }, []);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     try {
       await fetch('/api/demo/logout', { method: 'POST' });
     } catch {
@@ -299,7 +303,15 @@ export function AppShell({
       }
     }
     window.location.assign('/');
-  };
+  }, []);
+
+  useEffect(() => {
+    const onSidebarLogout = () => {
+      void handleLogout();
+    };
+    window.addEventListener('ti-sidebar-logout', onSidebarLogout);
+    return () => window.removeEventListener('ti-sidebar-logout', onSidebarLogout);
+  }, [handleLogout]);
 
   return (
     <div className="app-shell ti-fintech-app">
@@ -323,8 +335,8 @@ export function AppShell({
 
       {mobileOpen ? (
         <div className="fixed inset-0 z-50 md:hidden">
-          <button type="button" className="absolute inset-0 bg-black/40" aria-label="Close menu" onClick={() => setMobileOpen(false)} />
-          <div className="sidebar absolute inset-y-0 left-0 flex w-[min(100%,min(288px,calc(100vw-env(safe-area-inset-left)-env(safe-area-inset-right))))] max-w-[100vw] flex-col pb-[env(safe-area-inset-bottom)] shadow-elevated">
+          <button type="button" className="absolute inset-0 bg-black/40 motion-safe:animate-[ti-overlay-in_180ms_ease-out]" aria-label="Close menu" onClick={() => setMobileOpen(false)} />
+          <div className="sidebar absolute inset-y-0 left-0 flex w-[min(100%,min(288px,calc(100vw-env(safe-area-inset-left)-env(safe-area-inset-right))))] max-w-[100vw] flex-col pb-[env(safe-area-inset-bottom)] shadow-elevated motion-safe:animate-[ti-fade-up_200ms_ease-out]">
             <SidebarNav
               variant="mobile"
               collapsed={false}
@@ -358,11 +370,14 @@ export function AppShell({
               </Link>
             </div>
 
-            <div className="flex min-w-0 flex-1 items-center">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               <CommandPalette />
+              <div className="hidden shrink-0 sm:block">
+                <AskTimelyDrawer />
+              </div>
             </div>
 
-            <div className="flex shrink-0 items-center justify-end gap-1">
+            <div className="flex shrink-0 items-center justify-end gap-1.5">
               <Button
                 type="button"
                 variant="ghost"
@@ -379,9 +394,9 @@ export function AppShell({
               {showQuickCreate ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="primary" size="sm" className="h-10 w-10 px-0 sm:h-8 sm:w-auto sm:gap-1.5 sm:px-3" aria-label="Quick create">
+                    <Button type="button" variant="primary" size="sm" className="h-10 gap-1.5 rounded-full px-4 sm:h-9" aria-label="Quick create">
                       <Plus className="h-3.5 w-3.5" />
-                      <span className="hidden lg:inline">Create</span>
+                      <span className="hidden sm:inline">Create</span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-52">
@@ -412,16 +427,21 @@ export function AppShell({
                   <DropdownMenuItem asChild>
                     <Link href={routes.app.notifications}>Open notification centre</Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href={routes.app.settingsNotifications}>Notification preferences</Link>
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="ghost" size="sm" className="h-10 max-w-[160px] gap-2 px-1.5 md:h-8">
-                    <div className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                  <Button type="button" variant="ghost" size="sm" className="h-10 max-w-[180px] gap-2 rounded-full px-1.5 md:h-9">
+                    <span className="hidden truncate text-left text-[13px] font-medium lg:inline">
+                      {(userEmail?.split('@')[0] ?? 'Account')}
+                    </span>
+                    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--tl-navy)] text-[11px] font-semibold text-white">
                       {(userEmail?.[0] ?? 'U').toUpperCase()}
                     </div>
-                    <span className="hidden truncate text-left text-[13px] font-medium lg:inline">{userEmail ?? 'Account'}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
@@ -430,7 +450,7 @@ export function AppShell({
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link href={routes.app.profile}>Profile</Link>
+                    <Link href={routes.app.settingsProfile}>Profile</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href={routes.app.settings}>Settings</Link>

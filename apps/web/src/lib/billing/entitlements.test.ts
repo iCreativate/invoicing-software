@@ -14,7 +14,7 @@ describe('entitlements', () => {
   });
 
   it('exposes published prices', () => {
-    expect(getPlan('pro').priceZarMonthly).toBe(299);
+    expect(getPlan('pro').priceZarMonthly).toBe(59);
     expect(getPlan('business').priceZarMonthly).toBe(799);
   });
 

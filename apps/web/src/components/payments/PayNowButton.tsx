@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Lock, ShieldCheck } from 'lucide-react';
-import { cn } from '@/lib/utils/cn';
+import { Select } from '@/components/ui/Input';
 
 type Provider = 'payfast' | 'snapscan' | 'ozow';
 
@@ -22,7 +21,6 @@ export function PayNowButton({
   invoiceId: string;
   disabled?: boolean;
   label?: string;
-  /** Tighter layout for tables / dense rows */
   compact?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
@@ -43,19 +41,17 @@ export function PayNowButton({
       const url = String(json.data.redirectUrl ?? '');
       if (!url) throw new Error('Missing redirect URL');
       window.location.assign(url);
-    } catch (e: any) {
-      setError(e?.message ?? 'Payment failed');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Payment failed');
       setLoading(false);
     }
   };
 
-  const active = METHODS.find((m) => m.id === provider)!;
-
   if (compact) {
     return (
-      <div className="space-y-1.5">
-        <select
-          className="h-9 w-full max-w-[11rem] rounded-lg border border-border bg-card px-2 text-xs font-medium shadow-[var(--shadow-sm)]"
+      <div className="space-y-2">
+        <Select
+          className="max-w-[11rem]"
           value={provider}
           onChange={(e) => setProvider(e.target.value as Provider)}
           disabled={disabled || loading}
@@ -64,44 +60,20 @@ export function PayNowButton({
           <option value="payfast">PayFast — card / EFT</option>
           <option value="snapscan">SnapScan — QR</option>
           <option value="ozow">Ozow — instant EFT</option>
-        </select>
-        <Button size="sm" className="h-9 w-full max-w-[11rem] text-xs" onClick={onPay} disabled={disabled || loading}>
-          <Lock className="mr-1.5 h-3.5 w-3.5 opacity-80" />
-          {loading ? 'Opening…' : label}
+        </Select>
+        <Button size="sm" onClick={onPay} disabled={disabled} loading={loading}>
+          {label}
         </Button>
-        {error ? <div className="max-w-[11rem] text-[10px] leading-snug text-danger">{error}</div> : null}
+        {error ? <p className="ti-field-error">{error}</p> : null}
       </div>
     );
   }
 
   return (
-    <div
-      className={cn(
-        'rounded-2xl border border-border bg-gradient-to-b from-card to-muted/20 p-4 shadow-[var(--shadow-sm)]',
-        'ring-1 ring-black/[0.03] dark:ring-white/[0.06]'
-      )}
-    >
-      <div className="flex items-start gap-3">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-          <ShieldCheck className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold">Pay this invoice</div>
-          <div className="mt-0.5 text-xs text-muted-foreground">256-bit SSL · You’ll be redirected to your chosen provider</div>
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-2">
+    <div>
+      <div className="space-y-2">
         {METHODS.map((m) => (
-          <label
-            key={m.id}
-            className={cn(
-              'flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 transition',
-              provider === m.id
-                ? 'border-primary bg-primary/5 shadow-[var(--shadow-sm)]'
-                : 'border-border bg-card/60 hover:border-primary/30'
-            )}
-          >
+          <label key={m.id} className="flex cursor-pointer items-baseline gap-3">
             <input
               type="radio"
               name="pay-method"
@@ -110,26 +82,21 @@ export function PayNowButton({
               onChange={() => setProvider(m.id)}
               disabled={disabled || loading}
             />
-            <div>
-              <div className="text-sm font-semibold">{m.title}</div>
-              <div className="mt-0.5 text-xs text-muted-foreground">{m.sub}</div>
-            </div>
+            <span>
+              <span className="text-sm text-[var(--tl-ink)]">{m.title}</span>
+              <span className="ti-caption mt-0.5 block">{m.sub}</span>
+            </span>
           </label>
         ))}
       </div>
-
-      <Button className="mt-4 w-full" onClick={onPay} disabled={disabled || loading}>
-        <Lock className="mr-2 h-4 w-4 opacity-90" />
-        {loading ? 'Opening secure checkout…' : label}
+      <Button className="mt-5" onClick={onPay} disabled={disabled} loading={loading}>
+        {label}
       </Button>
-
-      <div className="mt-3 text-center text-[11px] text-muted-foreground">
-        {active.id === 'payfast' ? 'Visa, Mastercard, Mobicred, and more via PayFast.' : null}
-        {active.id === 'snapscan' ? 'Opens SnapScan so you can scan and pay.' : null}
-        {active.id === 'ozow' ? 'Instant EFT requires Ozow merchant setup in your environment.' : null}
-      </div>
-
-      {error ? <div className="mt-2 rounded-xl bg-danger/10 p-2 text-center text-xs text-danger">{error}</div> : null}
+      {error ? (
+        <p className="ti-field-error mt-2" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -60,7 +60,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   pro: {
     id: 'pro',
     label: 'Pro',
-    priceZarMonthly: 299,
+    priceZarMonthly: 59,
     entitlements: {
       recurring_invoices: true,
       automated_reminders: true,

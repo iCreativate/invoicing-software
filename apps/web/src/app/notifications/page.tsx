@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AppShell } from '@/components/layout/AppShell';
-import { PageBody } from '@/components/layout/PageLayout';
-import { GlassCard } from '@/components/dashboard-ui/GlassCard';
-import { PageHeader } from '@/components/dashboard-ui/PageHeader';
+import { AppPageHero } from '@/components/layout/AppPageHero';
+import { Surface } from '@/components/ui/Card';
+import { SectionHeader } from '@/components/ui/PageHeader';
+import { Button } from '@/components/ui/Button';
+import { routes } from '@/lib/routing/routes';
 
 type NotificationRow = {
   id: string;
@@ -54,44 +56,61 @@ export default function NotificationsPage() {
   }, []);
 
   return (
-    <AppShell title="Notifications">
-      <PageBody>
-        <PageHeader title="Notification centre" description="Workspace events for your TimelyInvoices account." />
+    <AppShell hideHeader title="Notifications">
+      <div className="ti-page-enter flex min-h-0 w-full flex-1 flex-col gap-4">
+        <AppPageHero
+          kicker="Inbox"
+          title="Notification centre"
+          description="Workspace events for your TimelyInvoices account."
+          image="collections"
+          imageAlt="Stay on top of activity"
+          compact
+          actions={
+            <Button asChild variant="secondary" size="sm">
+              <Link href={routes.app.settingsNotifications}>Preferences</Link>
+            </Button>
+          }
+        />
 
         {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : null}
         {error ? <p className="text-sm text-danger">{error}</p> : null}
 
         {!loading && !error ? (
-          <GlassCard className="flex min-h-0 flex-1 flex-col divide-y divide-border overflow-auto">
-            {rows.length === 0 ? (
-              <div className="flex flex-1 items-center justify-center px-4 py-10 text-center text-sm text-muted-foreground">No notifications yet.</div>
-            ) : (
-              rows.map((n) => {
-                const inner = (
-                  <>
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <span className="font-medium text-foreground">{n.title}</span>
-                      <span className="text-[11px] text-muted-foreground">{formatWhen(n.createdAt)}</span>
+          <Surface variant="elevated" className="flex min-h-0 flex-1 flex-col overflow-auto p-5 sm:p-6">
+            <SectionHeader kicker="Activity" description={rows.length ? `${rows.length} notification${rows.length === 1 ? '' : 's'}` : 'Nothing new'} />
+            <div className="mt-4 divide-y divide-border">
+              {rows.length === 0 ? (
+                <div className="flex flex-1 items-center justify-center px-4 py-10 text-center text-sm text-muted-foreground">
+                  No notifications yet.
+                </div>
+              ) : (
+                rows.map((n) => {
+                  const inner = (
+                    <>
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <span className="font-medium text-foreground">{n.title}</span>
+                        <span className="text-[11px] text-muted-foreground">{formatWhen(n.createdAt)}</span>
+                      </div>
+                      {n.body ? <p className="mt-1 text-sm text-muted-foreground">{n.body}</p> : null}
+                    </>
+                  );
+                  return (
+                    <div key={n.id} className="py-4 first:pt-0">
+                      {n.href ? (
+                        <Link href={n.href} className="block transition-colors hover:opacity-90">
+                          {inner}
+                        </Link>
+                      ) : (
+                        inner
+                      )}
                     </div>
-                    {n.body ? <p className="mt-1 text-sm text-muted-foreground">{n.body}</p> : null}
-                  </>
-                );
-                return (
-                  <div key={n.id} className="px-4 py-4">
-                    {n.href ? (
-                      <Link href={n.href} className="block transition-colors hover:opacity-90">
-                        {inner}
-                      </Link>
-                    ) : (
-                      inner
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </GlassCard>
+                  );
+                })
+              )}
+            </div>
+          </Surface>
         ) : null}
-      </PageBody>
+      </div>
     </AppShell>
   );
 }

@@ -1,19 +1,44 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AppShell } from '@/components/layout/AppShell';
-import { Card } from '@/components/ui/Card';
+import { Surface } from '@/components/ui/Card';
+import { SectionHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Input, Select } from '@/components/ui/Input';
+import { Field } from '@/components/ui/Field';
+import { Amount } from '@/components/ui/Text';
+import { PageSummary } from '@/components/layout/PageLayout';
+import { EmptyState } from '@/components/dashboard-ui/EmptyState';
 import { fetchClientsList } from '@/features/clients/api';
 import type { ClientListItem } from '@/features/clients/types';
-import { createRecurringSchedule, fetchRecurringList, setRecurringActive, type RecurringScheduleRow } from '@/features/recurring/api';
+import {
+  createRecurringSchedule,
+  fetchRecurringList,
+  setRecurringActive,
+  type RecurringScheduleRow,
+} from '@/features/recurring/api';
 import { todayISO } from '@/components/invoice/composer/utils';
 import { formatMoney } from '@/lib/format/money';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { routes } from '@/lib/routing/routes';
 import { notifyError, notifySuccess } from '@/lib/notify';
+import { MONEY_INVOICE_SUBNAV, MoneySubNav, MoneyWorkspace } from '@/components/money/MoneyWorkspace';
+import { MoneyKpiCard, MoneyKpiGrid } from '@/components/money/MoneyKpiCard';
+import { RefreshCw, Banknote, PauseCircle, Layers } from 'lucide-react';
+import { cn } from '@/lib/utils/cn';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
+function scheduleTotal(r: RecurringScheduleRow) {
+  const line = r.quantity * r.unitPrice;
+  return line + line * (r.vatRate / 100);
+}
+
+function formatNextRun(iso: string) {
+  const d = new Date(`${iso}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
 
 export default function RecurringPage() {
   const [loading, setLoading] = useState(true);
@@ -64,181 +89,312 @@ export default function RecurringPage() {
     };
   }, []);
 
-  return (
-    <AppShell
-      title="Recurring invoices"
-      actions={
-        <Link href={routes.app.invoices}>
-          <Button variant="secondary">Invoices</Button>
-        </Link>
-      }
-    >
-      <div className="flex min-h-0 w-full flex-1 flex-col gap-4 lg:grid lg:grid-cols-[1fr_380px]">
-        <Card className="flex min-h-0 flex-1 flex-col overflow-auto p-5">
-          <div className="text-sm font-semibold">Schedules</div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            A secure cron endpoint generates invoices and can email/WhatsApp links when{' '}
-            <code className="text-xs">CRON_SECRET</code> is set. Example:{' '}
-            <code className="text-xs">GET /api/cron/recurring?secret=…</code>
-          </p>
-          {error ? <div className="mt-4 rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
-          {loading ? (
-            <div className="mt-4 space-y-2">
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-            </div>
-          ) : rows.length === 0 ? (
-            <div className="mt-6 rounded-[var(--ti-radius)] border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">No recurring schedules yet.</div>
-          ) : (
-            <div className="mt-4 space-y-3">
-              {rows.map((r) => {
-                const line = r.quantity * r.unitPrice;
-                const vat = line * (r.vatRate / 100);
-                const total = line + vat;
-                return (
-                  <div
-                    key={r.id}
-                    className="flex flex-col gap-3 rounded-[var(--ti-radius)] border border-border bg-card p-4 transition-[box-shadow,transform] duration-150 hover:-translate-y-px hover:shadow-[var(--ti-shadow)] sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div>
-                      <div className="font-semibold tracking-tight">{r.title}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {r.clientName ?? 'Client'} · {r.frequency} · next {r.nextRunDate}
-                      </div>
-                      <div className="ti-num mt-1 text-sm">{formatMoney(total, r.currency)} / run</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        Reminders: {r.remindEmail ? 'Email' : ''}
-                        {r.remindEmail && r.remindWhatsapp ? ' · ' : ''}
-                        {r.remindWhatsapp ? 'WhatsApp' : ''}
-                        {!r.remindEmail && !r.remindWhatsapp ? 'Off' : ''}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={async () => {
-                          try {
-                            await setRecurringActive(r.id, !r.active);
-                            await reload();
-                            notifySuccess(r.active ? 'Schedule paused.' : 'Schedule resumed.');
-                          } catch (e: unknown) {
-                            notifyError(e instanceof Error ? e.message : 'Could not update schedule.');
-                          }
-                        }}
-                      >
-                        {r.active ? 'Pause' : 'Resume'}
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </Card>
+  const metrics = useMemo(() => {
+    const currency = rows[0]?.currency ?? 'ZAR';
+    const active = rows.filter((r) => r.active);
+    const paused = rows.length - active.length;
+    const perRun = active.reduce((sum, r) => sum + scheduleTotal(r), 0);
+    return { currency, active: active.length, paused, perRun, total: rows.length };
+  }, [rows]);
 
-        <Card className="p-5 h-fit">
-          <div className="text-sm font-semibold">New schedule</div>
-          <div className="mt-4 grid gap-3">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Client</label>
-              <select
-                className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-              >
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Title</label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Line description</label>
-              <Input value={lineDescription} onChange={(e) => setLineDescription(e.target.value)} />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Qty</label>
-                <Input value={quantity} onChange={(e) => setQuantity(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Unit price</label>
-                <Input value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Frequency</label>
-              <select
-                className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
-                value={frequency}
-                onChange={(e) => setFrequency(e.target.value as typeof frequency)}
-              >
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-                <option value="quarterly">Quarterly</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Next run</label>
-              <Input type="date" value={nextRun} onChange={(e) => setNextRun(e.target.value)} />
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={remindEmail} onChange={(e) => setRemindEmail(e.target.checked)} />
-              Remind via email (Resend)
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={remindWhatsapp} onChange={(e) => setRemindWhatsapp(e.target.checked)} />
-              Remind via WhatsApp (Twilio)
-            </label>
-            {remindWhatsapp ? (
-              <Input
-                value={whatsappPhone}
-                onChange={(e) => setWhatsappPhone(e.target.value)}
-                placeholder="+27… override (else uses client phone)"
+  const toggleActive = async (r: RecurringScheduleRow) => {
+    try {
+      await setRecurringActive(r.id, !r.active);
+      await reload();
+      notifySuccess(r.active ? 'Schedule paused.' : 'Schedule resumed.');
+    } catch (e: unknown) {
+      notifyError(e instanceof Error ? e.message : 'Could not update schedule.');
+    }
+  };
+
+  return (
+    <MoneyWorkspace
+      title="Recurring"
+      description="Automate retainers and repeat invoices on a schedule."
+      actions={
+        <Button asChild size="sm">
+          <Link href={`${routes.app.invoices}/new`}>New invoice</Link>
+        </Button>
+      }
+      subNav={<MoneySubNav items={MONEY_INVOICE_SUBNAV} />}
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-4 md:gap-5">
+        <PageSummary>
+          <MoneyKpiGrid>
+            <MoneyKpiCard
+              icon={RefreshCw}
+              label="Active"
+              value={metrics.active}
+              trend={metrics.active === 1 ? 'Schedule running' : 'Schedules running'}
+              trendUp={metrics.active > 0}
+            />
+            <MoneyKpiCard
+              icon={Banknote}
+              label="Per run"
+              value={formatMoney(metrics.perRun, metrics.currency)}
+              trend="Across active schedules"
+            />
+            <MoneyKpiCard
+              icon={PauseCircle}
+              label="Paused"
+              value={metrics.paused}
+              trend={metrics.paused > 0 ? 'Ready to resume' : 'None paused'}
+            />
+            <MoneyKpiCard
+              icon={Layers}
+              label="Total"
+              value={metrics.total}
+              trend="In this workspace"
+            />
+          </MoneyKpiGrid>
+        </PageSummary>
+
+        <div className="flex min-h-0 flex-1 flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+          <Surface variant="elevated" className="ti-panel ti-invoice-ledger flex min-h-0 flex-1 flex-col">
+            <div className="ti-panel-head">
+              <SectionHeader
+                kicker="Schedules"
+                title={`${rows.length} schedule${rows.length === 1 ? '' : 's'}`}
+                description="Cron generates invoices and can email or WhatsApp links when configured."
               />
+            </div>
+
+            {error ? (
+              <div className="ti-error mt-4" role="alert">
+                <div className="font-medium">Couldn’t load schedules</div>
+                <p className="ti-error-body">{error}</p>
+              </div>
             ) : null}
-            <Button
-              disabled={saving || !clientId || !unitPrice || Number(unitPrice) <= 0}
-              onClick={async () => {
-                setSaving(true);
-                try {
-                  await createRecurringSchedule({
-                    clientId,
-                    title,
-                    lineDescription,
-                    quantity: Number(quantity) || 1,
-                    unitPrice: Number(unitPrice),
-                    vatRate: 15,
-                    currency: 'ZAR',
-                    frequency,
-                    nextRunDate: nextRun,
-                    reminderDaysBefore: 3,
-                    remindEmail,
-                    remindWhatsapp,
-                    whatsappPhone: whatsappPhone || null,
-                  });
-                  await reload();
-                  notifySuccess('Recurring schedule created.');
-                } catch (e: any) {
-                  const msg = e?.message ?? 'Save failed';
-                  setError(msg);
-                  notifyError(msg);
-                } finally {
-                  setSaving(false);
-                }
-              }}
-            >
-              {saving ? 'Saving…' : 'Save schedule'}
-            </Button>
-          </div>
-        </Card>
+
+            {loading ? (
+              <div className="mt-5 space-y-0" aria-busy="true" aria-label="Loading schedules">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-6 border-b border-border py-4">
+                    <Skeleton className="h-4 w-36 flex-1" />
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-5 w-20" />
+                    <Skeleton className="h-8 w-20 rounded-full" />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {!loading && !error && rows.length === 0 ? (
+              <div className="mt-6">
+                <EmptyState
+                  kicker="No schedules"
+                  title="Automate your next retainer."
+                  description="Create a schedule on the right — invoices generate on the next run date."
+                />
+              </div>
+            ) : null}
+
+            {!loading && rows.length > 0 ? (
+              <>
+                <div className="mt-4 space-y-3 md:hidden">
+                  {rows.map((r) => {
+                    const total = scheduleTotal(r);
+                    return (
+                      <div
+                        key={r.id}
+                        className="ti-invoice-card"
+                        data-tone={r.active ? 'open' : 'draft'}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="ti-invoice-client">{r.title}</div>
+                            <div className="ti-invoice-meta">
+                              {r.clientName ?? 'Client'} · {r.frequency}
+                            </div>
+                          </div>
+                          <span className={cn('ti-status', r.active ? 'ti-status-sent' : 'ti-status-draft')}>
+                            {r.active ? 'Active' : 'Paused'}
+                          </span>
+                        </div>
+                        <div className="flex items-end justify-between gap-3">
+                          <div>
+                            <div className="ti-meta">Per run</div>
+                            <div className="ti-invoice-amount mt-1">{formatMoney(total, r.currency)}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="ti-meta">Next</div>
+                            <div className="ti-invoice-due mt-1">{formatNextRun(r.nextRunDate)}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between border-t border-[var(--tl-line)] pt-3">
+                          <span className="ti-invoice-meta">
+                            Reminders:{' '}
+                            {[r.remindEmail ? 'Email' : null, r.remindWhatsapp ? 'WhatsApp' : null]
+                              .filter(Boolean)
+                              .join(' · ') || 'Off'}
+                          </span>
+                          <Button type="button" size="sm" variant="secondary" onClick={() => void toggleActive(r)}>
+                            {r.active ? 'Pause' : 'Resume'}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4 hidden min-h-0 flex-1 overflow-auto md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead>Schedule</TableHead>
+                        <TableHead>Client</TableHead>
+                        <TableHead className="text-right">Per run</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Next</TableHead>
+                        <TableHead className="w-28 text-right">
+                          <span className="sr-only">Actions</span>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rows.map((r) => {
+                        const total = scheduleTotal(r);
+                        return (
+                          <TableRow key={r.id} data-tone={r.active ? 'open' : 'draft'}>
+                            <TableCell>
+                              <div className="ti-invoice-client">{r.title}</div>
+                              <div className="ti-invoice-meta capitalize">
+                                {r.frequency}
+                                {r.remindEmail || r.remindWhatsapp
+                                  ? ` · ${[r.remindEmail ? 'Email' : null, r.remindWhatsapp ? 'WhatsApp' : null]
+                                      .filter(Boolean)
+                                      .join(' · ')}`
+                                  : ' · Reminders off'}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="ti-invoice-client">{r.clientName ?? '—'}</div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="ti-invoice-amount">{formatMoney(total, r.currency)}</div>
+                            </TableCell>
+                            <TableCell>
+                              <span className={cn('ti-status', r.active ? 'ti-status-sent' : 'ti-status-draft')}>
+                                {r.active ? 'Active' : 'Paused'}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="ti-invoice-due">{formatNextRun(r.nextRunDate)}</div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button type="button" size="sm" variant="secondary" onClick={() => void toggleActive(r)}>
+                                {r.active ? 'Pause' : 'Resume'}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            ) : null}
+          </Surface>
+
+          <Surface variant="elevated" className="ti-panel h-fit">
+            <div className="ti-panel-head">
+              <SectionHeader kicker="New schedule" title="Create" description="Set the line, frequency, and next run." />
+            </div>
+            <div className="mt-4 grid gap-3.5">
+              <Field label="Client">
+                <Select value={clientId} onChange={(e) => setClientId(e.target.value)} aria-label="Client">
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Title">
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+              </Field>
+              <Field label="Line description">
+                <Input value={lineDescription} onChange={(e) => setLineDescription(e.target.value)} />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Qty">
+                  <Input value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+                </Field>
+                <Field label="Unit price">
+                  <Input value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} />
+                </Field>
+              </div>
+              <Field label="Frequency">
+                <Select
+                  value={frequency}
+                  onChange={(e) => setFrequency(e.target.value as typeof frequency)}
+                  aria-label="Frequency"
+                >
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                </Select>
+              </Field>
+              <Field label="Next run">
+                <Input type="date" value={nextRun} onChange={(e) => setNextRun(e.target.value)} />
+              </Field>
+              <label className="flex items-center gap-2 text-sm text-[var(--tl-ink-2)]">
+                <input type="checkbox" checked={remindEmail} onChange={(e) => setRemindEmail(e.target.checked)} />
+                Remind via email
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[var(--tl-ink-2)]">
+                <input
+                  type="checkbox"
+                  checked={remindWhatsapp}
+                  onChange={(e) => setRemindWhatsapp(e.target.checked)}
+                />
+                Remind via WhatsApp
+              </label>
+              {remindWhatsapp ? (
+                <Input
+                  value={whatsappPhone}
+                  onChange={(e) => setWhatsappPhone(e.target.value)}
+                  placeholder="+27… override (else uses client phone)"
+                />
+              ) : null}
+              <Button
+                className="mt-1"
+                disabled={saving || !clientId || !unitPrice || Number(unitPrice) <= 0}
+                onClick={async () => {
+                  setSaving(true);
+                  try {
+                    await createRecurringSchedule({
+                      clientId,
+                      title,
+                      lineDescription,
+                      quantity: Number(quantity) || 1,
+                      unitPrice: Number(unitPrice),
+                      vatRate: 15,
+                      currency: 'ZAR',
+                      frequency,
+                      nextRunDate: nextRun,
+                      reminderDaysBefore: 3,
+                      remindEmail,
+                      remindWhatsapp,
+                      whatsappPhone: whatsappPhone || null,
+                    });
+                    await reload();
+                    notifySuccess('Recurring schedule created.');
+                  } catch (e: any) {
+                    const msg = e?.message ?? 'Save failed';
+                    setError(msg);
+                    notifyError(msg);
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                {saving ? 'Saving…' : 'Save schedule'}
+              </Button>
+            </div>
+          </Surface>
+        </div>
       </div>
-    </AppShell>
+    </MoneyWorkspace>
   );
 }

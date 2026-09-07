@@ -6,8 +6,7 @@ import { useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { routes } from '@/lib/routing/routes';
 import { AuthShell } from '@/components/auth/AuthShell';
-import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
+import { AuthPasswordField } from '@/components/auth/AuthPasswordField';
 import { Button } from '@/components/ui/Button';
 
 export function ResetPasswordClient() {
@@ -86,84 +85,71 @@ export function ResetPasswordClient() {
     router.refresh();
   };
 
+  const mismatch = confirm.length > 0 && password !== confirm;
+
   return (
     <AuthShell
-      title="Choose a new password"
-      subtitle="Enter a strong password you have not used elsewhere."
+      title={checking ? 'Opening reset link' : ready ? 'Choose a new password' : 'Link expired'}
+      subtitle={ready ? 'Use a password you haven’t used elsewhere.' : undefined}
     >
-      <Card className="border-border/80 bg-card/80 p-6 shadow-[var(--shadow-lg)] backdrop-blur-xl motion-safe:animate-[ti-fade-up_0.45s_ease-out_both] sm:p-8">
-        {checking ? (
-          <p className="text-center text-sm text-muted-foreground">Checking your reset link…</p>
-        ) : !ready ? (
-          <div className="space-y-4 text-center">
-            <p className="text-sm text-muted-foreground">
-              This reset link is invalid or has expired. Request a new one from the sign-in page.
-            </p>
-            <Link href={routes.auth.forgotPassword}>
-              <Button variant="primary" className="w-full">
-                Request new link
-              </Button>
-            </Link>
-            <Link href={routes.auth.login} className="block text-sm font-semibold text-foreground underline-offset-4 hover:underline">
+      {checking ? (
+        <p className="text-sm text-[var(--tl-ink-2)]">Checking your reset link…</p>
+      ) : !ready ? (
+        <div className="space-y-5">
+          <p className="text-sm leading-relaxed text-[var(--tl-ink-2)]">
+            This reset link is invalid or has expired. Request a new one from the sign-in page.
+          </p>
+          <Button asChild className="h-11 w-full">
+            <Link href={routes.auth.forgotPassword}>Request new link</Link>
+          </Button>
+          <p className="text-sm text-[var(--tl-ink-2)]">
+            <Link href={routes.auth.login} className="font-medium text-[var(--tl-ink)] underline-offset-4 hover:underline">
               Back to sign in
             </Link>
-          </div>
-        ) : (
-          <form onSubmit={onSubmit} className="space-y-5" aria-describedby={error ? 'reset-error' : undefined}>
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="password">
-                New password
-              </label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="h-11"
-              />
+          </p>
+        </div>
+      ) : (
+        <form onSubmit={onSubmit} className="space-y-5" aria-describedby={error ? 'reset-error' : undefined}>
+          <AuthPasswordField
+            id="password"
+            label="New password"
+            value={password}
+            onChange={setPassword}
+            autoComplete="new-password"
+            required
+            minLength={8}
+            hint="At least 8 characters."
+          />
+          <AuthPasswordField
+            id="confirm"
+            label="Confirm password"
+            value={confirm}
+            onChange={setConfirm}
+            autoComplete="new-password"
+            required
+            minLength={8}
+            error={mismatch ? 'Passwords do not match.' : undefined}
+          />
+
+          {error ? (
+            <div id="reset-error" className="ti-error" role="alert">
+              <p className="ti-error-body">{error}</p>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="confirm">
-                Confirm password
-              </label>
-              <Input
-                id="confirm"
-                name="confirm"
-                type="password"
-                autoComplete="new-password"
-                required
-                minLength={8}
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                className="h-11"
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">At least 8 characters.</p>
+          ) : null}
 
-            {error ? (
-              <div id="reset-error" className="rounded-xl border border-danger/25 bg-danger/10 p-3 text-sm text-danger" role="alert">
-                {error}
-              </div>
-            ) : null}
+          <Button type="submit" loading={submitting} className="h-11 w-full">
+            Update password
+          </Button>
+        </form>
+      )}
 
-            <Button type="submit" disabled={submitting} className="h-12 w-full text-base shadow-[var(--shadow-md)]">
-              {submitting ? 'Updating…' : 'Update password'}
-            </Button>
-          </form>
-        )}
-
-        {ready ? (
-          <div className="mt-6 border-t border-border/60 pt-6 text-center text-sm text-muted-foreground">
-            <Link href={routes.auth.login} className="font-semibold text-foreground underline-offset-4 hover:underline">
-              Back to sign in
-            </Link>
-          </div>
-        ) : null}
-      </Card>
+      {ready ? (
+        <p className="mt-8 text-sm text-[var(--tl-ink-2)]">
+          <Link href={routes.auth.login} className="font-medium text-[var(--tl-ink)] underline-offset-4 hover:underline">
+            Back to sign in
+          </Link>
+        </p>
+      ) : null}
     </AuthShell>
   );
 }

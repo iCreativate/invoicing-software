@@ -1,5 +1,7 @@
 /** Server/edge helpers for cookie demo mode (no Supabase). */
 
+import { demoModeEnabled } from '@/lib/demo/accounts';
+
 export function cookieHeaderHasDemo(cookieHeader: string | null | undefined): boolean {
   if (!cookieHeader) return false;
   return (
@@ -10,6 +12,7 @@ export function cookieHeaderHasDemo(cookieHeader: string | null | undefined): bo
 }
 
 export function requestIsDemo(request: Request): boolean {
+  if (!demoModeEnabled()) return false;
   return cookieHeaderHasDemo(request.headers.get('cookie'));
 }
 

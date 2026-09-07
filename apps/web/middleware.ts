@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { demoModeEnabled } from '@/lib/demo/accounts';
 import { getSupabaseEnv } from '@/lib/supabase/env';
 import { hasSupabaseAuthCookie, isTransientDbError, withTimeoutRetry } from '@/lib/demo/server';
 
@@ -7,6 +8,8 @@ function isProtectedPath(pathname: string) {
   return (
     pathname === '/dashboard' ||
     pathname.startsWith('/dashboard/') ||
+    pathname === '/money' ||
+    pathname.startsWith('/money/') ||
     pathname === '/invoices' ||
     pathname.startsWith('/invoices/') ||
     pathname === '/quotes' ||
@@ -47,6 +50,8 @@ function isProtectedPath(pathname: string) {
     pathname.startsWith('/payroll/') ||
     pathname === '/profile' ||
     pathname.startsWith('/profile/') ||
+    pathname === '/company' ||
+    pathname.startsWith('/company/') ||
     pathname === '/settings' ||
     pathname.startsWith('/settings/')
   );
@@ -85,13 +90,22 @@ export async function middleware(request: NextRequest) {
     return res;
   }
 
-  const demo =
+  const demoCookies =
     request.cookies.get('ti_demo')?.value === '1' ||
     request.cookies.get('ti_demo_ui')?.value === '1' ||
     request.cookies.get('ti_supabase_down')?.value === '1';
 
-  // Explicit sample mode only (set by /api/demo). Do not auto-enter it.
-  if (demo) {
+  // Live Supabase only: strip leftover sample cookies and require a real session.
+  if (!demoModeEnabled()) {
+    const response = NextResponse.next();
+    if (demoCookies) clearDemoCookies(response);
+    if (!hasSupabaseAuthCookie(request.cookies.getAll())) {
+      if (isProtectedPath(pathname)) return redirectTo(request, '/login');
+      return response;
+    }
+    // Fall through to session refresh below (do not bypass auth).
+  } else if (demoCookies) {
+    // Explicit sample mode only (set by /api/demo).
     return NextResponse.next();
   }
 

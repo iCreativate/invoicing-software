@@ -4,31 +4,43 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { z } from 'zod';
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalDescription } from '@/components/ui/modal';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Badge } from '@/components/ui/badge';
+import { Input, Textarea } from '@/components/ui/Input';
+import { Field } from '@/components/ui/Field';
+import { Amount } from '@/components/ui/Text';
 import { formatMoney } from '@/lib/format/money';
 import { routes } from '@/lib/routing/routes';
 import { fetchClientsList, createClient, searchClients } from '@/features/clients/api';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { isDemoUiActive } from '@/lib/demo/accounts';
+import { demoQuoteDetail, demoSaveInvoice, demoSendInvoice } from '@/lib/demo/fixtures';
 import { cn } from '@/lib/utils/cn';
 import type { ClientListItem } from '@/features/clients/types';
 import type { InvoiceComposerDraft, InvoiceComposerItem, InvoiceComposerTemplate } from './types';
-import { INVOICE_TEMPLATE_PRESETS } from '@/lib/invoices/templates';
 import { addDaysISO, calcTotals, makeEmptyItem, todayISO } from './utils';
 import { itemsToPayload, totalsForDraftSync, workingItemsForDraftSync } from './draftItems';
-import { Check, FilePlus2, Sparkles, Send, Printer, Trash2, Wand2 } from 'lucide-react';
+import { Check, ChevronRight, Download, FilePlus2, Printer, Search, Sparkles, Trash2, UserPlus, Users, Wifi, WifiOff } from 'lucide-react';
 import { aiSuggestPricing, fetchItemSuggestions, rememberPrice, type ItemSuggestion } from '@/features/invoices/suggestions';
 import { InvoicePreview } from '@/components/invoice/InvoicePreview';
 import { SendStep } from './SendStep';
 import { clearDraft, loadDraft, saveDraft } from './autosave';
+import { discardPersistedDraft, loadPersistedDraft } from './composerPersistence';
+import { consumeAskInvoicePrefill } from '@/lib/invoices/askPrefill';
 import { fetchMyCompanyProfile, subscriptionShowsPoweredBy } from '@/features/company/api';
+import {
+  mapCompanyProfileToPreviewDetails,
+  type InvoicePreviewCompanyDetails,
+} from '@/features/company/previewDetails';
 import { getWorkspaceOwnerIdForClient } from '@/lib/auth/workspaceClient';
 import { fetchClientDetail } from '@/features/clients/api';
 import { fetchCatalogItems } from '@/features/catalog/api';
 import type { CatalogListItem } from '@/features/catalog/types';
+import { notifyError, notifySuccess } from '@/lib/notify';
+import { openDocumentPrintPage } from '@/lib/documents/print';
 import { buildPublicInvoiceViewUrl } from '@/lib/invoice/platformUrls';
+import { createQuote, updateQuote, ensureQuoteShareLink, makeQuoteNumber } from '@/features/quotes/api';
+import { draftDocumentFromDescription } from '@/lib/ai/draftDocument';
+import { ComposerDocumentOptions } from './ComposerDocumentOptions';
 
 const DraftSchema = z.object({
   clientId: z.string().min(1, 'Select a client'),
@@ -38,6 +50,38 @@ const DraftSchema = z.object({
 });
 
 type Step = 1 | 2 | 3 | 4;
+type ComposerKind = 'invoice' | 'quote';
+
+function InvoiceTotalsBlock({
+  currency,
+  totals,
+  totalLabel = 'Total due',
+  elevated = false,
+}: {
+  currency: string;
+  totals: { subtotal: number; vat: number; total: number };
+  totalLabel?: string;
+  elevated?: boolean;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-[var(--tl-ink-3)]">Subtotal</span>
+        <span className="ti-amount ti-amount-live">{formatMoney(totals.subtotal, currency)}</span>
+      </div>
+      <div className="mt-2.5 flex items-center justify-between text-sm">
+        <span className="text-[var(--tl-ink-3)]">Tax</span>
+        <span className="ti-amount ti-amount-live">{formatMoney(totals.vat, currency)}</span>
+      </div>
+      <div className={cn(elevated ? 'ti-composer-total-label' : 'mt-5 border-t border-border pt-4')}>
+        <p className="ti-meta">{totalLabel}</p>
+        <Amount display className={cn('ti-amount-live mt-2 block', elevated && 'ti-composer-total-value')}>
+          {formatMoney(totals.total, currency)}
+        </Amount>
+      </div>
+    </div>
+  );
+}
 
 export function InvoiceComposerModal({
   open,
@@ -45,6 +89,8 @@ export function InvoiceComposerModal({
   onCreated,
   mode = 'modal',
   editInvoiceId = null,
+  initialClientId = null,
+  kind = 'invoice',
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -52,9 +98,17 @@ export function InvoiceComposerModal({
   mode?: 'modal' | 'page';
   /** When set (e.g. edit page), load this invoice from the API instead of a blank draft. */
   editInvoiceId?: string | null;
+  /** Prefill the client when opening from a client profile. */
+  initialClientId?: string | null;
+  /** Invoice vs quote composer. Quotes ignore editInvoiceId for now. */
+  kind?: ComposerKind;
 }) {
-  const autosaveScope = mode === 'page' ? 'page' : 'modal';
-  const makeInvoiceNumber = () => {
+  const isQuote = kind === 'quote';
+  const isPage = mode === 'page';
+  const autosaveScope = isQuote ? (isPage ? 'quote-page' : 'quote-modal') : isPage ? 'page' : 'modal';
+  const defaultValidDays = isQuote ? 14 : 30;
+  const makeDocumentNumber = () => {
+    if (isQuote) return makeQuoteNumber();
     const now = new Date();
     const yyyy = String(now.getFullYear());
     const n = Math.floor(10000 + Math.random() * 90000);
@@ -64,6 +118,8 @@ export function InvoiceComposerModal({
   const [clients, setClients] = useState<ClientListItem[]>([]);
   const [clientsQuery, setClientsQuery] = useState('');
   const [loadingClients, setLoadingClients] = useState(false);
+  const [creatingClient, setCreatingClient] = useState(false);
+  const [clientPickerMode, setClientPickerMode] = useState<'search' | 'add'>('search');
   const [clientsError, setClientsError] = useState<string | null>(null);
 
   const [quickClient, setQuickClient] = useState({
@@ -80,7 +136,7 @@ export function InvoiceComposerModal({
     invoiceNumber: null,
     clientId: '',
     issueDate: todayISO(),
-    dueDate: addDaysISO(30),
+    dueDate: addDaysISO(defaultValidDays),
     currency: 'ZAR',
     template: 'modern',
     items: [makeEmptyItem(15)],
@@ -90,6 +146,7 @@ export function InvoiceComposerModal({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   const [resumeCandidate, setResumeCandidate] = useState<InvoiceComposerDraft | null>(null);
   const [resumeCandidateSavedAt, setResumeCandidateSavedAt] = useState<number | null>(null);
   const [serverInvoiceId, setServerInvoiceId] = useState<string | null>(null);
@@ -97,6 +154,7 @@ export function InvoiceComposerModal({
   const [shareUrl, setShareUrl] = useState<string | null>(null);
 
   const clientSearchRef = useRef<HTMLInputElement>(null);
+  const sendSectionRef = useRef<HTMLDivElement>(null);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<ItemSuggestion[]>([]);
   const [suggestLoading, setSuggestLoading] = useState(false);
@@ -105,19 +163,62 @@ export function InvoiceComposerModal({
   const [aiInput, setAiInput] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiOk, setAiOk] = useState<string | null>(null);
+  const [aiInsights, setAiInsights] = useState<string[]>([]);
+  const [aiSource, setAiSource] = useState<'local' | 'cloud' | 'merged' | null>(null);
+  const [showSmart, setShowSmart] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [sentShareUrl, setSentShareUrl] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState<string>('TimelyInvoices');
-  const [companyDetails, setCompanyDetails] = useState<any>(null);
+  const [companyDetails, setCompanyDetails] = useState<InvoicePreviewCompanyDetails | null>(null);
   const [companyLogoPath, setCompanyLogoPath] = useState<string | null>(null);
   const [showPoweredBy, setShowPoweredBy] = useState(true);
   const [clientDetails, setClientDetails] = useState<any>(null);
   const [inventoryCatalog, setInventoryCatalog] = useState<CatalogListItem[]>([]);
+  const [draftCatalog, setDraftCatalog] = useState<CatalogListItem[]>([]);
 
   const submittingRef = useRef(false);
   submittingRef.current = submitting;
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const serverAutosaveRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const skipPersistResumeRef = useRef(false);
+
+  const applyDraftBundle = (loaded: { draft: InvoiceComposerDraft; savedAt: number; serverInvoiceId?: string | null }) => {
+    const d = loaded.draft;
+    const hasClient = Boolean(d.clientId && String(d.clientId).trim().length);
+    if (hasClient) {
+      setDraft({
+        ...d,
+        invoiceNumber:
+          d.invoiceNumber && String(d.invoiceNumber).trim().length ? d.invoiceNumber : makeDocumentNumber(),
+        items: d.items?.length ? d.items : [makeEmptyItem(15)],
+      });
+      setSavedAt(loaded.savedAt);
+      setServerInvoiceId(loaded.serverInvoiceId ?? null);
+      setResumeCandidate(null);
+      setResumeCandidateSavedAt(null);
+      setStep(2);
+      return;
+    }
+    setResumeCandidate(d);
+    setResumeCandidateSavedAt(loaded.savedAt);
+    setStep(1);
+    setDraft({
+      clientId: '',
+      invoiceNumber: makeDocumentNumber(),
+      issueDate: todayISO(),
+      dueDate: addDaysISO(defaultValidDays),
+      currency: d.currency || 'ZAR',
+      template: d.template || 'modern',
+      items: d.items?.length ? d.items : [makeEmptyItem(15)],
+      notes: d.notes,
+    });
+  };
 
   useLayoutEffect(() => {
     if (!open) return;
-    if (editInvoiceId) return;
+    if (!isQuote && editInvoiceId) return;
     setSubmitError(null);
     setSaveOk(null);
     setAiOk(null);
@@ -125,6 +226,7 @@ export function InvoiceComposerModal({
     setClientsQuery('');
     setClients([]);
     setClientsSearched(false);
+    setClientPickerMode('search');
     setQuickClient({
       name: '',
       email: '',
@@ -136,57 +238,107 @@ export function InvoiceComposerModal({
     });
     setServerInvoiceId(null);
     setShareUrl(null);
+    skipPersistResumeRef.current = false;
+
+    const ask = !isQuote ? consumeAskInvoicePrefill() : null;
+    if (ask) {
+      skipPersistResumeRef.current = true;
+      const items: InvoiceComposerItem[] = ask.items.length
+        ? ask.items.map((it) => ({
+            id: crypto.randomUUID(),
+            description: it.description,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+            vatRate: it.vatRate,
+          }))
+        : [makeEmptyItem(15)];
+      const clientId = String(ask.client.id ?? initialClientId ?? '').trim();
+      setResumeCandidate(null);
+      setResumeCandidateSavedAt(null);
+      setDraft({
+        invoiceNumber: makeDocumentNumber(),
+        clientId,
+        issueDate: ask.issueDate || todayISO(),
+        dueDate: ask.dueDate || addDaysISO(defaultValidDays),
+        currency: ask.currency || 'ZAR',
+        template: 'modern',
+        items,
+        notes: ask.notes || undefined,
+      });
+      if (!clientId && ask.client.name) {
+        setQuickClient({
+          name: ask.client.name,
+          email: ask.client.email || '',
+          phone: ask.client.phone || '',
+          companyName: '',
+          website: '',
+          companyRegistration: '',
+          vatNumber: '',
+        });
+        setStep(1);
+      } else {
+        setStep(clientId ? 2 : 1);
+      }
+      setAiOk('Ask Timely pre-filled this invoice. Review and continue.');
+      return;
+    }
 
     const loaded = loadDraft(autosaveScope);
     if (loaded?.draft) {
-      const d = loaded.draft;
-      const hasClient = Boolean(d.clientId && String(d.clientId).trim().length);
-      if (hasClient) {
-        setDraft({
-          ...d,
-          invoiceNumber:
-            d.invoiceNumber && String(d.invoiceNumber).trim().length ? d.invoiceNumber : makeInvoiceNumber(),
-          items: d.items?.length ? d.items : [makeEmptyItem(15)],
-        });
-        setSavedAt(loaded.savedAt);
-        setServerInvoiceId(loaded.serverInvoiceId ?? null);
-        setResumeCandidate(null);
-        setResumeCandidateSavedAt(null);
-        setStep(2);
+      const savedClient = String(loaded.draft.clientId ?? '').trim();
+      const requested = String(initialClientId ?? '').trim();
+      if (!requested || !savedClient || savedClient === requested) {
+        applyDraftBundle(loaded);
+        if (requested && !savedClient) {
+          setDraft((d) => ({ ...d, clientId: requested }));
+          setStep(2);
+        }
         return;
       }
-      setResumeCandidate(d);
-      setResumeCandidateSavedAt(loaded.savedAt);
-      setStep(1);
-      setDraft({
-        clientId: '',
-        invoiceNumber: makeInvoiceNumber(),
-        issueDate: todayISO(),
-        dueDate: addDaysISO(30),
-        currency: d.currency || 'ZAR',
-        template: d.template || 'modern',
-        items: d.items?.length ? d.items : [makeEmptyItem(15)],
-        notes: d.notes,
-      });
-      return;
     }
 
     setResumeCandidate(null);
     setResumeCandidateSavedAt(null);
-    setStep(1);
+    setStep(initialClientId ? 2 : 1);
     setDraft({
-      invoiceNumber: makeInvoiceNumber(),
-      clientId: '',
+      invoiceNumber: makeDocumentNumber(),
+      clientId: initialClientId ?? '',
       issueDate: todayISO(),
-      dueDate: addDaysISO(30),
+      dueDate: addDaysISO(defaultValidDays),
       currency: 'ZAR',
       template: 'modern',
       items: [makeEmptyItem(15)],
     });
-  }, [open, editInvoiceId, autosaveScope]);
+  }, [open, editInvoiceId, autosaveScope, initialClientId, isQuote, defaultValidDays]);
 
   useEffect(() => {
-    if (!open || !editInvoiceId) return;
+    if (!open || isQuote || editInvoiceId) return;
+    if (skipPersistResumeRef.current) return;
+    let alive = true;
+    (async () => {
+      try {
+        const resolved = await loadPersistedDraft(autosaveScope);
+        if (!alive || !resolved?.draft) return;
+        const requested = String(initialClientId ?? '').trim();
+        const resolvedClient = String(resolved.draft.clientId ?? '').trim();
+        if (requested && resolvedClient && resolvedClient !== requested) return;
+        const local = loadDraft(autosaveScope);
+        const shouldApply =
+          !local ||
+          (resolved.serverInvoiceId && !local.serverInvoiceId) ||
+          resolved.savedAt > (local.savedAt ?? 0) + 1000;
+        if (shouldApply) applyDraftBundle(resolved);
+      } catch {
+        // keep local draft from layout effect
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [open, editInvoiceId, autosaveScope, initialClientId, isQuote]);
+
+  useEffect(() => {
+    if (!open || isQuote || !editInvoiceId) return;
     let alive = true;
     (async () => {
       setSubmitting(true);
@@ -234,7 +386,7 @@ export function InvoiceComposerModal({
     return () => {
       alive = false;
     };
-  }, [open, editInvoiceId]);
+  }, [open, editInvoiceId, isQuote]);
 
   const saveInvoiceToServer = async (opts?: { redirectToInvoice?: boolean; silentAutosave?: boolean; relaxedItems?: boolean }) => {
     const silent = Boolean(opts?.silentAutosave);
@@ -253,15 +405,61 @@ export function InvoiceComposerModal({
       if (!parsed.success) return null;
     }
 
-    const ownerId = await getWorkspaceOwnerIdForClient();
-    const supabase = createSupabaseBrowserClient();
-
     const invoiceNumber = draft.invoiceNumber && String(draft.invoiceNumber).trim().length ? String(draft.invoiceNumber) : null;
     const shareIdFromDraft =
       (draft as any).publicShareId && String((draft as any).publicShareId).trim().length ? String((draft as any).publicShareId) : null;
 
     const workingItems = relaxed ? workingItemsForDraftSync(draft.items) : draft.items;
     const amountTotals = relaxed ? totalsForDraftSync(draft.items) : calcTotals(draft.items);
+
+    if (isDemoUiActive()) {
+      if (!silent) setSubmitting(true);
+      try {
+        const sourceItems = relaxed ? workingItems : draft.items;
+        const saved = demoSaveInvoice({
+          invoiceId: serverInvoiceId,
+          clientId: draft.clientId,
+          issueDate: draft.issueDate,
+          dueDate: draft.dueDate,
+          currency: draft.currency,
+          templateId: draft.template,
+          invoiceNumber,
+          notes: draft.notes ?? null,
+          publicShareId: shareIdFromDraft,
+          items: sourceItems.map((it) => ({
+            description: it.description,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+            vatRate: it.vatRate,
+          })),
+        });
+        setServerInvoiceId(saved.id);
+        setDraft((d: any) => ({
+          ...d,
+          invoiceNumber: saved.invoiceNumber,
+          publicShareId: saved.publicShareId,
+        }));
+        setShareUrl(buildPublicInvoiceViewUrl(saved.publicShareId));
+        saveDraft(autosaveScope, draftRef.current, saved.id);
+        setCloudSyncStatus('saved');
+        if (!silent) {
+          setSaveOk('Saved.');
+          notifySuccess('Invoice saved.');
+        }
+        if (opts?.redirectToInvoice) {
+          clearDraft(autosaveScope);
+          onCreated?.(saved.id);
+          onOpenChange(false);
+          window.location.assign(`${routes.app.invoices}/${saved.id}`);
+        }
+        return saved.id;
+      } finally {
+        if (!silent) setSubmitting(false);
+      }
+    }
+
+    const ownerId = await getWorkspaceOwnerIdForClient();
+    const supabase = createSupabaseBrowserClient();
 
     const basePayload = {
       owner_id: ownerId,
@@ -294,7 +492,7 @@ export function InvoiceComposerModal({
       let savedInvoiceNumber = invoiceNumber;
 
       if (!invoiceId) {
-        if (!savedInvoiceNumber) savedInvoiceNumber = makeInvoiceNumber();
+        if (!savedInvoiceNumber) savedInvoiceNumber = makeDocumentNumber();
         const shareId = shareIdFromDraft ?? crypto.randomUUID();
         const { data: row, error } = await supabase
           .from('invoices')
@@ -387,7 +585,13 @@ export function InvoiceComposerModal({
       );
       if (itemsErr) throw itemsErr;
 
-      if (!silent) setSaveOk('Saved.');
+      saveDraft(autosaveScope, draftRef.current, invoiceId);
+      setCloudSyncStatus('saved');
+
+      if (!silent) {
+        setSaveOk('Saved.');
+        notifySuccess('Invoice saved.');
+      }
       if (opts?.redirectToInvoice) {
         clearDraft(autosaveScope);
         onCreated?.(invoiceId);
@@ -401,6 +605,110 @@ export function InvoiceComposerModal({
     }
   };
 
+  const saveQuoteToServer = async (opts?: { redirectToInvoice?: boolean; silentAutosave?: boolean; relaxedItems?: boolean }) => {
+    const silent = Boolean(opts?.silentAutosave);
+    const relaxed = Boolean(opts?.relaxedItems);
+    if (!silent) {
+      setSubmitError(null);
+      setSaveOk(null);
+    }
+    if (!relaxed) {
+      if (!validateStep1() || !validateItems()) {
+        setStep(1);
+        return null;
+      }
+    } else {
+      const parsed = DraftSchema.safeParse(draft);
+      if (!parsed.success) return null;
+    }
+
+    const quoteNumber =
+      draft.invoiceNumber && String(draft.invoiceNumber).trim().length ? String(draft.invoiceNumber).trim() : null;
+    const sourceItems = relaxed ? workingItemsForDraftSync(draft.items) : draft.items;
+    const items = sourceItems.map((it) => ({
+      description: it.description,
+      quantity: it.quantity,
+      unitPrice: it.unitPrice,
+      vatRate: it.vatRate,
+    }));
+
+    if (!silent) setSubmitting(true);
+    try {
+      let quoteId = serverInvoiceId;
+
+      if (!quoteId) {
+        const created = await createQuote({
+          clientId: draft.clientId,
+          issueDate: draft.issueDate,
+          validUntil: draft.dueDate,
+          currency: draft.currency,
+          vatRate: 15,
+          notes: draft.notes,
+          quoteNumber: quoteNumber ?? makeDocumentNumber(),
+          items,
+        });
+        quoteId = created.id;
+        setServerInvoiceId(quoteId);
+        setDraft((d) => ({ ...d, invoiceNumber: created.quoteNumber || quoteNumber || d.invoiceNumber }));
+      } else {
+        if (silent) {
+          if (isDemoUiActive()) {
+            const q = demoQuoteDetail(quoteId);
+            if (q && q.status !== 'draft') return quoteId;
+          } else {
+            const supabase = createSupabaseBrowserClient();
+            const ownerId = await getWorkspaceOwnerIdForClient();
+            const { data: stRow, error: stErr } = await supabase
+              .from('quotes')
+              .select('status')
+              .eq('id', quoteId)
+              .eq('owner_id', ownerId)
+              .maybeSingle();
+            if (stErr) throw stErr;
+            if (stRow && String((stRow as any).status) !== 'draft') {
+              return quoteId;
+            }
+          }
+        }
+
+        await updateQuote(quoteId, {
+          clientId: draft.clientId,
+          issueDate: draft.issueDate,
+          validUntil: draft.dueDate,
+          currency: draft.currency,
+          vatRate: 15,
+          notes: draft.notes ?? null,
+          quoteNumber,
+          items,
+        });
+      }
+
+      saveDraft(autosaveScope, draftRef.current, quoteId);
+      setCloudSyncStatus('saved');
+
+      if (!silent) {
+        setSaveOk('Saved.');
+        notifySuccess('Quote saved.');
+      }
+      if (opts?.redirectToInvoice) {
+        clearDraft(autosaveScope);
+        onCreated?.(quoteId);
+        onOpenChange(false);
+        window.location.assign(`${routes.app.quotes}/${quoteId}`);
+      }
+
+      return quoteId;
+    } finally {
+      if (!silent) setSubmitting(false);
+    }
+  };
+
+  const saveDocumentToServer = async (opts?: {
+    redirectToInvoice?: boolean;
+    silentAutosave?: boolean;
+    relaxedItems?: boolean;
+  }) => (isQuote ? saveQuoteToServer(opts) : saveInvoiceToServer(opts));
+
   useEffect(() => {
     if (!open) return;
     let alive = true;
@@ -410,7 +718,7 @@ export function InvoiceComposerModal({
         if (!alive) return;
         if (p?.companyName) setCompanyName(p.companyName);
         setCompanyLogoPath(p?.logoUrl ?? null);
-        setCompanyDetails(p ?? null);
+        setCompanyDetails(mapCompanyProfileToPreviewDetails(p));
         setShowPoweredBy(subscriptionShowsPoweredBy(p?.subscriptionPlan));
       } catch {
         // ignore (keeps composer usable if settings table isn't created yet)
@@ -444,6 +752,35 @@ export function InvoiceComposerModal({
   }, [draft.clientId, open]);
 
   useEffect(() => {
+    if (!open) return;
+    const sync = () => setIsOnline(typeof navigator !== 'undefined' ? navigator.onLine : true);
+    sync();
+    window.addEventListener('online', sync);
+    window.addEventListener('offline', sync);
+    return () => {
+      window.removeEventListener('online', sync);
+      window.removeEventListener('offline', sync);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    (async () => {
+      try {
+        const { items, tableMissing } = await fetchCatalogItems();
+        if (!alive) return;
+        setDraftCatalog(tableMissing ? [] : items);
+      } catch {
+        if (alive) setDraftCatalog([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [open]);
+
+  useEffect(() => {
     if (!open || step !== 2) return;
     let alive = true;
     (async () => {
@@ -474,22 +811,48 @@ export function InvoiceComposerModal({
     return () => clearTimeout(t);
   }, [autosaveScope, draft, open, serverInvoiceId]);
 
-  const saveInvoiceRef = useRef(saveInvoiceToServer);
-  saveInvoiceRef.current = saveInvoiceToServer;
+  const saveDocumentRef = useRef(saveDocumentToServer);
+  saveDocumentRef.current = saveDocumentToServer;
 
-  /** Persist in-progress work as a real `draft` row so it appears on the invoices list. */
+  /** Persist in-progress work as a real `draft` row so it appears on the list. */
   useEffect(() => {
-    if (!open || editInvoiceId) return;
+    if (!open || (!isQuote && editInvoiceId)) return;
     if (submittingRef.current) return;
     const parsed = DraftSchema.safeParse(draft);
     if (!parsed.success) return;
 
     const t = setTimeout(() => {
       if (submittingRef.current) return;
-      void saveInvoiceRef.current({ silentAutosave: true, relaxedItems: true }).catch(() => {});
+      void (async () => {
+        try {
+          const id = await saveDocumentRef.current({ silentAutosave: true, relaxedItems: true });
+          if (id) {
+            saveDraft(autosaveScope, draftRef.current, id);
+            setCloudSyncStatus('saved');
+            if (serverAutosaveRetryRef.current) {
+              clearTimeout(serverAutosaveRetryRef.current);
+              serverAutosaveRetryRef.current = null;
+            }
+          }
+        } catch {
+          setCloudSyncStatus('error');
+          if (serverAutosaveRetryRef.current) clearTimeout(serverAutosaveRetryRef.current);
+          serverAutosaveRetryRef.current = setTimeout(() => {
+            void saveDocumentRef.current({ silentAutosave: true, relaxedItems: true }).catch(() => {
+              setCloudSyncStatus('error');
+            });
+          }, 12000);
+        }
+      })();
     }, 2800);
     return () => clearTimeout(t);
-  }, [draft, open, editInvoiceId]);
+  }, [draft, open, editInvoiceId, autosaveScope, isQuote]);
+
+  useEffect(() => {
+    return () => {
+      if (serverAutosaveRetryRef.current) clearTimeout(serverAutosaveRetryRef.current);
+    };
+  }, []);
 
   const [clientsSearched, setClientsSearched] = useState(false);
 
@@ -530,6 +893,8 @@ export function InvoiceComposerModal({
     if (clientDetails?.name) return clientDetails.name;
     return clients.find((c) => c.id === draft.clientId)?.name ?? '—';
   }, [clientDetails?.name, clients, draft.clientId]);
+  const hasResolvedClient = Boolean(draft.clientId?.trim() && selectedClientName !== '—');
+  const selectedClientInitial = hasResolvedClient ? selectedClientName.trim().charAt(0).toUpperCase() : null;
 
   /** Step 1: show selected client in the list without forcing a search. */
   useEffect(() => {
@@ -558,6 +923,11 @@ export function InvoiceComposerModal({
     };
   }, [open, step, editInvoiceId, draft.clientId]);
 
+  useEffect(() => {
+    if (step !== 4) return;
+    sendSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [step]);
+
   const validateStep1 = () => {
     const parsed = DraftSchema.safeParse(draft);
     if (parsed.success) return true;
@@ -578,6 +948,68 @@ export function InvoiceComposerModal({
     });
     setErrors(next);
     return Object.keys(next).length === 0;
+  };
+
+  const collectValidationIssues = () => {
+    const issues: string[] = [];
+    const step1 = DraftSchema.safeParse(draft);
+    if (!step1.success) {
+      for (const issue of step1.error.issues) issues.push(issue.message);
+    }
+    if (!draft.items.length) issues.push('Add at least one line item.');
+    draft.items.forEach((it, idx) => {
+      if (!it.description.trim()) issues.push(`Line ${idx + 1}: add a description.`);
+      if (!(it.quantity > 0)) issues.push(`Line ${idx + 1}: quantity must be greater than zero.`);
+      if (!(it.unitPrice >= 0)) issues.push(`Line ${idx + 1}: unit price must be zero or more.`);
+      if (!(it.vatRate >= 0 && it.vatRate <= 100)) issues.push(`Line ${idx + 1}: VAT must be between 0 and 100.`);
+    });
+    return issues;
+  };
+
+  const reportValidationIssues = () => {
+    const issues = collectValidationIssues();
+    if (!issues.length) return true;
+    validateStep1();
+    validateItems();
+    const message = issues[0];
+    setSubmitError(message);
+    notifyError(message);
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    return false;
+  };
+
+  const proceedToSendStep = () => {
+    setSubmitError(null);
+    if (!reportValidationIssues()) return;
+    setStep(4);
+  };
+
+  const downloadDocumentPdf = async () => {
+    setSubmitError(null);
+    if (!reportValidationIssues()) return;
+    let docId = serverInvoiceId;
+    if (!docId) {
+      setSubmitting(true);
+      try {
+        docId = await saveDocumentToServer();
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Could not save before downloading PDF.';
+        setSubmitError(message);
+        notifyError(message);
+        return;
+      } finally {
+        setSubmitting(false);
+      }
+    }
+    if (!docId) {
+      const message = 'Save the document before downloading PDF.';
+      setSubmitError(message);
+      notifyError(message);
+      return;
+    }
+    openDocumentPrintPage(isQuote ? 'quote' : 'invoice', docId);
   };
 
   const addItem = () => setDraft((d) => ({ ...d, items: [...d.items, makeEmptyItem(15)] }));
@@ -640,26 +1072,62 @@ export function InvoiceComposerModal({
     return () => window.removeEventListener('mousedown', onDown, { capture: true } as any);
   }, [activeItemId, step]);
 
+  const openQuickAddClient = (prefillName = '') => {
+    const name = prefillName.trim();
+    if (name) {
+      setQuickClient((current) => ({ ...current, name }));
+    }
+    setClientPickerMode('add');
+    setErrors((current) => {
+      const { quickClientName, clientId, ...rest } = current;
+      return rest;
+    });
+  };
+
   const createQuickClient = async () => {
-    if (!quickClient.name.trim()) {
+    const name = quickClient.name.trim();
+    if (!name) {
       setErrors((e) => ({ ...e, quickClientName: 'Client name required' }));
       return;
     }
-    setSubmitting(true);
+    setCreatingClient(true);
     setSubmitError(null);
+    setErrors((current) => {
+      const { quickClientName, clientId, ...rest } = current;
+      return rest;
+    });
     try {
-      const created = await createClient({
-        name: quickClient.name.trim(),
+      const payload = {
+        name,
         email: quickClient.email.trim() || undefined,
         phone: quickClient.phone.trim() || undefined,
         companyName: quickClient.companyName.trim() || undefined,
         website: quickClient.website.trim() || undefined,
         companyRegistration: quickClient.companyRegistration.trim() || undefined,
         vatNumber: quickClient.vatNumber.trim() || undefined,
+      };
+      const created = await createClient(payload);
+      const optimistic: ClientListItem = {
+        id: created.id,
+        name: payload.name,
+        email: payload.email ?? null,
+        companyName: payload.companyName ?? null,
+      };
+      setClientDetails({
+        id: created.id,
+        name: payload.name,
+        email: payload.email ?? null,
+        phone: payload.phone ?? null,
+        address: null,
+        companyName: payload.companyName ?? null,
+        website: payload.website ?? null,
+        companyRegistration: payload.companyRegistration ?? null,
+        vatNumber: payload.vatNumber ?? null,
       });
-      const list = await fetchClientsList();
-      setClients(list);
       setDraft((d) => ({ ...d, clientId: created.id }));
+      setClients((prev) => [optimistic, ...prev.filter((c) => c.id !== created.id)]);
+      setClientsSearched(true);
+      setClientPickerMode('search');
       setQuickClient({
         name: '',
         email: '',
@@ -669,23 +1137,28 @@ export function InvoiceComposerModal({
         companyRegistration: '',
         vatNumber: '',
       });
-      setErrors((e) => {
-        const { quickClientName, ...rest } = e;
-        return rest;
-      });
-    } catch (e: any) {
-      setSubmitError(e?.message ?? 'Failed to create client.');
+      notifySuccess(`${payload.name} added to this ${isQuote ? 'quote' : 'invoice'}.`);
+      try {
+        const list = await fetchClientsList();
+        setClients(list);
+      } catch {
+        // Keep optimistic client selection if the refresh fails.
+      }
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to create client.';
+      setSubmitError(message);
+      setErrors((current) => ({ ...current, quickClientName: message }));
+      notifyError(message);
     } finally {
-      setSubmitting(false);
+      setCreatingClient(false);
     }
   };
 
-  const createInvoiceDraft = async () => {
+  const createDocumentDraft = async () => {
     try {
-      // Save draft to Supabase and go to invoice page
-      await saveInvoiceToServer({ redirectToInvoice: true });
+      await saveDocumentToServer({ redirectToInvoice: true });
     } catch (e: any) {
-      setSubmitError(e?.message ?? 'Failed to create invoice.');
+      setSubmitError(e?.message ?? (isQuote ? 'Failed to create quote.' : 'Failed to create invoice.'));
     }
   };
 
@@ -695,29 +1168,33 @@ export function InvoiceComposerModal({
     setAiLoading(true);
     setSubmitError(null);
     setAiOk(null);
+    setAiInsights([]);
+    setAiSource(null);
     try {
-      const res = await fetch('/api/ai/invoice-generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input,
-          clients: clients.slice(0, 40).map((c) => ({ id: c.id, name: c.name, email: c.email })),
-        }),
+      const knownClients = clients.slice(0, 40).map((c) => ({ id: c.id, name: c.name, email: c.email }));
+      const result = await draftDocumentFromDescription({
+        input,
+        documentKind: isQuote ? 'quote' : 'invoice',
+        knownClients,
+        catalogItems: draftCatalog.map((c) => ({
+          id: c.id,
+          name: c.name,
+          unitPrice: c.unitPrice,
+          defaultTaxRate: c.defaultTaxRate,
+        })),
       });
-      const json = await res.json();
-      if (!res.ok || !json?.success) throw new Error(json?.error ?? 'Couldn’t draft the invoice.');
-      const d = json.data;
-      const items: InvoiceComposerItem[] = Array.isArray(d.items)
-        ? d.items
-            .map((it: { description?: string; quantity?: number; unitPrice?: number; vatRate?: number }) => ({
-              id: crypto.randomUUID(),
-              description: String(it.description ?? '').trim(),
-              quantity: Number(it.quantity ?? 1),
-              unitPrice: Number(it.unitPrice ?? 0),
-              vatRate: Number(it.vatRate ?? 15),
-            }))
-            .filter((it: InvoiceComposerItem) => it.description.length > 0)
-        : [];
+
+      const d = result.draft;
+      const items: InvoiceComposerItem[] = d.items
+        .map((it) => ({
+          id: crypto.randomUUID(),
+          description: String(it.description ?? '').trim(),
+          quantity: Number(it.quantity ?? 1),
+          unitPrice: Number(it.unitPrice ?? 0),
+          vatRate: Number(it.vatRate ?? 15),
+          ...(it.catalogItemId ? { catalogItemId: it.catalogItemId } : {}),
+        }))
+        .filter((it) => it.description.length > 0);
       if (!items.length) throw new Error('No line items found in that description.');
 
       const suggestedName = String(d?.client?.name ?? '').trim();
@@ -757,12 +1234,23 @@ export function InvoiceComposerModal({
 
       const n = items.length;
       const itemLabel = n === 1 ? '1 line item' : `${n} line items`;
+      setAiInsights(result.insights);
+      setAiSource(result.source);
+
+      const sourceNote =
+        result.source === 'merged'
+          ? ' Timely refined this with cloud AI.'
+          : result.source === 'local'
+            ? isOnline
+              ? ' Drafted on this device.'
+              : ' Drafted offline on this device.'
+            : '';
 
       if (matched) {
-        setAiOk(`Drafted ${itemLabel} for ${matched.name}. Review quantities and VAT.`);
+        setAiOk(`Drafted ${itemLabel} for ${matched.name}.${sourceNote} Review quantities and VAT.`);
         setStep(2);
       } else if (draft.clientId) {
-        setAiOk(`Drafted ${itemLabel}. Review quantities and VAT.`);
+        setAiOk(`Drafted ${itemLabel}.${sourceNote} Review quantities and VAT.`);
         setStep(2);
       } else if (suggestedName) {
         setQuickClient({
@@ -774,14 +1262,14 @@ export function InvoiceComposerModal({
           companyRegistration: '',
           vatNumber: '',
         });
-        setAiOk(`Drafted ${itemLabel}. Add or select ${suggestedName} to continue.`);
+        setAiOk(`Drafted ${itemLabel}. Add or select ${suggestedName} to continue.${sourceNote}`);
         setStep(1);
       } else {
-        setAiOk(`Drafted ${itemLabel}. Pick a client to continue.`);
+        setAiOk(`Drafted ${itemLabel}. Pick a client to continue.${sourceNote}`);
         setStep(1);
       }
     } catch (e: unknown) {
-      setSubmitError(e instanceof Error ? e.message : 'Couldn’t draft the invoice.');
+      setSubmitError(e instanceof Error ? e.message : `Couldn’t draft the ${isQuote ? 'quote' : 'invoice'}.`);
     } finally {
       setAiLoading(false);
     }
@@ -796,6 +1284,11 @@ export function InvoiceComposerModal({
     toEmail?: string;
     toWhatsapp?: string;
   }) => {
+    if (isDemoUiActive()) {
+      void toEmail;
+      void toWhatsapp;
+      return demoSendInvoice(invoiceId);
+    }
     const res = await fetch('/api/invoices/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -806,142 +1299,596 @@ export function InvoiceComposerModal({
     return json.data as { shareId: string; shareUrl: string };
   };
 
+  const showClientStep = isPage ? step < 4 : step === 1;
+  const showItemsStep = isPage ? step < 4 : step === 2;
+  const showReviewStep = !isPage && step === 3;
+  const showSendStep = step === 4;
+
+  const hasClient = Boolean(draft.clientId?.trim());
+  const hasPricedLines = draft.items.some((i) => i.description.trim().length > 0 && Number(i.unitPrice) > 0);
+  const syncState =
+    cloudSyncStatus === 'error' ? 'error' : cloudSyncStatus === 'saved' || serverInvoiceId ? 'saved' : 'local';
+  const syncLabel =
+    syncState === 'error'
+      ? 'Sync issue'
+      : syncState === 'saved'
+        ? 'Saved'
+        : savedAt
+          ? 'On this device'
+          : 'Auto-save on';
+
+  const pageKicker = !isQuote && editInvoiceId ? 'Edit invoice' : isQuote ? 'New quote' : 'New invoice';
+  const phaseClient = !showSendStep && !hasClient;
+  const phaseLines = !showSendStep && hasClient;
+  const phaseSend = showSendStep;
+
+  const draftExamples = isQuote
+    ? [
+        'Quote for Sunrise Studio: brand identity R18,500 + 2 strategy sessions at R950',
+        'Estimate for Beta Ltd — 3 days on-site at R2,200/day, valid 14 days',
+        'Proposal: website rebuild R45,000, hosting R1,200/month',
+      ]
+    : [
+        'Website design for Acme: 8 hours at R950/hr + hosting retainer R1,200',
+        'Invoice ABC Construction for R15,000, net 30',
+        'Consulting for Delta — 4 hrs @ R600, zero-rated VAT',
+      ];
+
+  const documentOptionsBar = (
+    <ComposerDocumentOptions
+      draft={draft}
+      documentKind={isQuote ? 'quote' : 'invoice'}
+      className={!isPage ? 'rounded-t-[var(--radius-card)]' : undefined}
+      onCurrencyChange={(code) => setDraft((d) => ({ ...d, currency: code }))}
+      onTemplateChange={(template) => setDraft((d) => ({ ...d, template }))}
+    />
+  );
+
+  const livePreview =
+    isPage ? (
+      <aside className="ti-composer-live ti-no-print" aria-label="Live document preview">
+        <div className="ti-composer-live-head">
+          <p className="ti-meta">Live document</p>
+          <p className="ti-caption text-[var(--tl-ink-3)]">Updates as you type</p>
+        </div>
+        <div className="ti-composer-live-frame">
+          <InvoicePreview
+            draft={draft}
+            documentKind={isQuote ? 'quote' : 'invoice'}
+            client={{
+              name: clientDetails?.name ?? selectedClientName,
+              email: clientDetails?.email ?? null,
+              phone: clientDetails?.phone ?? null,
+              address: clientDetails?.address ?? null,
+              companyName: clientDetails?.companyName ?? null,
+              website: clientDetails?.website ?? null,
+              companyRegistration: clientDetails?.companyRegistration ?? null,
+              vatNumber: clientDetails?.vatNumber ?? null,
+            }}
+            companyName={companyName}
+            companyLogoPath={companyLogoPath}
+            companyDetails={companyDetails}
+            showPoweredBy={showPoweredBy}
+            invoiceViewUrl={shareUrl}
+          />
+        </div>
+      </aside>
+    ) : null;
+
   const body = (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between ti-no-print">
-        <div className="flex items-center gap-2">
-          <Badge variant="outline">Fast flow</Badge>
-          <div className="text-xs text-muted-foreground">Create + send in under 10 seconds</div>
+    <div className={cn(isPage ? 'ti-composer-page ti-page-enter' : 'space-y-4')}>
+      {isPage ? null : (
+        <div className="flex items-end justify-between gap-4 ti-no-print">
+          <div>
+            <p className="ti-meta">{isQuote ? 'Quote' : 'Invoice'}</p>
+          </div>
+          <div className="hidden items-center gap-2 text-[12px] text-[var(--tl-ink-3)] sm:flex">
+            <span className={step >= 1 ? 'text-[var(--tl-ink)]' : undefined}>Client</span>
+            <span aria-hidden>→</span>
+            <span className={step >= 2 ? 'text-[var(--tl-ink)]' : undefined}>Items</span>
+            <span aria-hidden>→</span>
+            <span className={step >= 3 ? 'text-[var(--tl-ink)]' : undefined}>Review</span>
+            <span aria-hidden>→</span>
+            <span className={step >= 4 ? 'text-[var(--tl-ink)]' : undefined}>Send</span>
+          </div>
         </div>
-        <div className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
-          <span className={cn('inline-flex items-center gap-1', step >= 1 && 'text-foreground')}>
-            <span className={cn('h-5 w-5 rounded-full grid place-items-center', step > 1 ? 'bg-success text-white' : 'bg-muted/50')}>
-              {step > 1 ? <Check className="h-3 w-3" /> : 1}
-            </span>
-            Client
-          </span>
-          <span>→</span>
-          <span className={cn('inline-flex items-center gap-1', step >= 2 && 'text-foreground')}>
-            <span className={cn('h-5 w-5 rounded-full grid place-items-center', step > 2 ? 'bg-success text-white' : 'bg-muted/50')}>
-              {step > 2 ? <Check className="h-3 w-3" /> : 2}
-            </span>
-            Items
-          </span>
-          <span>→</span>
-          <span className={cn('inline-flex items-center gap-1', step >= 3 && 'text-foreground')}>
-            <span className={cn('h-5 w-5 rounded-full grid place-items-center', step > 3 ? 'bg-success text-white' : 'bg-muted/50')}>
-              {step > 3 ? <Check className="h-3 w-3" /> : 3}
-            </span>
-            Review
-          </span>
-          <span>→</span>
-          <span className={cn('inline-flex items-center gap-1', step >= 4 && 'text-foreground')}>
-            <span className={cn('h-5 w-5 rounded-full grid place-items-center', step > 4 ? 'bg-success text-white' : 'bg-muted/50')}>
-              4
-            </span>
-            Send
-          </span>
-        </div>
-      </div>
+      )}
 
       {submitError ? (
-        <div className="rounded-2xl bg-danger/10 p-3 text-sm text-danger ti-no-print">{submitError}</div>
+        <div className="ti-error ti-no-print" role="alert">
+          {submitError}
+        </div>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_min(360px,100%)]">
-        <Card className="p-5">
-          <div className="mb-5 rounded-lg border border-[#e5e7eb] bg-[#f6f4f0] p-4 ti-no-print">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#1a3a4a] text-white">
-                <Sparkles className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-[#101418]">Smart invoice generator</div>
-                <div className="mt-0.5 text-sm text-[#5a6169]">
-                  Describe the work and we’ll draft the invoice (items + VAT).
+      <div
+        className={cn(
+          isPage ? 'ti-composer-workspace' : 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_min(360px,100%)] lg:items-start'
+        )}
+      >
+        <div className={isPage ? 'ti-composer-sheet' : undefined}>
+          {isPage ? (
+            <>
+              <header className="ti-composer-mast ti-no-print">
+                <div className="min-w-0">
+                  <p className="ti-composer-mast-kicker">{pageKicker}</p>
+                  <h1 className="ti-composer-mast-no">
+                    {draft.invoiceNumber || (isQuote ? 'Untitled quote' : 'Untitled invoice')}
+                  </h1>
                 </div>
+                <div className="ti-composer-mast-meta">
+                  <span className="ti-composer-sync" data-state={syncState}>
+                    {syncLabel}
+                  </span>
+                  <p className="ti-composer-phase" aria-label="Composer progress">
+                    <span data-on={phaseClient || hasClient ? 'true' : undefined}>01 Client</span>
+                    {' · '}
+                    <span data-on={phaseLines || hasPricedLines ? 'true' : undefined}>02 Lines</span>
+                    {' · '}
+                    <span data-on={phaseSend ? 'true' : undefined}>03 Send</span>
+                  </p>
+                </div>
+              </header>
+              {documentOptionsBar}
+            </>
+          ) : null}
+          <div
+            className={
+              isPage
+                ? 'ti-composer-sheet-body'
+                : 'overflow-hidden rounded-[var(--radius-card)] border border-border bg-[var(--tl-surface)] shadow-[var(--shadow-elevated)]'
+            }
+          >
+          {!isPage ? documentOptionsBar : null}
+          <div className={cn(!isPage && 'p-5')}>
+          <div className="ti-no-print">
+            {showSendStep ? null : showSmart ? (
+              <div className={cn(isPage ? 'ti-composer-ai ti-composer-ai-hero' : 'mb-8 border-b border-border pb-6')}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="ti-composer-ai-badge">
+                        <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                        Timely draft
+                      </span>
+                      <span className="ti-composer-ai-mode" data-online={isOnline ? 'true' : undefined}>
+                        {isOnline ? (
+                          <>
+                            <Wifi className="h-3 w-3" aria-hidden />
+                            On-device + cloud
+                          </>
+                        ) : (
+                          <>
+                            <WifiOff className="h-3 w-3" aria-hidden />
+                            Offline — on-device only
+                          </>
+                        )}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-base font-semibold tracking-tight text-[var(--tl-ink)]">
+                      Describe the {isQuote ? 'quote' : 'invoice'} — Timely drafts it
+                    </p>
+                    <p className="mt-1 text-sm text-[var(--tl-ink-2)]">
+                      Plain language in, line items + client + terms out. Works without an internet connection; smarter when
+                      you&apos;re online.
+                    </p>
+                  </div>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setShowSmart(false)}>
+                    Hide
+                  </Button>
+                </div>
+
+                <div className="ti-composer-ai-examples">
+                  {draftExamples.map((example) => (
+                    <button
+                      key={example}
+                      type="button"
+                      className="ti-composer-ai-example"
+                      onClick={() => setAiInput(example)}
+                    >
+                      {example}
+                    </button>
+                  ))}
+                </div>
+
+                <label htmlFor="smart-invoice-prompt" className="sr-only">
+                  Describe the work
+                </label>
+                <textarea
+                  id="smart-invoice-prompt"
+                  value={aiInput}
+                  onChange={(e) => setAiInput(e.target.value)}
+                  placeholder={
+                    isQuote
+                      ? 'e.g. Quote for Acme: logo design R8,500 + 3 revision rounds at R750, valid 30 days…'
+                      : 'e.g. Website design for Acme: 8 hours at R950/hr + hosting retainer R1,200, due in 14 days…'
+                  }
+                  rows={4}
+                  disabled={aiLoading}
+                  aria-busy={aiLoading}
+                  className={cn('input mt-3 min-h-[6.5rem] resize-y py-2.5 leading-5', aiLoading && 'opacity-70')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      void runAiGenerate();
+                    }
+                  }}
+                />
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="ti-caption">
+                    Timely reads hours, day rates, retainers, lists, VAT, and your catalog. ⌘ Enter to draft.
+                  </p>
+                  <Button type="button" onClick={() => void runAiGenerate()} disabled={aiLoading || !aiInput.trim()} loading={aiLoading}>
+                    {aiLoading ? 'Drafting…' : `Draft ${isQuote ? 'quote' : 'invoice'}`}
+                  </Button>
+                </div>
+                {aiInsights.length ? (
+                  <div className="ti-composer-ai-insights" aria-label="Draft summary">
+                    {aiInsights.map((insight) => (
+                      <span key={insight} className="ti-composer-ai-insight">
+                        {insight}
+                      </span>
+                    ))}
+                    {aiSource === 'merged' ? (
+                      <span className="ti-composer-ai-insight" data-tone="cloud">
+                        Cloud refined
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+                {aiOk ? <p className="mt-2 text-xs font-medium text-[var(--tl-success)]">{aiOk}</p> : null}
+                {submitError && showSmart ? (
+                  <p className="mt-2 text-xs font-medium text-[var(--tl-danger)]" role="alert">
+                    {submitError}
+                  </p>
+                ) : null}
               </div>
-            </div>
-            <label htmlFor="smart-invoice-prompt" className="sr-only">
-              Describe the work
-            </label>
-            <textarea
-              id="smart-invoice-prompt"
-              value={aiInput}
-              onChange={(e) => setAiInput(e.target.value)}
-              placeholder="e.g. Website design for Acme: 8 hours at R950/hr + hosting retainer…"
-              rows={3}
-              disabled={aiLoading}
-              aria-busy={aiLoading}
-              className={cn(
-                'input mt-3 min-h-[5.5rem] resize-y py-2.5 leading-5',
-                aiLoading && 'opacity-70'
-              )}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  void runAiGenerate();
-                }
-              }}
-            />
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-xs text-[#8b9199]">
-                VAT 15% unless you say otherwise. Uses Groq/Claude when configured. ⌘ Enter to generate.
-              </div>
-              <Button
+            ) : (
+              <button
                 type="button"
-                onClick={() => void runAiGenerate()}
-                disabled={aiLoading || !aiInput.trim()}
-                className="shrink-0"
+                className={cn(
+                  isPage
+                    ? 'ti-composer-ai-toggle'
+                    : 'mb-6 flex w-full items-center gap-3 rounded-[var(--radius-card)] border border-[color-mix(in_srgb,var(--tl-violet)_22%,var(--tl-line))] bg-[linear-gradient(145deg,color-mix(in_srgb,var(--tl-violet)_8%,white),color-mix(in_srgb,var(--tl-indigo)_5%,white)_52%,color-mix(in_srgb,var(--tl-accent)_3%,white))] p-4 text-left shadow-[var(--shadow-elevated)] transition hover:-translate-y-px'
+                )}
+                onClick={() => {
+                  setSubmitError(null);
+                  setShowSmart(true);
+                }}
+                aria-expanded={false}
               >
-                <Wand2 className="h-4 w-4" />
-                {aiLoading ? 'Generating…' : 'Generate'}
-              </Button>
-            </div>
-            {aiOk ? <div className="mt-2 text-xs font-medium text-[#1b7f4e]">{aiOk}</div> : null}
+                <span className={isPage ? 'ti-composer-ai-toggle-icon' : 'grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[color-mix(in_srgb,var(--tl-violet)_22%,var(--tl-line))] bg-[color-mix(in_srgb,var(--tl-violet)_14%,white)] text-[color-mix(in_srgb,var(--tl-violet)_72%,var(--tl-ink))]'}>
+                  <Sparkles className="h-4 w-4" aria-hidden />
+                </span>
+                <span className={isPage ? 'ti-composer-ai-toggle-copy' : 'min-w-0 flex-1'}>
+                  <span className={isPage ? 'ti-composer-ai-toggle-title' : 'block text-sm font-semibold text-[var(--tl-ink)]'}>
+                    Ask Timely to draft this {isQuote ? 'quote' : 'invoice'}
+                  </span>
+                  <span className={isPage ? 'ti-composer-ai-toggle-hint' : 'mt-0.5 block text-xs text-[var(--tl-ink-2)]'}>
+                    Plain language in — line items, client, and terms out. Works offline.
+                  </span>
+                </span>
+                <ChevronRight className={cn('h-4 w-4 shrink-0', isPage ? 'ti-composer-ai-toggle-chevron' : 'text-[var(--tl-ink-3)]')} aria-hidden />
+              </button>
+            )}
           </div>
 
-          {step === 1 ? (
-            <div className="space-y-5">
-              <div className="flex items-end justify-between gap-3">
-                <div>
-                  <div className="text-lg font-semibold">Client</div>
-                  <div className="mt-1 text-sm text-muted-foreground">Search or quickly add.</div>
+          {showClientStep ? (
+            <div className={cn(isPage ? 'ti-composer-section' : 'space-y-8')}>
+              <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--tl-line)] bg-white shadow-[var(--shadow-elevated)]">
+                <div className="grid md:grid-cols-2">
+                  <div className="min-w-0 border-b border-[var(--tl-line)] p-5 md:border-r md:border-b-0 md:p-6">
+                    <p className="ti-meta">From</p>
+                    <p className="mt-2 text-lg font-semibold tracking-tight text-[var(--tl-ink)]">{companyName}</p>
+                    <p className="ti-caption mt-1">Your company on this document</p>
+                  </div>
+
+                  <div className="min-w-0 bg-[color-mix(in_srgb,var(--tl-navy)_2.5%,white)] p-5 md:p-6">
+                    <p className="ti-meta">To</p>
+                    {hasResolvedClient ? (
+                      <div className="mt-2 flex items-start gap-3">
+                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--tl-navy)] text-sm font-semibold text-white shadow-[0_6px_16px_rgb(15_20_28_/_0.18)]">
+                          {selectedClientInitial}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-lg font-semibold tracking-tight text-[var(--tl-ink)]">{selectedClientName}</p>
+                          {(clientDetails?.companyName || clientDetails?.email) ? (
+                            <p className="ti-caption mt-0.5 truncate">
+                              {[clientDetails?.companyName, clientDetails?.email].filter(Boolean).join(' · ')}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-2">
+                        <p className="text-lg font-semibold tracking-tight text-[var(--tl-ink-3)]">Choose recipient</p>
+                        <p className="ti-caption mt-1">Search your list or add someone new below.</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <Link href={`${routes.app.clients}/new`} className="text-sm font-semibold text-primary hover:underline">
-                  Full client form
-                </Link>
+
+                <div className="border-t border-[var(--tl-line)] p-5 md:p-6">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="ti-tabs" role="tablist" aria-label="Client picker mode">
+                      <button
+                        type="button"
+                        role="tab"
+                        className="ti-tab inline-flex items-center gap-1.5"
+                        aria-selected={clientPickerMode === 'search'}
+                        data-active={clientPickerMode === 'search' ? 'true' : undefined}
+                        onClick={() => setClientPickerMode('search')}
+                      >
+                        <Users className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        Search existing
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        className="ti-tab inline-flex items-center gap-1.5"
+                        aria-selected={clientPickerMode === 'add'}
+                        data-active={clientPickerMode === 'add' ? 'true' : undefined}
+                        onClick={() => openQuickAddClient()}
+                      >
+                        <UserPlus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        Add new
+                      </button>
+                    </div>
+                    <Link
+                      href={`${routes.app.clients}/new`}
+                      className="inline-flex items-center gap-0.5 text-sm font-semibold text-[var(--tl-ink-2)] transition hover:text-[var(--tl-ink)]"
+                    >
+                      Full client form
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    </Link>
+                  </div>
+
+                  {clientPickerMode === 'search' ? (
+                    <div className="space-y-3">
+                      <label htmlFor="composer-client-search" className="sr-only">
+                        Search clients
+                      </label>
+                      <div className="flex items-stretch gap-2 rounded-full border border-[var(--tl-line)] bg-[color-mix(in_srgb,var(--tl-bg)_50%,white)] p-1">
+                        <div className="relative min-w-0 flex-1">
+                          <Search
+                            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--tl-ink-3)]"
+                            aria-hidden
+                          />
+                          <Input
+                            id="composer-client-search"
+                            ref={clientSearchRef}
+                            value={clientsQuery}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setClientsQuery(v);
+                              setClientsSearched(false);
+                              setClients([]);
+                              setClientsError(null);
+                            }}
+                            placeholder="Search by name or email…"
+                            autoComplete="off"
+                            className="h-10 border-0 bg-transparent pl-10 shadow-none focus:border-transparent focus:shadow-none"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                void runClientSearch();
+                              }
+                            }}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          className="h-10 shrink-0 rounded-full px-5"
+                          disabled={loadingClients}
+                          onClick={() => void runClientSearch()}
+                        >
+                          {loadingClients ? 'Searching…' : 'Search'}
+                        </Button>
+                      </div>
+
+                      {!clientsSearched && !loadingClients ? (
+                        <p className="text-xs leading-relaxed text-[var(--tl-ink-3)]">
+                          Start typing, then search your saved clients.
+                        </p>
+                      ) : null}
+
+                      {clientsError ? <div className="ti-error">{clientsError}</div> : null}
+                      {errors.clientId ? <div className="text-xs text-danger">{errors.clientId}</div> : null}
+
+                      {clientsSearched || loadingClients ? (
+                        <div className="max-h-60 overflow-auto rounded-[calc(var(--radius-card)-4px)] border border-[var(--tl-line)] bg-white shadow-[var(--shadow-elevated)]">
+                          {loadingClients ? (
+                            <p className="px-4 py-3 text-sm text-[var(--tl-ink-3)]">Searching your client list…</p>
+                          ) : filteredClients.length === 0 ? (
+                            <p className="px-4 py-3 text-sm leading-relaxed text-[var(--tl-ink-3)]">
+                              No matches for &ldquo;{clientsQuery.trim()}&rdquo;.{' '}
+                              <button
+                                type="button"
+                                className="font-semibold text-[var(--tl-ink)] underline underline-offset-2 hover:text-[var(--tl-accent)]"
+                                onClick={() => openQuickAddClient(clientsQuery)}
+                              >
+                                Add as new client
+                              </button>
+                            </p>
+                          ) : (
+                            filteredClients.slice(0, 10).map((c) => {
+                              const selected = draft.clientId === c.id;
+                              return (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() => setDraft((d) => ({ ...d, clientId: c.id }))}
+                                  className={cn(
+                                    'flex w-full items-center gap-3 border-b border-[var(--tl-line)] px-4 py-3 text-left transition-colors duration-[var(--ti-duration-hover)] last:border-b-0 hover:bg-[var(--tl-accent-soft)]',
+                                    selected && 'bg-[var(--tl-accent-soft)]'
+                                  )}
+                                >
+                                  <span
+                                    className={cn(
+                                      'grid h-8 w-8 shrink-0 place-items-center rounded-full border text-xs font-semibold',
+                                      selected
+                                        ? 'border-[var(--tl-navy)] bg-[var(--tl-navy)] text-white'
+                                        : 'border-[color-mix(in_srgb,var(--tl-navy)_12%,var(--tl-line))] bg-[color-mix(in_srgb,var(--tl-navy)_8%,white)] text-[var(--tl-ink)]'
+                                    )}
+                                    aria-hidden
+                                  >
+                                    {c.name.trim().charAt(0).toUpperCase()}
+                                  </span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className={cn('block text-sm', selected ? 'font-semibold text-[var(--tl-ink)]' : 'text-[var(--tl-ink)]')}>
+                                      {c.name}
+                                    </span>
+                                    {c.companyName ? <span className="ti-caption block">{c.companyName}</span> : null}
+                                    <span className="ti-caption block">{c.email ?? 'No email on file'}</span>
+                                  </span>
+                                  <span className="grid h-5 w-5 shrink-0 place-items-center text-[var(--tl-accent)]" aria-hidden>
+                                    {selected ? <Check className="h-4 w-4" strokeWidth={2.25} /> : null}
+                                  </span>
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <p className="text-sm leading-relaxed text-[var(--tl-ink-2)]">
+                        Capture essentials now — you can enrich the profile later from Clients.
+                      </p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Field label="Name">
+                          <Input
+                            value={quickClient.name}
+                            onChange={(e) => setQuickClient((c) => ({ ...c, name: e.target.value }))}
+                            placeholder="Client or contact name"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                void createQuickClient();
+                              }
+                            }}
+                          />
+                        </Field>
+                        <Field label="Email">
+                          <Input
+                            value={quickClient.email}
+                            onChange={(e) => setQuickClient((c) => ({ ...c, email: e.target.value }))}
+                            placeholder="Optional"
+                            type="email"
+                          />
+                        </Field>
+                        <Field label="Phone">
+                          <Input
+                            value={quickClient.phone}
+                            onChange={(e) => setQuickClient((c) => ({ ...c, phone: e.target.value }))}
+                            placeholder="Optional"
+                          />
+                        </Field>
+                        <Field label="Company">
+                          <Input
+                            value={quickClient.companyName}
+                            onChange={(e) => setQuickClient((c) => ({ ...c, companyName: e.target.value }))}
+                            placeholder="Optional"
+                          />
+                        </Field>
+                        <Field label="Registration">
+                          <Input
+                            value={quickClient.companyRegistration}
+                            onChange={(e) => setQuickClient((c) => ({ ...c, companyRegistration: e.target.value }))}
+                            placeholder="Reg / CK"
+                          />
+                        </Field>
+                        <Field label="VAT number">
+                          <Input
+                            value={quickClient.vatNumber}
+                            onChange={(e) => setQuickClient((c) => ({ ...c, vatNumber: e.target.value }))}
+                            placeholder="Optional"
+                          />
+                        </Field>
+                        <Field label="Website" className="sm:col-span-2">
+                          <Input
+                            value={quickClient.website}
+                            onChange={(e) => setQuickClient((c) => ({ ...c, website: e.target.value }))}
+                            placeholder="https://"
+                            type="url"
+                          />
+                        </Field>
+                      </div>
+                      {errors.quickClientName ? (
+                        <div className="text-xs text-danger" role="alert">
+                          {errors.quickClientName}
+                        </div>
+                      ) : null}
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button
+                          type="button"
+                          onClick={() => void createQuickClient()}
+                          disabled={creatingClient || !quickClient.name.trim()}
+                          loading={creatingClient}
+                        >
+                          <FilePlus2 className="h-4 w-4" />
+                          Add client
+                        </Button>
+                        <button
+                          type="button"
+                          className="text-sm font-semibold text-[var(--tl-ink-2)] underline underline-offset-2 hover:text-[var(--tl-ink)]"
+                          onClick={() => setClientPickerMode('search')}
+                        >
+                          Search existing instead
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {resumeCandidate ? (
-                <div className="rounded-2xl border border-border bg-card p-4 ti-no-print">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="border-b border-border py-4 ti-no-print">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-baseline sm:justify-between">
                     <div>
-                      <div className="text-sm font-semibold">Resume unfinished invoice?</div>
-                      <div className="mt-1 text-sm text-muted-foreground">
+                      <p className="text-sm font-medium">Unfinished {isQuote ? 'quote' : 'invoice'}</p>
+                      <p className="ti-small mt-1">
                         Draft saved {resumeCandidateSavedAt ? new Date(resumeCandidateSavedAt).toLocaleString() : 'recently'}.
-                      </div>
+                      </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button
+                    <div className="flex items-center gap-4">
+                      <button
                         type="button"
-                        variant="secondary"
+                        className="text-sm text-[var(--tl-ink-3)] hover:text-[var(--tl-ink)]"
                         onClick={() => {
-                          clearDraft(autosaveScope);
+                          if (isQuote) {
+                            clearDraft(autosaveScope);
+                            if (serverInvoiceId) {
+                              void (async () => {
+                                try {
+                                  const supabase = createSupabaseBrowserClient();
+                                  const ownerId = await getWorkspaceOwnerIdForClient();
+                                  await supabase.from('quotes').delete().eq('id', serverInvoiceId).eq('owner_id', ownerId);
+                                } catch {
+                                  // local draft already cleared
+                                }
+                              })();
+                            }
+                          } else {
+                            void discardPersistedDraft(autosaveScope, serverInvoiceId);
+                          }
+                          setServerInvoiceId(null);
                           setResumeCandidate(null);
                           setResumeCandidateSavedAt(null);
                           setSavedAt(null);
+                          setCloudSyncStatus('idle');
                         }}
                       >
                         Discard
-                      </Button>
-                      <Button
+                      </button>
+                      <button
                         type="button"
+                        className="text-sm font-medium text-[var(--tl-ink)] hover:underline"
                         onClick={() => {
                           const invNo =
                             (resumeCandidate as any)?.invoiceNumber && String((resumeCandidate as any).invoiceNumber).trim().length
                               ? (resumeCandidate as any).invoiceNumber
-                              : makeInvoiceNumber();
+                              : makeDocumentNumber();
                           setDraft({ ...(resumeCandidate as any), invoiceNumber: invNo });
                           setSavedAt(resumeCandidateSavedAt ?? Date.now());
                           setResumeCandidate(null);
@@ -949,298 +1896,121 @@ export function InvoiceComposerModal({
                         }}
                       >
                         Resume
-                      </Button>
+                      </button>
                     </div>
                   </div>
                 </div>
               ) : null}
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Search clients</label>
-                <div className="flex items-center gap-2">
-                  <div className="min-w-0 flex-1">
-                    <Input
-                      ref={clientSearchRef}
-                      value={clientsQuery}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setClientsQuery(v);
-                        setClientsSearched(false);
-                        setClients([]);
-                        setClientsError(null);
-                      }}
-                      placeholder="Type a name or email…"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          void runClientSearch();
-                        }
-                      }}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-11 shrink-0 px-4"
-                    disabled={loadingClients}
-                    onClick={() => void runClientSearch()}
-                  >
-                    {loadingClients ? 'Searching…' : 'Search'}
-                  </Button>
-                </div>
-              </div>
-
-              {clientsError ? <div className="rounded-2xl bg-danger/10 p-3 text-sm text-danger">{clientsError}</div> : null}
-              {saveOk ? (
-                <div className="rounded-2xl bg-success/10 p-3 text-sm text-success">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>{saveOk}</div>
-                    {shareUrl ? (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="h-9"
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(shareUrl);
-                            setSaveOk('Saved. Share link copied.');
-                          } catch {
-                            setSaveOk(`Saved. Share link: ${shareUrl}`);
-                          }
-                        }}
-                      >
-                        Copy share link
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="max-h-48 overflow-auto rounded-2xl bg-muted/20 p-2">
-                {loadingClients ? (
-                  <div className="p-3 text-sm text-muted-foreground">Searching…</div>
-                ) : !clientsSearched ? (
-                  <div className="p-3 text-sm text-muted-foreground">
-                    Search to load clients. Nothing is shown until you search.
-                  </div>
-                ) : filteredClients.length === 0 ? (
-                  <div className="p-3 text-sm text-muted-foreground">No matches.</div>
-                ) : (
-                  filteredClients.slice(0, 10).map((c) => {
-                    const selected = draft.clientId === c.id;
-                    return (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => setDraft((d) => ({ ...d, clientId: c.id }))}
-                        className={cn(
-                          'flex w-full items-start gap-3 rounded-2xl px-3 py-2.5 text-left transition hover:bg-white/70 dark:hover:bg-white/10',
-                          selected && 'bg-white/80 shadow-[var(--shadow-sm)] dark:bg-white/10'
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            'mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border-2',
-                            selected
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-muted-foreground/40 bg-background'
-                          )}
-                          aria-hidden
-                        >
-                          {selected ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <div className="text-sm font-semibold">{c.name}</div>
-                          {c.companyName ? (
-                            <div className="text-xs text-muted-foreground">{c.companyName}</div>
-                          ) : null}
-                          <div className="text-xs text-muted-foreground">{c.email ?? '—'}</div>
-                        </span>
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-              {errors.clientId ? <div className="text-xs text-danger">{errors.clientId}</div> : null}
-              {draft.clientId && clientsSearched ? (
-                <div className="text-xs text-muted-foreground">
-                  The checked client is selected. Search again only if you want to bill someone else.
-                </div>
-              ) : null}
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Issue date</label>
-                  <Input type="date" value={draft.issueDate} onChange={(e) => setDraft((d) => ({ ...d, issueDate: e.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Due date</label>
-                  <Input type="date" value={draft.dueDate} onChange={(e) => setDraft((d) => ({ ...d, dueDate: e.target.value }))} />
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Currency</label>
-                  <Input value={draft.currency} onChange={(e) => setDraft((d) => ({ ...d, currency: e.target.value.toUpperCase() }))} />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Template</label>
-                  <select
-                    className="h-11 w-full rounded-xl bg-white/70 px-3 text-sm shadow-[var(--shadow-sm)] dark:bg-white/5"
-                    value={draft.template}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, template: e.target.value as InvoiceComposerTemplate }))
-                    }
-                  >
-                    {INVOICE_TEMPLATE_PRESETS.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Invoice number</label>
-                <Input
-                  value={draft.invoiceNumber ?? ''}
-                  onChange={(e) => setDraft((d) => ({ ...d, invoiceNumber: e.target.value }))}
-                  placeholder="e.g. INV-2026-00042"
-                />
-                <div className="text-xs text-muted-foreground">This will appear on the PDF and share link.</div>
-              </div>
-
-              <div className="rounded-2xl bg-muted/20 p-4">
-                <div className="text-sm font-semibold">Quick add client</div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                  <Input
-                    value={quickClient.name}
-                    onChange={(e) => setQuickClient((c) => ({ ...c, name: e.target.value }))}
-                    placeholder="Name (required)"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        void createQuickClient();
-                      }
-                    }}
-                  />
-                  <Input
-                    value={quickClient.email}
-                    onChange={(e) => setQuickClient((c) => ({ ...c, email: e.target.value }))}
-                    placeholder="Email (optional)"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        void createQuickClient();
-                      }
-                    }}
-                  />
-                  <Input
-                    value={quickClient.phone}
-                    onChange={(e) => setQuickClient((c) => ({ ...c, phone: e.target.value }))}
-                    placeholder="Phone (optional)"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        void createQuickClient();
-                      }
-                    }}
-                  />
-                </div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <Input
-                    value={quickClient.companyName}
-                    onChange={(e) => setQuickClient((c) => ({ ...c, companyName: e.target.value }))}
-                    placeholder="Company name (optional)"
-                  />
-                  <Input
-                    value={quickClient.website}
-                    onChange={(e) => setQuickClient((c) => ({ ...c, website: e.target.value }))}
-                    placeholder="Website (optional)"
-                    type="url"
-                  />
-                </div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <Input
-                    value={quickClient.companyRegistration}
-                    onChange={(e) => setQuickClient((c) => ({ ...c, companyRegistration: e.target.value }))}
-                    placeholder="Reg / CK (optional)"
-                  />
-                  <Input
-                    value={quickClient.vatNumber}
-                    onChange={(e) => setQuickClient((c) => ({ ...c, vatNumber: e.target.value }))}
-                    placeholder="VAT no. (optional)"
-                  />
-                </div>
-                {errors.quickClientName ? <div className="mt-2 text-xs text-danger">{errors.quickClientName}</div> : null}
-                <div className="mt-3">
-                  <Button type="button" variant="secondary" onClick={createQuickClient} disabled={submitting}>
-                    <FilePlus2 className="h-4 w-4" />
-                    Add client
-                  </Button>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between pt-2">
-                <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
-                  Cancel
-                </Button>
-                <Button
+              {saveOk && shareUrl ? (
+                <button
                   type="button"
-                  onClick={() => {
-                    setSubmitError(null);
-                    if (!validateStep1()) return;
-                    setStep(2);
+                  className="text-sm text-[var(--tl-ink-2)] hover:text-[var(--tl-ink)]"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(shareUrl);
+                      setSaveOk('Saved. Share link copied.');
+                    } catch {
+                      setSaveOk(`Saved. Share link: ${shareUrl}`);
+                    }
                   }}
                 >
-                  Continue
-                </Button>
+                  Copy share link
+                </button>
+              ) : null}
+
+              <div className={cn(isPage ? 'ti-composer-section space-y-4' : 'space-y-4 border-t border-border pt-6')}>
+                <p className="ti-meta">{isQuote ? 'Quote details' : 'Invoice details'}</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Issue date">
+                    <Input type="date" value={draft.issueDate} onChange={(e) => setDraft((d) => ({ ...d, issueDate: e.target.value }))} />
+                  </Field>
+                  <Field label={isQuote ? 'Quote number' : 'Invoice number'} hint="Shown on the PDF and share link.">
+                    <Input
+                      value={draft.invoiceNumber ?? ''}
+                      onChange={(e) => setDraft((d) => ({ ...d, invoiceNumber: e.target.value }))}
+                      placeholder={isQuote ? 'e.g. QT-2026-00042' : 'e.g. INV-2026-00042'}
+                    />
+                  </Field>
+                </div>
               </div>
+
+              <div className={cn(isPage ? 'ti-composer-section space-y-4' : 'space-y-4')}>
+                <p className="ti-meta">{isQuote ? 'Validity' : 'Payment terms'}</p>
+                <Field label={isQuote ? 'Valid until' : 'Due date'}>
+                  <Input type="date" value={draft.dueDate} onChange={(e) => setDraft((d) => ({ ...d, dueDate: e.target.value }))} />
+                </Field>
+              </div>
+
+              {!isPage ? (
+                <div className="flex items-center justify-between pt-2">
+                  <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setSubmitError(null);
+                      if (!validateStep1()) return;
+                      setStep(2);
+                    }}
+                  >
+                    Continue
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
-          {step === 2 ? (
-            <div className="space-y-5">
-              <div className="flex items-end justify-between gap-3">
+          {showItemsStep ? (
+            <div className={cn(isPage ? 'ti-composer-section space-y-5' : 'space-y-5')}>
+              <div className="ti-composer-section-head">
                 <div>
-                  <div className="text-lg font-semibold">Line items</div>
-                  <div className="mt-1 text-sm text-muted-foreground">VAT defaults to 15% (South Africa).</div>
+                  <p className="ti-meta">Line items</p>
+                  <p className={isPage ? 'ti-composer-section-title' : 'mt-2 text-lg font-semibold tracking-tight'}>
+                    {isQuote ? 'Quoted work' : 'Work billed'}
+                  </p>
                 </div>
-                <Button type="button" variant="secondary" onClick={addItem}>
-                  + Add item
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Link href={routes.app.productsServices} className="text-xs font-medium text-[var(--tl-ink-2)] hover:text-[var(--tl-ink)]">
+                    Products &amp; services
+                  </Link>
+                  <Button type="button" variant="secondary" onClick={addItem}>
+                    Add item
+                  </Button>
+                </div>
               </div>
 
-              <div className="flex flex-col gap-2 rounded-2xl border border-border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-muted-foreground">Bill to</div>
-                  <div className="truncate text-sm font-semibold">{clientDetails?.name ?? selectedClientName}</div>
-                  {clientDetails?.email ? (
-                    <div className="truncate text-xs text-muted-foreground">{clientDetails.email}</div>
-                  ) : null}
+              {!isPage ? (
+                <div className="flex flex-col gap-2 border-b border-border py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="ti-meta">{isQuote ? 'Quote to' : 'Bill to'}</p>
+                    <div className="mt-2 truncate text-sm font-semibold">{clientDetails?.name ?? selectedClientName}</div>
+                    {clientDetails?.email ? (
+                      <div className="truncate text-xs text-[var(--tl-ink-3)]">{clientDetails.email}</div>
+                    ) : null}
+                  </div>
+                  <Button type="button" variant="secondary" className="shrink-0" onClick={() => setStep(1)}>
+                    Change client
+                  </Button>
                 </div>
-                <Button type="button" variant="secondary" className="shrink-0" onClick={() => setStep(1)}>
-                  Change client
-                </Button>
-              </div>
+              ) : null}
 
               {errors.items ? <div className="text-xs text-danger">{errors.items}</div> : null}
 
-              <div className="space-y-2">
+              <div className={cn(isPage ? 'ti-composer-lines' : 'space-y-2')}>
                 <div
                   className={cn(
-                    'hidden px-4 md:grid md:grid-cols-[minmax(0,1fr)_4.75rem_7.25rem_4.5rem_8.5rem_2.5rem] md:items-center md:gap-3'
+                    isPage
+                      ? 'ti-composer-lines-head'
+                      : 'hidden px-4 md:grid md:grid-cols-[minmax(0,1fr)_4.75rem_7.25rem_4.5rem_8.5rem_2.5rem] md:items-center md:gap-3'
                   )}
                 >
-                  <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Description</div>
-                  <div className="text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Qty</div>
-                  <div className="text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    Unit ({draft.currency})
-                  </div>
-                  <div className="text-right text-xs font-semibold uppercase tracking-wider text-gray-500">VAT %</div>
-                  <div className="text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Line total</div>
+                  <div className="ti-meta">Description</div>
+                  <div className="ti-meta text-right">Qty</div>
+                  <div className="ti-meta text-right">Unit ({draft.currency})</div>
+                  <div className="ti-meta text-right">VAT %</div>
+                  <div className="ti-meta text-right">Line total</div>
                   <div className="sr-only">Action</div>
                 </div>
                 {draft.items.map((it, itemIndex) => {
@@ -1259,12 +2029,16 @@ export function InvoiceComposerModal({
                     }
                   };
                   return (
-                    <div key={it.id} className="rounded-lg border border-[#e5e7eb] bg-white p-3 md:px-4 md:py-3">
+                    <div
+                      key={it.id}
+                      className={cn(
+                        'ti-line-enter',
+                        isPage ? 'ti-composer-line' : 'border-b border-border py-3 md:px-0'
+                      )}
+                    >
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_4.75rem_7.25rem_4.5rem_8.5rem_2.5rem] md:items-start">
                         <div className="min-w-0 space-y-2">
-                          <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 md:sr-only">
-                            Description
-                          </label>
+                          <label className="ti-meta md:sr-only">Description</label>
                           {inventoryCatalog.length > 0 ? (
                             <div>
                               <label className="sr-only" htmlFor={`inv-cat-${it.id}`}>
@@ -1272,10 +2046,7 @@ export function InvoiceComposerModal({
                               </label>
                               <select
                                 id={`inv-cat-${it.id}`}
-                                className={cn(
-                                  'h-10 w-full rounded-lg border border-[#e5e7eb] bg-white px-3 text-sm text-foreground',
-                                  'focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900'
-                                )}
+                                className="input ti-select h-10 w-full"
                                 value={it.catalogItemId ?? ''}
                                 onChange={(e) => {
                                   const v = e.target.value;
@@ -1316,7 +2087,7 @@ export function InvoiceComposerModal({
                                 updateItem(it.id, { description: e.target.value });
                               }}
                               placeholder="e.g. Consulting services"
-                              className="h-10 rounded-lg border-[#e5e7eb] bg-white shadow-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900"
+                              className="h-10"
                               onKeyDown={(e) => {
                                 if (e.key === 'Escape') {
                                   e.preventDefault();
@@ -1326,8 +2097,8 @@ export function InvoiceComposerModal({
                             />
                             {activeItemId === it.id && (suggestLoading || suggestions.length > 0) ? (
                               <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20">
-                                <div className="overflow-hidden rounded-lg border border-[#e5e7eb] bg-white shadow-[var(--shadow-dropdown)]">
-                                  <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                                <div className="overflow-hidden border border-border bg-[var(--tl-surface)] shadow-[var(--shadow-dropdown)]">
+                                  <div className="ti-meta px-3 py-2">
                                     {suggestLoading ? 'Suggestions…' : 'Suggestions'}
                                   </div>
                                   {suggestions.length ? (
@@ -1336,7 +2107,7 @@ export function InvoiceComposerModal({
                                         <button
                                           key={`${s.description}-${idx}`}
                                           type="button"
-                                          className="w-full rounded-lg px-2 py-2 text-left text-sm transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
+                                          className="w-full px-2 py-2 text-left text-sm hover:bg-[var(--tl-accent-soft)]"
                                           onClick={() => {
                                             updateItem(it.id, {
                                               description: s.description,
@@ -1371,19 +2142,19 @@ export function InvoiceComposerModal({
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 md:sr-only">Qty</label>
+                          <label className="ti-meta md:sr-only">Qty</label>
                           <Input
                             type="number"
                             min={1}
                             inputMode="decimal"
                             value={it.quantity}
-                            className="h-10 rounded-lg border-[#e5e7eb] bg-white text-right tabular-nums shadow-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900"
+                            className="h-10 text-right tabular-nums"
                             onChange={(e) => updateItem(it.id, { quantity: Number(e.target.value) })}
                           />
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 md:sr-only">
+                          <label className="ti-meta md:sr-only">
                             Unit ({draft.currency})
                           </label>
                           <Input
@@ -1392,13 +2163,13 @@ export function InvoiceComposerModal({
                             step="0.01"
                             inputMode="decimal"
                             value={it.unitPrice}
-                            className="h-10 rounded-lg border-[#e5e7eb] bg-white text-right tabular-nums shadow-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900"
+                            className="h-10 text-right tabular-nums"
                             onChange={(e) => updateItem(it.id, { unitPrice: Number(e.target.value) })}
                             onBlur={() => rememberPrice(it.description, it.unitPrice, it.vatRate)}
                           />
                           <button
                             type="button"
-                            className="text-xs font-medium text-gray-500 hover:text-slate-900"
+                            className="text-xs font-medium text-[var(--tl-ink-3)] hover:text-[var(--tl-ink)]"
                             onClick={() => void suggestPrice()}
                           >
                             Suggest
@@ -1406,24 +2177,22 @@ export function InvoiceComposerModal({
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 md:sr-only">VAT %</label>
+                          <label className="ti-meta md:sr-only">VAT %</label>
                           <Input
                             type="number"
                             min={0}
                             max={100}
                             inputMode="decimal"
                             value={it.vatRate}
-                            className="h-10 rounded-lg border-[#e5e7eb] bg-white text-right tabular-nums shadow-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900"
+                            className="h-10 text-right tabular-nums"
                             onChange={(e) => updateItem(it.id, { vatRate: Number(e.target.value) })}
                             onBlur={() => rememberPrice(it.description, it.unitPrice, it.vatRate)}
                           />
                         </div>
 
                         <div className="flex items-center justify-between gap-3 md:h-10 md:justify-end">
-                          <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 md:sr-only">
-                            Line total
-                          </span>
-                          <span className="text-sm font-semibold tabular-nums text-foreground">
+                          <span className="ti-meta md:sr-only">Line total</span>
+                          <span className="ti-amount ti-amount-live text-sm">
                             {formatMoney(lineTotal, draft.currency)}
                           </span>
                         </div>
@@ -1432,7 +2201,7 @@ export function InvoiceComposerModal({
                           {draft.items.length > 1 ? (
                             <button
                               type="button"
-                              className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-red-600 transition-colors hover:bg-red-50 hover:text-red-700"
+                              className="inline-flex h-10 w-10 items-center justify-center text-[var(--tl-danger)] transition-colors duration-[var(--ti-duration-hover)] hover:text-[var(--tl-ink)]"
                               aria-label="Remove line item"
                               onClick={() => removeItem(it.id)}
                             >
@@ -1448,25 +2217,95 @@ export function InvoiceComposerModal({
                 })}
               </div>
 
-              <div className="flex items-center justify-between pt-2">
-                <Button type="button" variant="secondary" onClick={() => setStep(1)}>
-                  Back
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    setSubmitError(null);
-                    if (!validateItems()) return;
-                    setStep(3);
-                  }}
-                >
-                  Review
-                </Button>
-              </div>
+              <Field label="Notes">
+                <Textarea
+                  value={draft.notes ?? ''}
+                  onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+                  placeholder={
+                    isQuote
+                      ? 'Scope notes or terms for the client'
+                      : 'Payment instructions or a short note to the client'
+                  }
+                  rows={3}
+                />
+              </Field>
+
+              {isPage ? (
+                <details className="ti-composer-section ti-composer-preview-fallback ti-no-print">
+                  <summary className="cursor-pointer text-sm font-medium text-[var(--tl-ink-2)] hover:text-[var(--tl-ink)]">
+                    Preview document
+                  </summary>
+                  <div className="mt-4 overflow-hidden rounded-[calc(var(--radius-card)-4px)] border border-border">
+                    <InvoicePreview
+                      draft={draft}
+                      documentKind={isQuote ? 'quote' : 'invoice'}
+                      client={{
+                        name: clientDetails?.name ?? selectedClientName,
+                        email: clientDetails?.email ?? null,
+                        phone: clientDetails?.phone ?? null,
+                        address: clientDetails?.address ?? null,
+                        companyName: clientDetails?.companyName ?? null,
+                        website: clientDetails?.website ?? null,
+                        companyRegistration: clientDetails?.companyRegistration ?? null,
+                        vatNumber: clientDetails?.vatNumber ?? null,
+                      }}
+                      companyName={companyName}
+                      companyLogoPath={companyLogoPath}
+                      companyDetails={companyDetails}
+                      showPoweredBy={showPoweredBy}
+                      invoiceViewUrl={shareUrl}
+                    />
+                  </div>
+                </details>
+              ) : null}
+
+              {isPage ? (
+                <p>
+                  <button
+                    type="button"
+                    className="ti-composer-cancel"
+                    onClick={() => window.location.assign(isQuote ? routes.app.quotes : routes.app.invoices)}
+                  >
+                    Cancel
+                  </button>
+                </p>
+              ) : (
+                <div className="flex items-center justify-between pt-2">
+                  <Button type="button" variant="secondary" onClick={() => setStep(1)}>
+                    Back
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      loading={submitting}
+                      onClick={async () => {
+                        try {
+                          await saveDocumentToServer();
+                        } catch (e: any) {
+                          setSubmitError(e?.message ?? 'Save failed');
+                        }
+                      }}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setSubmitError(null);
+                        if (!reportValidationIssues()) return;
+                        setStep(3);
+                      }}
+                    >
+                      Review
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : null}
 
-          {step === 3 ? (
+          {showReviewStep ? (
             <div className="space-y-5">
               <div className="flex items-end justify-between ti-no-print">
                 <div>
@@ -1478,67 +2317,24 @@ export function InvoiceComposerModal({
                 </Button>
               </div>
 
-              <div className="rounded-2xl bg-muted/20 p-4 text-sm ti-no-print">
+              <InvoiceTotalsBlock
+                currency={draft.currency}
+                totals={totals}
+                totalLabel={isQuote ? 'Quote total' : 'Total due'}
+              />
+
+              <div className="border-t border-border pt-4 ti-no-print">
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span className="font-semibold">{formatMoney(totals.subtotal, draft.currency)}</span>
-                </div>
-                <div className="mt-2 flex items-center justify-between">
-                  <span className="text-muted-foreground">VAT</span>
-                  <span className="font-semibold">{formatMoney(totals.vat, draft.currency)}</span>
-                </div>
-                <div className="mt-3 h-px bg-black/5 dark:bg-white/10" />
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="text-muted-foreground">Total</span>
-                  <span className="text-lg font-semibold">{formatMoney(totals.total, draft.currency)}</span>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-[#e5e7eb] bg-white p-4 ti-no-print">
-                <div className="text-sm font-semibold">Invoice template</div>
-                <div className="mt-1 text-sm text-muted-foreground">Applies to the PDF and the client view.</div>
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {INVOICE_TEMPLATE_PRESETS.map((t) => {
-                    const selected = draft.template === t.id;
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => setDraft((d) => ({ ...d, template: t.id }))}
-                        className={cn(
-                          'rounded-lg border bg-white p-3 text-left transition-shadow',
-                          selected
-                            ? 'border-[#1a3a4a] ring-2 ring-[#1a3a4a]/20'
-                            : 'border-[#e5e7eb] hover:border-[#1a3a4a]/40'
-                        )}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="h-2.5 w-10 rounded-full" style={{ backgroundColor: t.accentHex }} />
-                          {selected ? <Check className="h-3.5 w-3.5 text-[#1a3a4a]" /> : null}
-                        </div>
-                        <div className="mt-2 text-sm font-semibold text-[#101418]">{t.label}</div>
-                        <div className="mt-0.5 text-xs text-[#5a6169]">{t.description}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="rounded-2xl bg-muted/20 p-4">
-                <div className="flex items-center justify-between ti-no-print">
-                  <div className="text-sm font-semibold">PDF preview</div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => window.print()}
-                  >
+                  <p className="text-sm font-semibold">Preview</p>
+                  <Button type="button" variant="ghost" onClick={() => window.print()}>
                     <Printer className="h-4 w-4" />
-                    Print / Save PDF
+                    Print
                   </Button>
                 </div>
                 <div className="mt-4 ti-print-area">
                   <InvoicePreview
                     draft={draft}
+                    documentKind={isQuote ? 'quote' : 'invoice'}
                     client={{
                       name: clientDetails?.name ?? selectedClientName,
                       email: clientDetails?.email ?? null,
@@ -1572,7 +2368,7 @@ export function InvoiceComposerModal({
                     disabled={submitting}
                     onClick={async () => {
                       try {
-                        await saveInvoiceToServer();
+                        await saveDocumentToServer();
                       } catch (e: any) {
                         setSubmitError(e?.message ?? 'Save failed');
                       }
@@ -1580,7 +2376,7 @@ export function InvoiceComposerModal({
                   >
                     {submitting ? 'Saving…' : 'Save'}
                   </Button>
-                  <Button type="button" onClick={() => setStep(4)}>
+                  <Button type="button" onClick={proceedToSendStep}>
                     Continue to send
                   </Button>
                 </div>
@@ -1588,102 +2384,168 @@ export function InvoiceComposerModal({
             </div>
           ) : null}
 
-          {step === 4 ? (
-            <div className="space-y-5">
-              <div className="flex items-end justify-between">
-                <div>
-                  <div className="text-lg font-semibold">Send</div>
-                  <div className="mt-1 text-sm text-muted-foreground">Email, WhatsApp, or shareable link.</div>
+          {showSendStep ? (
+            <div ref={sendSectionRef} className={cn(isPage ? 'ti-composer-section space-y-6' : 'space-y-6')}>
+              {sentShareUrl ? (
+                <div className="ti-send-success space-y-3">
+                  <p className="ti-meta">Sent</p>
+                  <p className={isPage ? 'ti-composer-section-title' : 'text-lg font-semibold tracking-tight'}>
+                    {isQuote ? 'Quote is on its way.' : 'Invoice is on its way.'}
+                  </p>
+                  <p className="text-sm text-[var(--tl-ink-2)]">Opening the client view…</p>
                 </div>
-                <Badge variant="outline">v1</Badge>
-              </div>
+              ) : (
+                <>
+                  <div>
+                    <p className="ti-meta">Send</p>
+                    <p className={isPage ? 'ti-composer-section-title' : 'mt-2 text-lg font-semibold tracking-tight'}>
+                      {isQuote ? 'Deliver this quote' : 'Deliver this invoice'}
+                    </p>
+                    <p className="mt-1 text-sm text-[var(--tl-ink-2)]">Email, WhatsApp, or a shareable link.</p>
+                  </div>
 
-              <SendStep
-                currency={draft.currency}
-                total={totals.total}
-                submitting={submitting}
-                onCreateAndSend={async ({ email, whatsapp }) => {
-                  setSubmitting(true);
-                  setSubmitError(null);
-                  try {
-                    // Save invoice first (draft), then send
-                    const invoiceId = await saveInvoiceToServer();
-                    if (!invoiceId) throw new Error('Missing invoice id');
+                  <SendStep
+                    currency={draft.currency}
+                    total={totals.total}
+                    submitting={submitting}
+                    defaultEmail={clientDetails?.email ?? ''}
+                    actionLabel={isQuote ? 'Send quote' : 'Send invoice'}
+                    amountLabel={isQuote ? 'Quote total' : 'Amount due'}
+                    onDownloadPdf={() => void downloadDocumentPdf()}
+                    onCreateAndSend={async ({ email, whatsapp }) => {
+                      setSubmitting(true);
+                      setSubmitError(null);
+                      try {
+                        const docId = await saveDocumentToServer();
+                        if (!docId) throw new Error(isQuote ? 'Missing quote id' : 'Missing invoice id');
 
-                    const sent = await sendInvoice({
-                      invoiceId,
-                      toEmail: email || undefined,
-                      toWhatsapp: whatsapp || undefined,
-                    });
+                        if (isQuote) {
+                          // Quotes: ensure share link only (no invoice send / stock reduction).
+                          const share = await ensureQuoteShareLink(docId);
+                          void email;
+                          void whatsapp;
+                          onCreated?.(docId);
+                          setSubmitting(false);
+                          setSentShareUrl(share.shareUrl);
+                          notifySuccess('Quote ready to share.');
+                          window.setTimeout(() => {
+                            onOpenChange(false);
+                            window.location.assign(share.shareUrl);
+                          }, 400);
+                          return;
+                        }
 
-                    onCreated?.(invoiceId);
-                    setSubmitting(false);
-                    onOpenChange(false);
-                    window.location.assign(sent.shareUrl);
-                  } catch (e: any) {
-                    setSubmitError(e?.message ?? 'Send failed');
-                    setSubmitting(false);
-                  }
-                }}
-              />
+                        const sent = await sendInvoice({
+                          invoiceId: docId,
+                          toEmail: email || undefined,
+                          toWhatsapp: whatsapp || undefined,
+                        });
 
-              <div className="flex items-center justify-between pt-2">
-                <Button type="button" variant="secondary" onClick={() => setStep(3)}>
-                  Back
-                </Button>
-                <Button type="button" variant="secondary" onClick={createInvoiceDraft} disabled={submitting}>
-                  {submitting ? 'Working…' : 'Skip sending'}
-                </Button>
-              </div>
+                        onCreated?.(docId);
+                        setSubmitting(false);
+                        setSentShareUrl(sent.shareUrl);
+                        notifySuccess('Invoice sent.');
+                        window.setTimeout(() => {
+                          onOpenChange(false);
+                          window.location.assign(sent.shareUrl);
+                        }, 400);
+                      } catch (e: any) {
+                        setSubmitError(e?.message ?? 'Send failed');
+                        setSubmitting(false);
+                      }
+                    }}
+                  />
+
+                  <div className="flex items-center justify-between pt-2">
+                    <Button type="button" variant="secondary" onClick={() => setStep(isPage ? 1 : 3)}>
+                      Back
+                    </Button>
+                    <Button type="button" variant="ghost" onClick={createDocumentDraft} disabled={submitting}>
+                      Skip sending
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           ) : null}
-        </Card>
-
-        <Card className="p-5 h-fit lg:sticky lg:top-4 ti-no-print">
-          <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold">Totals</div>
-            <Badge variant="outline">SA VAT</Badge>
           </div>
-          <div className="mt-2 text-xs text-muted-foreground">
-            {savedAt ? `Auto-saved just now` : `Auto-save on`}
-          </div>
-          <div className="mt-4 space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span className="font-semibold tabular-nums whitespace-nowrap">{formatMoney(totals.subtotal, draft.currency)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">VAT</span>
-              <span className="font-semibold tabular-nums whitespace-nowrap">{formatMoney(totals.vat, draft.currency)}</span>
-            </div>
-            <div className="h-px bg-black/5 dark:bg-white/10" />
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Total</span>
-              <span className="text-base font-semibold tabular-nums whitespace-nowrap">{formatMoney(totals.total, draft.currency)}</span>
-            </div>
           </div>
 
-          <div className="mt-5 rounded-lg border border-[#e5e7eb] bg-[#f6f4f0] p-4">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#1a3a4a]/10 text-[#1a3a4a]">
-                <Sparkles className="h-4 w-4" />
+          {isPage && !showSendStep ? (
+            <footer className="ti-composer-sheet-foot ti-no-print">
+              <InvoiceTotalsBlock
+                currency={draft.currency}
+                totals={totals}
+                totalLabel={isQuote ? 'Quote total' : 'Total due'}
+                elevated
+              />
+              <div className="ti-composer-dock">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  loading={submitting}
+                  onClick={async () => {
+                    try {
+                      await saveDocumentToServer();
+                    } catch (e: any) {
+                      setSubmitError(e?.message ?? 'Save failed');
+                    }
+                  }}
+                >
+                  Save draft
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  loading={submitting}
+                  onClick={() => void downloadDocumentPdf()}
+                >
+                  <Download className="h-4 w-4" aria-hidden />
+                  PDF
+                </Button>
+                <Button type="button" onClick={proceedToSendStep}>
+                  {isQuote ? 'Send quote' : 'Send invoice'}
+                </Button>
               </div>
-              <div className="min-w-0">
-                <div className="text-sm font-semibold">Smart invoice</div>
-                <div className="mt-1 text-sm text-muted-foreground">
-                  {aiOk ?? 'Describe the work on the left and we’ll draft line items + VAT.'}
-                </div>
-              </div>
-            </div>
-          </div>
+            </footer>
+          ) : null}
+        </div>
 
-          <div className="mt-4 text-xs text-muted-foreground">
-            Prefer full page?{' '}
-            <Link href={`${routes.app.invoices}/new`} className="font-semibold text-primary hover:underline">
-              Open editor
-            </Link>
-          </div>
-        </Card>
+        {isPage ? (
+          livePreview
+        ) : (
+          <aside className="ti-no-print h-fit">
+            <div className="rounded-[var(--radius-card)] border border-border bg-[var(--tl-surface)] p-5 shadow-[var(--shadow-elevated)]">
+              <InvoiceTotalsBlock
+                currency={draft.currency}
+                totals={totals}
+                totalLabel={isQuote ? 'Quote total' : 'Total due'}
+              />
+              <p className="ti-caption mt-4">
+                {cloudSyncStatus === 'error'
+                  ? 'Saved on this device — retrying cloud sync…'
+                  : saveOk
+                    ? isQuote
+                      ? 'Quote saved.'
+                      : 'Invoice saved.'
+                    : cloudSyncStatus === 'saved' || serverInvoiceId
+                      ? 'Saved to your account'
+                      : savedAt
+                        ? 'Saved on this device'
+                        : 'Auto-save on'}
+              </p>
+              <p className="mt-4 text-xs text-[var(--tl-ink-3)]">
+                Prefer the full editor?{' '}
+                <Link
+                  href={isQuote ? `${routes.app.quotes}/new` : `${routes.app.invoices}/new`}
+                  className="font-medium text-[var(--tl-ink)] hover:underline"
+                >
+                  Open page
+                </Link>
+              </p>
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );
@@ -1694,9 +2556,13 @@ export function InvoiceComposerModal({
     <Modal open={open} onOpenChange={onOpenChange}>
       <ModalContent className="max-w-5xl p-4 sm:p-6">
         <ModalHeader className="mb-4">
-          <ModalTitle className="text-xl font-semibold tracking-tight">New invoice</ModalTitle>
+          <ModalTitle className="text-xl font-semibold tracking-tight">
+            {isQuote ? 'New quote' : 'New invoice'}
+          </ModalTitle>
           <ModalDescription className="text-sm text-muted-foreground">
-            Fast path for creating and sending a professional invoice.
+            {isQuote
+              ? 'Fast path for creating and sharing a professional quote.'
+              : 'Fast path for creating and sending a professional invoice.'}
           </ModalDescription>
         </ModalHeader>
         {body}

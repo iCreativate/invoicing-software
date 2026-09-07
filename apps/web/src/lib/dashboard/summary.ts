@@ -515,7 +515,7 @@ export async function getDashboardSummary(
   }
 
   const monthlyIncomeVsExpense: { label: string; income: number; expense: number }[] = [];
-  for (let back = 5; back >= 0; back--) {
+  for (let back = 11; back >= 0; back--) {
     const y = now.getUTCFullYear();
     const mo = now.getUTCMonth() - back;
     const d0 = new Date(Date.UTC(y, mo, 1));
@@ -727,8 +727,8 @@ export function buildDemoDashboardSummary(): DashboardSummary {
     },
   ];
 
-  const monthlyIncomeVsExpense = Array.from({ length: 6 }).map((_, i) => {
-    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (5 - i), 1));
+  const monthlyIncomeVsExpense = Array.from({ length: 12 }).map((_, i) => {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (11 - i), 1));
     return {
       label: d.toLocaleDateString('en-ZA', { month: 'short', year: '2-digit', timeZone: 'UTC' }),
       income: 12000 + i * 2400,

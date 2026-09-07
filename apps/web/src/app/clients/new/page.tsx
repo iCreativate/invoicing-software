@@ -1,73 +1,38 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { z } from 'zod';
-import { AppShell } from '@/components/layout/AppShell';
-import { Card } from '@/components/ui/Card';
+import { ArrowLeft, UserPlus } from 'lucide-react';
+import { ClientsWorkspace } from '@/components/clients/ClientsWorkspace';
+import { ClientForm } from '@/components/clients/ClientForm';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { routes } from '@/lib/routing/routes';
 import { createClient } from '@/features/clients/api';
+import { normalizeClientPayload } from '@/lib/clients/form';
+import { routes } from '@/lib/routing/routes';
+import { notifyError, notifySuccess } from '@/lib/notify';
 import { RedirectIfReadOnly } from '@/components/workspace/RedirectIfReadOnly';
 
-const Schema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  email: z.string().email('Invalid email').optional().or(z.literal('')),
-  phone: z.string().optional().or(z.literal('')),
-  address: z.string().optional().or(z.literal('')),
-  companyName: z.string().optional().or(z.literal('')),
-  website: z.string().optional().or(z.literal('')),
-  companyRegistration: z.string().optional().or(z.literal('')),
-  vatNumber: z.string().optional().or(z.literal('')),
-});
-
 export default function NewClientPage() {
-  const [form, setForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    address: '',
-    companyName: '',
-    website: '',
-    companyRegistration: '',
-    vatNumber: '',
-  });
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (payload: ReturnType<typeof normalizeClientPayload>, action: 'save' | 'invoice') => {
     setSubmitError(null);
-    setErrors({});
     setSubmitting(true);
     try {
-      const parsed = Schema.safeParse(form);
-      if (!parsed.success) {
-        const next: Record<string, string> = {};
-        for (const issue of parsed.error.issues) {
-          next[issue.path.join('.')] = issue.message;
-        }
-        setErrors(next);
+      const { id } = await createClient(payload);
+      notifySuccess(action === 'invoice' ? 'Client created — opening invoice.' : 'Client created.');
+      if (action === 'invoice') {
+        router.push(`${routes.app.invoices}/new?clientId=${id}`);
         return;
       }
-
-      const { id } = await createClient({
-        name: parsed.data.name,
-        email: parsed.data.email || undefined,
-        phone: parsed.data.phone || undefined,
-        address: parsed.data.address || undefined,
-        companyName: parsed.data.companyName || undefined,
-        website: parsed.data.website || undefined,
-        companyRegistration: parsed.data.companyRegistration || undefined,
-        vatNumber: parsed.data.vatNumber || undefined,
-      });
-
-      window.location.assign(routes.app.clients);
-      void id;
+      router.push(`${routes.app.clients}/${id}`);
     } catch (e: any) {
-      setSubmitError(e?.message ?? 'Failed to create client.');
+      const msg = e?.message ?? 'Failed to create client.';
+      setSubmitError(msg);
+      notifyError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -75,125 +40,40 @@ export default function NewClientPage() {
 
   return (
     <RedirectIfReadOnly href={routes.app.clients}>
-      <AppShell
+      <ClientsWorkspace
         title="New client"
+        description="Add a client with contact, company, and billing details — ready for your first invoice."
         actions={
-          <Link href={routes.app.clients}>
-            <Button variant="secondary">Back</Button>
-          </Link>
+          <Button asChild variant="secondary" size="sm">
+            <Link href={routes.app.clients}>
+              <ArrowLeft className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+              Back to clients
+            </Link>
+          </Button>
         }
       >
-        <Card className="p-4">
-          {submitError ? (
-            <div className="mb-4 rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{submitError}</div>
-          ) : null}
-
-          <form onSubmit={onSubmit} className="grid gap-6 sm:max-w-xl">
-            <div className="space-y-3">
-              <div className="text-sm font-semibold text-foreground">Contact</div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="name">
-                  Name <span className="text-muted-foreground">(required)</span>
-                </label>
-                <Input id="name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Contact or billing name" />
-                {errors.name ? <div className="text-xs text-red-700">{errors.name}</div> : null}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="email">
-                  Email (optional)
-                </label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                />
-                {errors.email ? <div className="text-xs text-red-700">{errors.email}</div> : null}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="phone">
-                  Phone (optional)
-                </label>
-                <Input id="phone" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
-              </div>
+        <div className="ti-page-enter">
+          <div className="mb-4 flex items-center gap-3 rounded-[var(--tl-radius-sm)] border border-[var(--tl-line)] bg-[var(--tl-bg)] px-4 py-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--tl-accent)_10%,white)] text-[var(--tl-accent)]">
+              <UserPlus className="h-4 w-4" aria-hidden />
+            </span>
+            <div>
+              <p className="text-[14px] font-semibold text-[var(--tl-ink)]">Build your client directory</p>
+              <p className="text-[13px] text-[var(--tl-ink-3)]">
+                Capture enough detail now so invoices and reminders look professional from day one.
+              </p>
             </div>
+          </div>
 
-            <div className="space-y-3 border-t border-border pt-4">
-              <div className="text-sm font-semibold text-foreground">Company</div>
-              <p className="text-xs text-muted-foreground">Optional — helps invoices and VAT records look professional.</p>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="companyName">
-                  Company / trading name (optional)
-                </label>
-                <Input
-                  id="companyName"
-                  value={form.companyName}
-                  onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))}
-                  placeholder="e.g. Acme (Pty) Ltd"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="website">
-                  Website (optional)
-                </label>
-                <Input
-                  id="website"
-                  type="url"
-                  value={form.website}
-                  onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))}
-                  placeholder="https://example.co.za"
-                />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="companyRegistration">
-                    Registration / CK (optional)
-                  </label>
-                  <Input
-                    id="companyRegistration"
-                    value={form.companyRegistration}
-                    onChange={(e) => setForm((f) => ({ ...f, companyRegistration: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="vatNumber">
-                    VAT number (optional)
-                  </label>
-                  <Input
-                    id="vatNumber"
-                    value={form.vatNumber}
-                    onChange={(e) => setForm((f) => ({ ...f, vatNumber: e.target.value }))}
-                    placeholder="e.g. 4123456789"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2 border-t border-border pt-4">
-              <label className="text-sm font-medium" htmlFor="address">
-                Address (optional)
-              </label>
-              <Input
-                id="address"
-                value={form.address}
-                onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
-                placeholder="Street, city, postal code"
-              />
-            </div>
-
-            <div className="pt-2">
-              <Button type="submit" disabled={submitting}>
-                {submitting ? 'Creating…' : 'Create client'}
-              </Button>
-            </div>
-          </form>
-        </Card>
-      </AppShell>
+          <ClientForm
+            submitting={submitting}
+            error={submitError}
+            showSecondaryAction
+            onCancel={() => router.push(routes.app.clients)}
+            onSubmit={onSubmit}
+          />
+        </div>
+      </ClientsWorkspace>
     </RedirectIfReadOnly>
   );
 }

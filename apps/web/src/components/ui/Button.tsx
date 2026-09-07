@@ -8,13 +8,14 @@ const buttonVariants = cva('btn', {
     variant: {
       primary: 'btn-primary',
       secondary: 'btn-secondary',
-      success: 'btn-primary',
-      danger: 'btn-danger',
+      tertiary: 'btn-tertiary',
       ghost: 'btn-ghost',
+      danger: 'btn-danger',
+      success: 'btn-success',
     },
     size: {
       sm: 'btn-sm',
-      md: 'px-3.5 py-1.5',
+      md: '',
       lg: 'min-h-10 px-4 text-[13.5px]',
       icon: 'h-8 w-8 p-0',
     },
@@ -29,12 +30,37 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  loading?: boolean;
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, loading = false, disabled, children, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button';
-    return <Comp className={cn(buttonVariants({ variant, size }), className)} ref={ref} {...props} />;
+    return (
+      <Comp
+        className={cn(buttonVariants({ variant, size }), loading && 'relative', className)}
+        ref={ref}
+        disabled={disabled || loading}
+        aria-busy={loading || undefined}
+        {...props}
+      >
+        {asChild ? (
+          children
+        ) : loading ? (
+          <>
+            <span className="invisible" aria-hidden>
+              {children}
+            </span>
+            <span className="absolute inset-0 grid place-items-center">
+              <span className="ti-spinner" aria-hidden />
+            </span>
+            <span className="sr-only">Loading</span>
+          </>
+        ) : (
+          children
+        )}
+      </Comp>
+    );
   }
 );
 Button.displayName = 'Button';

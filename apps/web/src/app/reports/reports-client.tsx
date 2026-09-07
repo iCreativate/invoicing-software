@@ -12,17 +12,26 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { AppShell } from '@/components/layout/AppShell';
-import { Card } from '@/components/ui/Card';
+import { InsightsWorkspace } from '@/components/insights/InsightsWorkspace';
+import { AdminAlertBanner, AdminPanel, AdminStatusCard } from '@/components/workspace/workspace-ui';
+import { PageSummary } from '@/components/layout/PageLayout';
 import { Button } from '@/components/ui/Button';
+import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { routes } from '@/lib/routing/routes';
 import { formatMoney } from '@/lib/format/money';
 import { fetchReports, openReportPrintDialog, reportsToCsv } from '@/features/reports/api';
 import type { ReportsPayload } from '@/features/reports/types';
-import { FileSpreadsheet, FileText, PieChart } from 'lucide-react';
+import { Banknote, FileSpreadsheet, FileText, Percent, Receipt } from 'lucide-react';
 import { notifySuccess } from '@/lib/notify';
 import { themeTokens } from '@/theme/tokens';
+
+const REPORT_LIBRARY = [
+  { id: 'report-revenue', label: 'Revenue', description: 'Invoiced vs collected over time.' },
+  { id: 'report-tax', label: 'Tax', description: 'VAT in the selected range.' },
+  { id: 'report-clients', label: 'Clients', description: 'Who you billed the most.' },
+  { id: 'report-outstanding', label: 'Outstanding', description: 'Open balances still to collect.' },
+] as const;
 
 function startOfMonth(d: Date) {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
@@ -142,8 +151,7 @@ export default function ReportsClient() {
   };
 
   return (
-    <AppShell
-      title="Reports"
+    <InsightsWorkspace
       actions={
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="secondary" disabled={!data || loading} onClick={onExportCsv}>
@@ -157,54 +165,64 @@ export default function ReportsClient() {
         </div>
       }
     >
-      <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
-        <Card className="shrink-0 border-border bg-muted/30 p-5">
-          <div className="text-sm font-semibold tracking-tight">Filters</div>
-          <p className="mt-1 text-[13px] text-muted-foreground">Date range applies to invoiced activity and payment collections. Outstanding list shows open balances (optionally filtered by currency).</p>
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            {(
-              [
-                ['this_month', 'This month'],
-                ['ytd', 'Year to date'],
-                ['last_12', 'Last 12 months'],
-                ['this_year', 'This calendar year'],
-                ['last_year', 'Last calendar year'],
-              ] as const
-            ).map(([id, label]) => (
-              <Button
-                key={id}
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => {
-                  const r = presetRange(id);
-                  setFrom(r.from);
-                  setTo(r.to);
-                }}
-              >
-                {label}
-              </Button>
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4 md:gap-5">
+        <AdminPanel kicker="Report library" description="Open a report below. Filters apply to all of them." bodyClassName="mt-0">
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {REPORT_LIBRARY.map((item) => (
+              <li key={item.id}>
+                <a href={`#${item.id}`} className="block transition-opacity hover:opacity-90">
+                  <AdminStatusCard title={item.label} description={item.description} badge="Open" badgeTone="outline" />
+                </a>
+              </li>
             ))}
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              From
-              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-            </label>
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              To
-              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-            </label>
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              Currency (optional)
+          </ul>
+        </AdminPanel>
+
+        <AdminPanel
+          kicker="Filters"
+          description="Date range applies to invoiced activity and payment collections. Outstanding list shows open balances (optionally filtered by currency)."
+          bodyClassName="mt-0"
+        >
+          <div className="ti-pill-track">
+              {(
+                [
+                  ['this_month', 'This month'],
+                  ['ytd', 'Year to date'],
+                  ['last_12', 'Last 12 months'],
+                  ['this_year', 'This calendar year'],
+                  ['last_year', 'Last calendar year'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="ti-pill ti-pill-idle"
+                  onClick={() => {
+                    const r = presetRange(id);
+                    setFrom(r.from);
+                    setTo(r.to);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Field label="From" htmlFor="report-from">
+              <Input id="report-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </Field>
+            <Field label="To" htmlFor="report-to">
+              <Input id="report-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </Field>
+            <Field label="Currency (optional)" htmlFor="report-currency" hint="Leave blank to include all currencies.">
               <Input
+                id="report-currency"
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value.toUpperCase())}
                 placeholder="All currencies"
                 maxLength={4}
               />
-            </label>
+            </Field>
             <div className="flex items-end">
               <Button type="button" className="w-full" disabled={loading} onClick={() => void load()}>
                 {loading ? 'Loading…' : 'Apply'}
@@ -212,39 +230,69 @@ export default function ReportsClient() {
             </div>
           </div>
           {data?.mixed_currency && !currency.trim() ? (
-            <p className="mt-3 text-xs text-warning">
-              Totals may mix multiple currencies. Set a currency filter for comparable figures.
-            </p>
+            <div className="mt-4">
+              <AdminAlertBanner tone="warning">
+                Totals may mix multiple currencies. Set a currency filter for comparable figures.
+              </AdminAlertBanner>
+            </div>
           ) : null}
-        </Card>
+        </AdminPanel>
 
-        {error ? <div className="rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
+        {error ? <AdminAlertBanner tone="error">{error}</AdminAlertBanner> : null}
 
         {data ? (
           <>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Card className="p-4">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Invoiced (range)</div>
-                <div className="ti-num mt-1 text-xl font-semibold">{formatMoney(data.totals_in_range.invoiced, cur)}</div>
-              </Card>
-              <Card className="p-4">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Collected (payments in range)</div>
-                <div className="ti-num mt-1 text-xl font-semibold">{formatMoney(data.totals_in_range.collected, cur)}</div>
-              </Card>
-              <Card className="p-4">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Tax in range</div>
-                <div className="ti-num mt-1 text-xl font-semibold">{formatMoney(data.tax_summary.tax_amount, cur)}</div>
-                <div className="mt-1 text-xs text-muted-foreground">{data.tax_summary.invoice_count} invoice(s)</div>
-              </Card>
-              <Card className="p-4">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Taxable subtotal</div>
-                <div className="ti-num mt-1 text-xl font-semibold">{formatMoney(data.tax_summary.taxable_subtotal, cur)}</div>
-              </Card>
+            <PageSummary>
+            <div id="report-tax" className="grid scroll-mt-4 grid-cols-2 gap-3 xl:grid-cols-4">
+              {(
+                [
+                  {
+                    label: 'Invoiced (range)',
+                    value: formatMoney(data.totals_in_range.invoiced, cur),
+                    trend: 'In selected dates',
+                    icon: Receipt,
+                  },
+                  {
+                    label: 'Collected',
+                    value: formatMoney(data.totals_in_range.collected, cur),
+                    trend: 'Payments in range',
+                    icon: Banknote,
+                  },
+                  {
+                    label: 'Tax in range',
+                    value: formatMoney(data.tax_summary.tax_amount, cur),
+                    trend: `${data.tax_summary.invoice_count} invoice(s)`,
+                    icon: Percent,
+                  },
+                  {
+                    label: 'Taxable subtotal',
+                    value: formatMoney(data.tax_summary.taxable_subtotal, cur),
+                    trend: 'Before tax',
+                    icon: FileText,
+                  },
+                ] as const
+              ).map((m) => {
+                const Icon = m.icon;
+                return (
+                  <div key={m.label} className="ti-kpi-card">
+                    <span className="ti-kpi-icon" aria-hidden>
+                      <Icon className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="ti-kpi-value">{m.value}</span>
+                    <span className="ti-kpi-label">{m.label}</span>
+                    <span className="ti-kpi-trend">{m.trend}</span>
+                  </div>
+                );
+              })}
             </div>
+            </PageSummary>
 
-            <Card className="p-5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-sm font-semibold">Revenue</div>
+            <AdminPanel
+              id="report-revenue"
+              kicker="Revenue"
+              className="scroll-mt-4"
+              bodyClassName="mt-0"
+              actions={
                 <div className="flex gap-2">
                   <Button
                     type="button"
@@ -263,8 +311,9 @@ export default function ReportsClient() {
                     Yearly
                   </Button>
                 </div>
-              </div>
-              <div className="mt-4 h-[320px] w-full min-h-[280px]">
+              }
+            >
+              <div className="h-[320px] w-full min-h-[280px]">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={280} debounce={50}>
                   <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                     <CartesianGrid stroke={themeTokens.chart.grid} strokeDasharray="3 3" vertical={false} />
@@ -286,85 +335,85 @@ export default function ReportsClient() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-            </Card>
+            </AdminPanel>
 
             <div className="grid gap-4 lg:grid-cols-2">
-              <Card className="p-5">
-                <div className="text-sm font-semibold">Top clients</div>
-                <p className="mt-1 text-xs text-muted-foreground">By invoiced total in the selected range (excl. draft &amp; cancelled).</p>
-                <div className="mt-4 overflow-x-auto">
+              <AdminPanel
+                id="report-clients"
+                kicker="Top clients"
+                description="By invoiced total in the selected range (excl. draft & cancelled)."
+                className="scroll-mt-4"
+                bodyClassName="mt-0"
+              >
+                <div className="overflow-x-auto">
                   <table className="w-full min-w-[400px] text-sm">
                     <thead>
-                      <tr className="text-left text-xs font-semibold text-muted-foreground">
-                        <th className="border-b border-border py-2 pr-2">Client</th>
-                        <th className="border-b border-border py-2 text-right">Invoiced</th>
-                        <th className="border-b border-border py-2 text-right">Paid on inv.</th>
-                        <th className="border-b border-border py-2 text-right">#</th>
+                      <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-[var(--tl-ink-3)]">
+                        <th className="border-b border-[var(--tl-line)] py-2.5 pr-2">Client</th>
+                        <th className="border-b border-[var(--tl-line)] py-2.5 text-right">Invoiced</th>
+                        <th className="border-b border-[var(--tl-line)] py-2.5 text-right">Paid on inv.</th>
+                        <th className="border-b border-[var(--tl-line)] py-2.5 text-right">#</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.top_clients.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="py-6 text-muted-foreground">
+                          <td colSpan={4} className="py-6 ti-caption text-[var(--tl-ink-3)]">
                             No data in this range.
                           </td>
                         </tr>
                       ) : (
                         data.top_clients.map((c) => (
                           <tr key={c.client_id}>
-                            <td className="border-b border-border py-2 pr-2 font-medium">
-                              {c.client_name}
-                            </td>
-                            <td className="border-b border-border py-2 text-right tabular-nums">
-                              {formatMoney(c.invoiced, cur)}
-                            </td>
-                            <td className="border-b border-border py-2 text-right tabular-nums">
+                            <td className="border-b border-[var(--tl-line)] py-2.5 pr-2 font-medium text-[var(--tl-ink)]">{c.client_name}</td>
+                            <td className="border-b border-[var(--tl-line)] py-2.5 text-right tabular-nums">{formatMoney(c.invoiced, cur)}</td>
+                            <td className="border-b border-[var(--tl-line)] py-2.5 text-right tabular-nums">
                               {formatMoney(c.paid_on_invoices, cur)}
                             </td>
-                            <td className="border-b border-border py-2 text-right tabular-nums">
-                              {c.invoice_count}
-                            </td>
+                            <td className="border-b border-[var(--tl-line)] py-2.5 text-right tabular-nums">{c.invoice_count}</td>
                           </tr>
                         ))
                       )}
                     </tbody>
                   </table>
                 </div>
-              </Card>
+              </AdminPanel>
 
-              <Card className="p-5">
-                <div className="text-sm font-semibold">Outstanding invoices</div>
-                <p className="mt-1 text-xs text-muted-foreground">Open balances (not draft / cancelled), up to 200 rows.</p>
-                <div className="mt-4 max-h-[360px] overflow-auto">
+              <AdminPanel
+                id="report-outstanding"
+                kicker="Outstanding invoices"
+                description="Open balances (not draft / cancelled), up to 200 rows."
+                className="scroll-mt-4"
+                bodyClassName="mt-0"
+              >
+                <div className="max-h-[360px] overflow-auto">
                   <table className="w-full min-w-[420px] text-sm">
                     <thead>
-                      <tr className="sticky top-0 bg-card text-left text-xs font-semibold text-muted-foreground">
-                        <th className="border-b border-border py-2 pr-2">Invoice</th>
-                        <th className="border-b border-border py-2 pr-2">Client</th>
-                        <th className="border-b border-border py-2">Due</th>
-                        <th className="border-b border-border py-2 text-right">Balance</th>
+                      <tr className="sticky top-0 bg-white text-left text-[11px] font-semibold uppercase tracking-wider text-[var(--tl-ink-3)]">
+                        <th className="border-b border-[var(--tl-line)] py-2.5 pr-2">Invoice</th>
+                        <th className="border-b border-[var(--tl-line)] py-2.5 pr-2">Client</th>
+                        <th className="border-b border-[var(--tl-line)] py-2.5">Due</th>
+                        <th className="border-b border-[var(--tl-line)] py-2.5 text-right">Balance</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.outstanding.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="py-6 text-muted-foreground">
+                          <td colSpan={4} className="py-6 ti-caption text-[var(--tl-ink-3)]">
                             Nothing outstanding.
                           </td>
                         </tr>
                       ) : (
                         data.outstanding.map((o) => (
                           <tr key={o.invoice_id}>
-                            <td className="border-b border-border py-2 pr-2">
-                              <Link className="font-semibold hover:underline" href={`${routes.app.invoices}/${o.invoice_id}`}>
+                            <td className="border-b border-[var(--tl-line)] py-2.5 pr-2">
+                              <Link className="font-semibold text-[var(--tl-ink)] hover:text-[var(--tl-accent)]" href={`${routes.app.invoices}/${o.invoice_id}`}>
                                 {o.invoice_number || o.invoice_id.slice(0, 8)}
                               </Link>
                             </td>
-                            <td className="border-b border-border py-2 pr-2 text-muted-foreground">
-                              {o.client_name ?? '—'}
-                            </td>
-                            <td className="border-b border-border py-2 tabular-nums">{o.due_date}</td>
-                            <td className="border-b border-border py-2 text-right font-semibold tabular-nums">
+                            <td className="border-b border-[var(--tl-line)] py-2.5 pr-2 text-[var(--tl-ink-2)]">{o.client_name ?? '—'}</td>
+                            <td className="border-b border-[var(--tl-line)] py-2.5 tabular-nums text-[var(--tl-ink-2)]">{o.due_date}</td>
+                            <td className="border-b border-[var(--tl-line)] py-2.5 text-right font-semibold tabular-nums">
                               {formatMoney(o.balance_amount, o.currency)}
                             </td>
                           </tr>
@@ -373,28 +422,11 @@ export default function ReportsClient() {
                     </tbody>
                   </table>
                 </div>
-              </Card>
+              </AdminPanel>
             </div>
           </>
         ) : null}
-
-        <Card className="p-5">
-          <div className="flex items-start gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-primary/10 text-primary">
-              <PieChart className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="font-semibold">Profit &amp; loss</div>
-              <p className="mt-1 text-sm text-muted-foreground">Compare collected invoice totals to expenses.</p>
-              <div className="mt-3">
-                <Button asChild variant="secondary">
-                  <Link href={routes.app.reportsPl}>Open P&amp;L</Link>
-                </Button>
-              </div>
-            </div>
-          </div>
-        </Card>
       </div>
-    </AppShell>
+    </InsightsWorkspace>
   );
 }

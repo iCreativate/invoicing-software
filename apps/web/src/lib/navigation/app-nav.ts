@@ -1,27 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import {
-  LayoutDashboard,
-  FileText,
-  Users,
-  FileInput,
-  CreditCard,
-  Receipt,
-  BellRing,
-  BarChart3,
-  Bell,
-  UsersRound,
-  Settings,
-  Wallet,
-  Package,
-  Repeat,
-  Clock,
-  PieChart,
-  WalletCards,
-  User,
-  TrendingUp,
-  Sparkles,
-  Plug,
-} from 'lucide-react';
+import { LayoutDashboard, Wallet, Users, Sparkles, UsersRound, Settings } from 'lucide-react';
 import { routes } from '@/lib/routing/routes';
 
 export type AppNavItem = { href: string; label: string; icon: LucideIcon };
@@ -32,7 +10,7 @@ export type AppNavGroup = {
   items: AppNavItem[];
 };
 
-/** Grouped workspace navigation (2.0 IA). */
+/** Primary workspace navigation — daily work, then Team and Settings. */
 export const APP_NAV_GROUPS: AppNavGroup[] = [
   {
     id: 'overview',
@@ -42,51 +20,27 @@ export const APP_NAV_GROUPS: AppNavGroup[] = [
   {
     id: 'money',
     label: 'Money',
-    items: [
-      { href: routes.app.invoices, label: 'Invoices', icon: FileText },
-      { href: routes.app.quotes, label: 'Quotes', icon: FileInput },
-      { href: routes.app.payments, label: 'Payments', icon: CreditCard },
-      { href: routes.app.expenses, label: 'Expenses', icon: Receipt },
-    ],
+    items: [{ href: routes.app.money, label: 'Money', icon: Wallet }],
   },
   {
     id: 'people',
     label: 'People',
-    items: [{ href: routes.app.clients, label: 'Clients', icon: Users }],
-  },
-  {
-    id: 'collections',
-    label: 'Collections',
-    items: [{ href: routes.app.reminders, label: 'Collections', icon: BellRing }],
+    items: [
+      { href: routes.app.clients, label: 'Clients', icon: Users },
+      { href: routes.app.team, label: 'Team', icon: UsersRound },
+    ],
   },
   {
     id: 'insights',
     label: 'Insights',
-    items: [
-      { href: routes.app.cashflow, label: 'Cashflow', icon: TrendingUp },
-      { href: routes.app.reports, label: 'Reports', icon: BarChart3 },
-      { href: routes.app.insights, label: 'Timely Insights', icon: Sparkles },
-    ],
+    items: [{ href: routes.app.insights, label: 'Insights', icon: Sparkles }],
   },
   {
-    id: 'workspace',
-    label: 'Workspace',
-    items: [
-      { href: routes.app.team, label: 'Team', icon: UsersRound },
-      { href: routes.app.integrations, label: 'Integrations', icon: Plug },
-      { href: routes.app.settings, label: 'Settings', icon: Settings },
-      { href: routes.app.billing, label: 'Billing', icon: Wallet },
-    ],
+    id: 'admin',
+    label: 'Admin',
+    items: [{ href: routes.app.settings, label: 'Admin', icon: Settings }],
   },
 ];
 
-/** Secondary / operations (sidebar “More”). */
-export const APP_NAV_MORE: AppNavItem[] = [
-  { href: routes.app.productsServices, label: 'Products / services', icon: Package },
-  { href: routes.app.recurring, label: 'Recurring', icon: Repeat },
-  { href: routes.app.notifications, label: 'Notifications', icon: Bell },
-  { href: routes.app.reportsPl, label: 'P&L', icon: PieChart },
-  { href: routes.app.payroll, label: 'Payroll', icon: WalletCards },
-  { href: routes.app.timeTracking, label: 'Time tracking', icon: Clock },
-  { href: routes.app.profile, label: 'Profile', icon: User },
-];
+/** Hidden from sidebar — still reachable via Settings, command palette, or deep links. */
+export const APP_NAV_SECONDARY: AppNavItem[] = [];

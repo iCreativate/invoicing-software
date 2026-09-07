@@ -2,19 +2,60 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AppShell } from '@/components/layout/AppShell';
-import { PageBody, PageMain } from '@/components/layout/PageLayout';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Surface } from '@/components/ui/Card';
+import { SectionHeader } from '@/components/ui/PageHeader';
+import { Amount } from '@/components/ui/Text';
+import { PageSummary } from '@/components/layout/PageLayout';
+import { EmptyState } from '@/components/dashboard-ui/EmptyState';
+import { Tabs } from '@/components/ui/Tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { routes } from '@/lib/routing/routes';
 import { formatMoney } from '@/lib/format/money';
-import { fetchQuotesList } from '@/features/quotes/api';
+import { convertQuoteOnServer, fetchQuotesList } from '@/features/quotes/api';
 import type { QuoteListItem } from '@/features/quotes/types';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
 import { FileImportDialog } from '@/components/import/FileImportDialog';
-import { Upload } from 'lucide-react';
+import { MoneyWorkspace } from '@/components/money/MoneyWorkspace';
+import { MoneyKpiCard, MoneyKpiGrid } from '@/components/money/MoneyKpiCard';
+import { notifyError, notifySuccess } from '@/lib/notify';
+import { Search, Upload, FileText, TrendingUp, CheckCircle, FilePenLine } from 'lucide-react';
+import { cn } from '@/lib/utils/cn';
+
+const STATUS_PILLS = [
+  { value: 'all', label: 'All' },
+  { value: 'draft', label: 'Draft' },
+  { value: 'sent', label: 'Sent' },
+  { value: 'accepted', label: 'Accepted' },
+  { value: 'declined', label: 'Declined' },
+] as const;
+
+type StatusView = (typeof STATUS_PILLS)[number]['value'];
+
+function quoteTone(status: string): 'paid' | 'overdue' | 'draft' | 'open' {
+  const s = status.toLowerCase();
+  if (s === 'accepted' || s === 'converted') return 'paid';
+  if (s === 'declined') return 'overdue';
+  if (s === 'sent') return 'open';
+  return 'draft';
+}
+
+function quoteStatusClass(status: string) {
+  const s = status.toLowerCase();
+  if (s === 'accepted' || s === 'converted') return 'ti-status-paid';
+  if (s === 'declined') return 'ti-status-overdue';
+  if (s === 'sent') return 'ti-status-sent';
+  return 'ti-status-draft';
+}
+
+function formatDate(iso: string | null | undefined) {
+  if (!iso) return '—';
+  const d = new Date(`${iso}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
 
 export default function QuotesPage() {
   const { canEdit, status: capStatus } = useWorkspaceCapabilities();
@@ -24,7 +65,9 @@ export default function QuotesPage() {
   const [items, setItems] = useState<QuoteListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [statusView, setStatusView] = useState<StatusView>('all');
   const [importOpen, setImportOpen] = useState(false);
+  const [convertingId, setConvertingId] = useState<string | null>(null);
 
   const loadQuotes = useCallback(async () => {
     try {
@@ -43,95 +86,314 @@ export default function QuotesPage() {
     void loadQuotes();
   }, [loadQuotes]);
 
+  const metrics = useMemo(() => {
+    const currency = items[0]?.currency ?? 'ZAR';
+    let pipeline = 0;
+    let accepted = 0;
+    let drafts = 0;
+    let sent = 0;
+    for (const q of items) {
+      const s = q.status.toLowerCase();
+      if (s === 'draft') drafts += 1;
+      if (s === 'sent') {
+        sent += 1;
+        pipeline += q.totalAmount;
+      }
+      if (s === 'accepted' || s === 'converted') accepted += q.totalAmount;
+      if (s !== 'declined' && s !== 'converted' && s !== 'draft') {
+        // keep pipeline as open sent quotes only
+      }
+    }
+    return { currency, pipeline, accepted, drafts, sent, total: items.length };
+  }, [items]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter(
-      (x) =>
+    return items.filter((x) => {
+      if (statusView !== 'all' && x.status.toLowerCase() !== statusView) return false;
+      if (!q) return true;
+      return (
         (x.quoteNumber ?? '').toLowerCase().includes(q) ||
         (x.clientName ?? '').toLowerCase().includes(q) ||
         x.status.toLowerCase().includes(q)
-    );
-  }, [items, query]);
+      );
+    });
+  }, [items, query, statusView]);
+
+  const convertQuote = async (id: string) => {
+    setConvertingId(id);
+    try {
+      const { invoiceId } = await convertQuoteOnServer(id);
+      notifySuccess('Quote converted to an invoice.');
+      window.location.href = `${routes.app.invoices}/${invoiceId}/edit`;
+    } catch (e: unknown) {
+      notifyError(e instanceof Error ? e.message : 'Could not convert quote.');
+    } finally {
+      setConvertingId(null);
+    }
+  };
 
   return (
-    <AppShell
-      title="Quotes"
+    <MoneyWorkspace
       actions={
         canMutate ? (
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="secondary" onClick={() => setImportOpen(true)}>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setImportOpen(true)}>
               <Upload className="h-4 w-4" />
               Import
             </Button>
-            <Link href={`${routes.app.quotes}/new`}>
-              <Button>New quote</Button>
-            </Link>
+            <Button asChild size="sm">
+              <Link href={`${routes.app.quotes}/new`}>New quote</Link>
+            </Button>
           </div>
         ) : null
       }
     >
-      <PageBody>
-      <PageMain className="flex min-h-0 flex-1 flex-col">
-      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-5">
-        <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="text-sm font-semibold">Proposals</div>
-            <div className="mt-1 text-sm text-muted-foreground">Convert accepted quotes to invoices in one click.</div>
-          </div>
-          <div className="w-full sm:max-w-xs">
-            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search quotes…" aria-label="Search quotes" />
-          </div>
-        </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 md:gap-5">
+        <PageSummary>
+          <MoneyKpiGrid>
+            <MoneyKpiCard
+              icon={FileText}
+              label="Quotes"
+              value={metrics.total}
+              trend="In this workspace"
+              active={statusView === 'all'}
+              onClick={() => setStatusView('all')}
+            />
+            <MoneyKpiCard
+              icon={TrendingUp}
+              label="Pipeline"
+              value={formatMoney(metrics.pipeline, metrics.currency)}
+              trend={`${metrics.sent} sent`}
+              active={statusView === 'sent'}
+              onClick={() => setStatusView('sent')}
+            />
+            <MoneyKpiCard
+              icon={CheckCircle}
+              label="Accepted"
+              value={formatMoney(metrics.accepted, metrics.currency)}
+              trend="Won value"
+              trendUp
+              active={statusView === 'accepted'}
+              onClick={() => setStatusView('accepted')}
+            />
+            <MoneyKpiCard
+              icon={FilePenLine}
+              label="Drafts"
+              value={metrics.drafts}
+              trend="Ready to send"
+              active={statusView === 'draft'}
+              onClick={() => setStatusView('draft')}
+            />
+          </MoneyKpiGrid>
+        </PageSummary>
 
-        {error ? <div className="mt-4 rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
+        <Surface variant="elevated" className="ti-panel ti-invoice-ledger flex min-h-0 flex-1 flex-col">
+          <div className="ti-panel-head">
+            <SectionHeader
+              kicker="Ledger"
+              title={`${filtered.length} quote${filtered.length === 1 ? '' : 's'}`}
+              description="Quote → Accepted → Invoice → Payment"
+            />
+          </div>
 
-        {loading ? (
-          <div className="mt-6 space-y-3">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
+          <div className="ti-invoice-toolbar mt-1">
+            <Tabs
+              items={STATUS_PILLS.map((p) => ({ value: p.value, label: p.label }))}
+              value={statusView}
+              onChange={(v) => setStatusView(v as StatusView)}
+            />
+            <div className="relative sm:min-w-[14rem]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--tl-ink-3)]" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search number or client"
+                className="pl-9"
+                aria-label="Search quotes"
+              />
+            </div>
           </div>
-        ) : filtered.length === 0 ? (
-          <div className="mt-6 rounded-[var(--ti-radius)] border border-dashed border-border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
-            No quotes yet. Create a quote to send pricing before invoicing.
-          </div>
-        ) : (
-          <div className="mt-4 min-h-0 flex-1 overflow-auto rounded-[var(--ti-radius)] border border-border">
-            <table className="w-full min-w-[720px] text-[13px]">
-              <thead className="sticky top-0 z-[1] bg-card">
-                <tr className="text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  <th className="border-b border-border px-3 py-2.5">Quote</th>
-                  <th className="border-b border-border px-3 py-2.5">Client</th>
-                  <th className="border-b border-border px-3 py-2.5">Status</th>
-                  <th className="border-b border-border px-3 py-2.5 text-right">Total</th>
-                  <th className="border-b border-border px-3 py-2.5 text-right">Valid until</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((q) => (
-                  <tr key={q.id} className="ti-row-hover">
-                    <td className="border-b border-border px-3 py-2.5 font-medium">
-                      <Link className="text-[var(--ti-brand-accent,#2F6F7E)] underline-offset-4 hover:underline" href={`${routes.app.quotes}/${q.id}`}>
-                        {q.quoteNumber ?? '—'}
-                      </Link>
-                    </td>
-                    <td className="border-b border-border px-3 py-2.5">{q.clientName ?? '—'}</td>
-                    <td className="border-b border-border px-3 py-2.5 capitalize">
-                      <span className="rounded-[var(--ti-radius-sm)] bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                        {q.status}
-                      </span>
-                    </td>
-                    <td className="ti-num border-b border-border px-3 py-2.5 text-right">{formatMoney(q.totalAmount, q.currency)}</td>
-                    <td className="border-b border-border px-3 py-2.5 text-right text-muted-foreground">{q.validUntil}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-      </PageMain>
+
+          {error ? (
+            <div className="ti-error mt-4" role="alert">
+              <div className="font-medium">Couldn’t load quotes</div>
+              <p className="ti-error-body">{error}</p>
+            </div>
+          ) : null}
+
+          {loading ? (
+            <div className="mt-5 space-y-0" aria-busy="true">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-6 border-b border-border py-4">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-40 flex-1" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                  <Skeleton className="h-5 w-24" />
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {!loading && !error && filtered.length === 0 ? (
+            <div className="mt-6">
+              <EmptyState
+                kicker={items.length === 0 ? 'No quotes' : 'No matches'}
+                title={items.length === 0 ? 'Send pricing before you invoice.' : 'No quotes match these filters.'}
+                description={
+                  items.length === 0
+                    ? 'Create a quote, get it accepted, then convert to an invoice.'
+                    : 'Try a different status or search term.'
+                }
+                action={
+                  canMutate && items.length === 0 ? (
+                    <Button asChild>
+                      <Link href={`${routes.app.quotes}/new`}>New quote</Link>
+                    </Button>
+                  ) : null
+                }
+              />
+            </div>
+          ) : null}
+
+          {filtered.length > 0 ? (
+            <>
+              <div className="mt-4 space-y-3 md:hidden">
+                {filtered.map((q) => {
+                  const canConvert =
+                    canMutate &&
+                    !q.convertedInvoiceId &&
+                    q.status.toLowerCase() !== 'declined' &&
+                    q.status.toLowerCase() !== 'converted';
+                  return (
+                    <div key={q.id} className="ti-invoice-card" data-tone={quoteTone(q.status)}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <Link
+                            href={`${routes.app.quotes}/${q.id}`}
+                            className="ti-invoice-number hover:underline"
+                          >
+                            {q.quoteNumber ?? '—'}
+                          </Link>
+                          <div className="ti-invoice-client mt-1">{q.clientName ?? '—'}</div>
+                          <div className="ti-invoice-meta">Valid until {formatDate(q.validUntil)}</div>
+                        </div>
+                        <span className={cn('ti-status capitalize', quoteStatusClass(q.status))}>{q.status}</span>
+                      </div>
+                      <div className="ti-invoice-amount">{formatMoney(q.totalAmount, q.currency)}</div>
+                      <div className="flex items-center justify-between border-t border-[var(--tl-line)] pt-3 text-[13px] font-medium">
+                        <Link href={`${routes.app.quotes}/${q.id}`} className="text-[var(--tl-ink-2)] hover:text-[var(--tl-ink)]">
+                          View
+                        </Link>
+                        {q.convertedInvoiceId ? (
+                          <Link
+                            href={`${routes.app.invoices}/${q.convertedInvoiceId}`}
+                            className="text-[var(--tl-ink-2)] hover:text-[var(--tl-ink)]"
+                          >
+                            Open invoice
+                          </Link>
+                        ) : canConvert ? (
+                          <button
+                            type="button"
+                            className="text-[var(--tl-ink-2)] hover:text-[var(--tl-ink)] disabled:opacity-50"
+                            disabled={convertingId === q.id}
+                            onClick={() => void convertQuote(q.id)}
+                          >
+                            {convertingId === q.id
+                              ? 'Converting…'
+                              : q.status.toLowerCase() === 'accepted'
+                                ? 'Convert to invoice'
+                                : 'Convert'}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 hidden min-h-0 flex-1 overflow-auto md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Quote</TableHead>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Valid until</TableHead>
+                      <TableHead className="w-36 text-right">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((q) => {
+                      const canConvert =
+                        canMutate &&
+                        !q.convertedInvoiceId &&
+                        q.status.toLowerCase() !== 'declined' &&
+                        q.status.toLowerCase() !== 'converted';
+                      return (
+                        <TableRow key={q.id} className="group" data-tone={quoteTone(q.status)}>
+                          <TableCell>
+                            <Link
+                              href={`${routes.app.quotes}/${q.id}`}
+                              className="ti-invoice-number hover:underline"
+                            >
+                              {q.quoteNumber ?? '—'}
+                            </Link>
+                            <div className="ti-invoice-meta">Issued {formatDate(q.issueDate)}</div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="ti-invoice-client">{q.clientName ?? '—'}</div>
+                          </TableCell>
+                          <TableCell>
+                            <span className={cn('ti-status capitalize', quoteStatusClass(q.status))}>
+                              {q.status}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="ti-invoice-amount">{formatMoney(q.totalAmount, q.currency)}</div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="ti-invoice-due">{formatDate(q.validUntil)}</div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {q.convertedInvoiceId ? (
+                              <Button asChild variant="ghost" size="sm" className="h-8 px-2.5 text-[12.5px]">
+                                <Link href={`${routes.app.invoices}/${q.convertedInvoiceId}`}>Open invoice</Link>
+                              </Button>
+                            ) : canConvert ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-2.5 text-[12.5px]"
+                                disabled={convertingId === q.id}
+                                onClick={() => void convertQuote(q.id)}
+                              >
+                                {convertingId === q.id
+                                  ? 'Converting…'
+                                  : q.status.toLowerCase() === 'accepted'
+                                    ? 'Convert'
+                                    : 'Convert'}
+                              </Button>
+                            ) : (
+                              <Button asChild variant="ghost" size="sm" className="h-8 px-2.5 text-[12.5px]">
+                                <Link href={`${routes.app.quotes}/${q.id}`}>View</Link>
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          ) : null}
+        </Surface>
+      </div>
 
       <FileImportDialog
         open={importOpen}
@@ -142,7 +404,6 @@ export default function QuotesPage() {
         templateHref="/import-templates/timely-quotes.csv"
         onSuccess={() => void loadQuotes()}
       />
-      </PageBody>
-    </AppShell>
+    </MoneyWorkspace>
   );
 }

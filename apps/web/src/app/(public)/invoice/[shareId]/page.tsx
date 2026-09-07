@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { InvoicePreview } from '@/components/invoice/InvoicePreview';
 import { PayNowButton } from '@/components/payments/PayNowButton';
 import { subscriptionShowsPoweredBy } from '@/lib/company/subscription';
+import { mapCompanyRowToPreviewDetails } from '@/features/company/previewDetails';
 import { PublicInvoiceViewTracker } from '@/components/invoice/PublicInvoiceViewTracker';
 import { headers } from 'next/headers';
 import { buildPublicInvoiceViewUrl } from '@/lib/invoice/platformUrls';
@@ -105,22 +106,7 @@ export default async function PublicInvoicePage({
         <InvoicePreview
           companyName={String((companyRow as any)?.company_name ?? 'TimelyInvoices')}
           companyLogoPath={(companyRow as any)?.logo_url ? String((companyRow as any).logo_url) : null}
-          companyDetails={
-            companyRow
-              ? {
-                  email: (companyRow as any).email ?? null,
-                  phone: (companyRow as any).phone ?? null,
-                  address: (companyRow as any).address ?? null,
-                  website: (companyRow as any).website ?? null,
-                  vatNumber: (companyRow as any).vat_number ?? null,
-                  bankName: (companyRow as any).bank_name ?? null,
-                  accountName: (companyRow as any).account_name ?? null,
-                  accountNumber: (companyRow as any).account_number ?? null,
-                  branchCode: (companyRow as any).branch_code ?? null,
-                  accountType: (companyRow as any).account_type ?? null,
-                }
-              : null
-          }
+          companyDetails={mapCompanyRowToPreviewDetails(companyRow as Record<string, unknown> | null)}
           draft={draft as any}
           client={{
             name: (invoice as any).client?.name ?? '—',

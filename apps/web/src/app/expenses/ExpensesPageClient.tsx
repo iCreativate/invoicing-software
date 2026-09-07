@@ -1,22 +1,24 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AppShell } from '@/components/layout/AppShell';
-import { PageBody, PageFootnote, PageMain, PageSummary } from '@/components/layout/PageLayout';
-import { Card } from '@/components/ui/Card';
+import { MoneyWorkspace } from '@/components/money/MoneyWorkspace';
+import { MoneyKpiCard, MoneyKpiGrid } from '@/components/money/MoneyKpiCard';
+import { PageFootnote, PageSummary } from '@/components/layout/PageLayout';
+import { EmptyState } from '@/components/dashboard-ui/EmptyState';
+import { Surface } from '@/components/ui/Card';
+import { SectionHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Badge } from '@/components/ui/badge';
+import { Input, Select } from '@/components/ui/Input';
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalDescription } from '@/components/ui/modal';
+import { Tabs } from '@/components/ui/Tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatMoney } from '@/lib/format/money';
-import { cn } from '@/lib/utils/cn';
+import { ExpenseForm, EMPTY_EXPENSE_FORM, type ExpenseFormValues } from '@/components/expenses/ExpenseForm';
 import {
-  categorizeExpenseWithAi,
   createExpense,
   deleteExpense,
   fetchExpensesList,
   updateExpense,
-  uploadExpenseReceipt,
 } from '@/features/expenses/api';
 import {
   EXPENSE_CATEGORY_OPTIONS,
@@ -26,11 +28,18 @@ import {
 import { todayISO } from '@/components/invoice/composer/utils';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
-import { Plus, Pencil, Receipt, Trash2, Filter, Upload, Eye } from 'lucide-react';
+import { Plus, Pencil, Receipt, Trash2, Upload, Eye, Calendar, Layers, TrendingDown, Search } from 'lucide-react';
 import { FileImportDialog } from '@/components/import/FileImportDialog';
 import { notifyError, notifySuccess } from '@/lib/notify';
 
 type PeriodFilter = 'all' | 'month' | 'quarter' | 'year';
+
+const PERIOD_TABS: { value: PeriodFilter; label: string }[] = [
+  { value: 'all', label: 'All time' },
+  { value: 'month', label: 'This month' },
+  { value: 'quarter', label: 'This quarter' },
+  { value: 'year', label: 'This year' },
+];
 
 function startOfMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -54,23 +63,9 @@ function filterByPeriod(items: ExpenseRow[], period: PeriodFilter): ExpenseRow[]
   return items.filter((x) => x.expenseDate >= start && x.expenseDate <= today);
 }
 
-type FormState = {
-  amount: string;
-  currency: string;
-  category: string;
-  description: string;
-  expenseDate: string;
-  receiptPath: string | null;
-};
+type FormState = ExpenseFormValues;
 
-const emptyForm = (): FormState => ({
-  amount: '',
-  currency: 'ZAR',
-  category: 'uncategorized',
-  description: '',
-  expenseDate: todayISO(),
-  receiptPath: null,
-});
+const emptyForm = (): FormState => ({ ...EMPTY_EXPENSE_FORM });
 
 function formFromRow(row: ExpenseRow): FormState {
   return {
@@ -81,6 +76,12 @@ function formFromRow(row: ExpenseRow): FormState {
     expenseDate: row.expenseDate,
     receiptPath: row.receiptPath,
   };
+}
+
+function formatExpenseDate(iso: string) {
+  const d = new Date(`${iso}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 export default function ExpensesPageClient() {
@@ -98,11 +99,9 @@ export default function ExpensesPageClient() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>(emptyForm);
-  const [categoryFromAi, setCategoryFromAi] = useState(false);
-  const [aiBusy, setAiBusy] = useState(false);
+  const [formInitial, setFormInitial] = useState<FormState>(emptyForm());
+  const [formKey, setFormKey] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [receiptUploading, setReceiptUploading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [viewing, setViewing] = useState<ExpenseRow | null>(null);
@@ -147,27 +146,45 @@ export default function ExpensesPageClient() {
     });
   }, [periodItems, categoryFilter, query]);
 
-  const totalsByCurrency = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const x of filtered) {
-      const c = x.currency || 'ZAR';
-      map.set(c, (map.get(c) ?? 0) + x.amount);
+  const monthStats = useMemo(() => {
+    const now = new Date();
+    const thisStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
+    const prevEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+    const thisMonth = items.filter((x) => x.expenseDate >= thisStart);
+    const prevMonth = items.filter((x) => x.expenseDate >= prevStart && x.expenseDate <= prevEnd);
+    const currency = items[0]?.currency || 'ZAR';
+    const sum = (rows: ExpenseRow[]) => rows.reduce((s, x) => s + x.amount, 0);
+    const cats = new Map<string, number>();
+    for (const x of thisMonth) {
+      const key = x.aiCategory || x.category || 'uncategorized';
+      cats.set(key, (cats.get(key) ?? 0) + x.amount);
     }
-    return map;
-  }, [filtered]);
+    const topCategories = [...cats.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([category, amount]) => ({ category, amount }));
+    return {
+      currency,
+      total: sum(items),
+      thisMonth: sum(thisMonth),
+      prevMonth: sum(prevMonth),
+      topCategories,
+    };
+  }, [items]);
 
   const openCreate = () => {
     setEditingId(null);
-    setForm(emptyForm());
-    setCategoryFromAi(false);
+    setFormInitial(emptyForm());
+    setFormKey((k) => k + 1);
     setFormError(null);
     setModalOpen(true);
   };
 
   const openEdit = (row: ExpenseRow) => {
     setEditingId(row.id);
-    setForm(formFromRow(row));
-    setCategoryFromAi(false);
+    setFormInitial(formFromRow(row));
+    setFormKey((k) => k + 1);
     setFormError(null);
     setModalOpen(true);
   };
@@ -177,28 +194,24 @@ export default function ExpensesPageClient() {
     openEdit(row);
   };
 
-  const submitForm = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitForm = async (data: ExpenseFormValues & { aiCategory: string | null }) => {
     setFormError(null);
-    const amt = Number(String(form.amount).replace(',', '.'));
+    const amt = Number(String(data.amount).replace(',', '.'));
     if (!Number.isFinite(amt) || amt <= 0) {
       setFormError('Enter a valid amount greater than zero.');
       return;
     }
-    const cur = form.currency.trim().toUpperCase() || 'ZAR';
-    const cat = form.category.trim() || 'uncategorized';
-    const aiCat = categoryFromAi ? cat : null;
 
     setSaving(true);
     try {
       const payload = {
         amount: amt,
-        currency: cur,
-        category: cat,
-        description: form.description.trim() || undefined,
-        expenseDate: form.expenseDate,
-        receiptPath: form.receiptPath,
-        aiCategory: aiCat,
+        currency: data.currency.trim().toUpperCase() || 'ZAR',
+        category: data.category.trim() || 'uncategorized',
+        description: data.description.trim() || undefined,
+        expenseDate: data.expenseDate,
+        receiptPath: data.receiptPath,
+        aiCategory: data.aiCategory,
       };
       if (editingId) {
         await updateExpense(editingId, payload);
@@ -206,6 +219,7 @@ export default function ExpensesPageClient() {
         await createExpense(payload);
       }
       setModalOpen(false);
+      setFormKey((k) => k + 1);
       await reload();
       notifySuccess(editingId ? 'Expense updated.' : 'Expense saved.');
     } catch (err: unknown) {
@@ -230,24 +244,18 @@ export default function ExpensesPageClient() {
     }
   };
 
-  const periodLabel: Record<PeriodFilter, string> = {
-    all: 'All time',
-    month: 'This month',
-    quarter: 'This quarter',
-    year: 'This year',
-  };
+  const noExpensesAtAll = !loading && items.length === 0 && !tableMissing;
 
   return (
-    <AppShell
-      title="Expenses"
+    <MoneyWorkspace
       actions={
         canMutate ? (
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" onClick={() => setImportOpen(true)}>
+            <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
               <Upload className="h-4 w-4" />
               Import
             </Button>
-            <Button variant="primary" onClick={openCreate}>
+            <Button variant="primary" size="sm" onClick={openCreate}>
               <Plus className="h-4 w-4" />
               Add expense
             </Button>
@@ -255,193 +263,245 @@ export default function ExpensesPageClient() {
         ) : null
       }
     >
-      <PageBody>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 md:gap-5">
         {tableMissing ? (
-          <div className="rounded-[var(--ti-radius)] border border-warning/30 bg-warning/10 p-4 text-sm text-foreground">
-            <p className="font-semibold">Database table required</p>
-            <p className="mt-1 text-muted-foreground">
+          <div className="ti-error" role="alert">
+            <div className="font-medium">Database table required</div>
+            <p className="ti-error-body">
               Run the SQL in{' '}
-              <code className="rounded bg-warning/15 px-1 py-0.5 text-xs">apps/web/supabase/expenses.sql</code> in the Supabase SQL
-              editor, then refresh this page.
+              <code className="rounded bg-[var(--tl-bg)] px-1 py-0.5 text-xs">apps/web/supabase/expenses.sql</code> in
+              the Supabase SQL editor, then refresh this page.
             </p>
           </div>
         ) : null}
 
-        {error ? (
-          <div className="rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">
-            {error}
-          </div>
-        ) : null}
-
         <PageSummary>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from(totalsByCurrency.entries()).map(([cur, sum]) => (
-            <Card key={cur} className="border-border p-4 shadow-none">
-              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total ({periodLabel[period]})</div>
-              <div className="mt-1 text-xl font-semibold tabular-nums">{formatMoney(sum, cur)}</div>
-              <div className="mt-1 text-xs text-muted-foreground">{filtered.length} expense(s) in view</div>
-            </Card>
-          ))}
-          {totalsByCurrency.size === 0 && !loading ? (
-            <Card className="border-border p-4 shadow-none sm:col-span-2">
-              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total</div>
-              <div className="mt-1 text-sm text-muted-foreground">No expenses match the current filters.</div>
-            </Card>
-          ) : null}
-        </div>
+          <MoneyKpiGrid aria-label="Expense metrics">
+            <MoneyKpiCard
+              icon={Receipt}
+              label="Total expenses"
+              value={formatMoney(monthStats.total, monthStats.currency)}
+              trend="All time"
+            />
+            <MoneyKpiCard
+              icon={Calendar}
+              label="This month"
+              value={formatMoney(monthStats.thisMonth, monthStats.currency)}
+              trend="Current period"
+            />
+            <MoneyKpiCard
+              icon={TrendingDown}
+              label="Previous month"
+              value={formatMoney(monthStats.prevMonth, monthStats.currency)}
+              trend="For comparison"
+            />
+            <MoneyKpiCard
+              icon={Layers}
+              label="Top category"
+              value={
+                monthStats.topCategories[0]
+                  ? formatMoney(monthStats.topCategories[0].amount, monthStats.currency)
+                  : '—'
+              }
+              trend={
+                monthStats.topCategories.length === 0
+                  ? 'No spend this month'
+                  : monthStats.topCategories.map((c) => formatExpenseCategoryLabel(c.category)).join(' · ')
+              }
+            />
+          </MoneyKpiGrid>
         </PageSummary>
 
-        <PageMain>
-        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="flex flex-wrap items-center gap-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-semibold">Filters</span>
-              {(['all', 'month', 'quarter', 'year'] as PeriodFilter[]).map((p) => (
-                <Button
-                  key={p}
-                  type="button"
-                  size="sm"
-                  variant={period === p ? 'primary' : 'secondary'}
-                  className="h-9"
-                  onClick={() => setPeriod(p)}
-                >
-                  {periodLabel[p]}
-                </Button>
-              ))}
-            </div>
-            <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-xl">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Category</label>
-                <select
-                  className={cn(
-                    'h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground shadow-[var(--shadow-sm)]',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30'
-                  )}
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                >
-                  <option value="all">All categories</option>
-                  {EXPENSE_CATEGORY_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Search</label>
-                <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Description, category…" />
-              </div>
-            </div>
+        <Surface variant="elevated" className="ti-panel ti-invoice-ledger flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="ti-panel-head">
+            <SectionHeader
+              kicker="Ledger"
+              title={`${filtered.length} expense${filtered.length === 1 ? '' : 's'}`}
+              description="Filter by period or category, then open a row to edit."
+            />
           </div>
-        </Card>
 
-        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
-          <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-sm font-semibold">Expense log</div>
-              <div className="mt-1 text-sm text-muted-foreground">
-                {loading ? 'Loading…' : `${filtered.length} row(s)`} · Receipts stored in Supabase Storage when attached.
+          <div className="ti-invoice-toolbar mt-1">
+            <Tabs
+              items={PERIOD_TABS.map((p) => ({ value: p.value, label: p.label }))}
+              value={period}
+              onChange={(v) => setPeriod(v as PeriodFilter)}
+            />
+            <div className="ti-invoice-toolbar-filters">
+              <Select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="w-full sm:w-[12.5rem]"
+                aria-label="Filter by category"
+              >
+                <option value="all">All categories</option>
+                {EXPENSE_CATEGORY_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              <div className="relative w-full sm:w-[15rem]">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--tl-ink-3)]" />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search expenses"
+                  className="pl-9"
+                  aria-label="Search expenses"
+                />
               </div>
             </div>
           </div>
+
+          {error ? (
+            <div className="ti-error mt-4" role="alert">
+              <div className="font-medium">Couldn’t load expenses</div>
+              <p className="ti-error-body">{error}</p>
+            </div>
+          ) : null}
 
           {loading ? (
-            <div className="mt-4 space-y-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
+            <div className="mt-5 space-y-0" aria-busy="true" aria-label="Loading expenses">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-6 border-b border-border py-4">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-40 flex-1" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                  <Skeleton className="h-5 w-24" />
+                </div>
+              ))}
             </div>
-          ) : items.length === 0 && !tableMissing ? (
-            <div className="mt-6 rounded-2xl border border-dashed border-border p-8 text-center">
-              <Receipt className="mx-auto h-10 w-10 text-muted-foreground" />
-              <p className="mt-3 text-sm font-medium">No expenses yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">Track software, travel, meals, and more for tax and P&amp;L reports.</p>
-              {canMutate ? (
-                <Button className="mt-4" variant="primary" onClick={openCreate}>
-                  Add your first expense
-                </Button>
-              ) : null}
+          ) : null}
+
+          {!loading && !error && filtered.length === 0 ? (
+            <div className="mt-6">
+              <EmptyState
+                kicker={noExpensesAtAll ? 'No expenses' : 'No matches'}
+                title={
+                  noExpensesAtAll
+                    ? 'Track software, travel, and meals.'
+                    : 'No expenses match these filters.'
+                }
+                description={
+                  noExpensesAtAll
+                    ? 'Add costs for tax and P&L reports — attach a receipt when you have one.'
+                    : 'Try a different period, category, or search term.'
+                }
+                action={
+                  canMutate && noExpensesAtAll ? (
+                    <Button variant="primary" onClick={openCreate}>
+                      Add your first expense
+                    </Button>
+                  ) : null
+                }
+              />
             </div>
           ) : null}
 
           {filtered.length > 0 ? (
             <>
-              <div className="mt-4 space-y-3 lg:hidden">
+              <div className="mt-4 space-y-3 md:hidden">
                 {filtered.map((x) => (
-                  <Card key={x.id} className="border border-border p-4 shadow-none">
-                    <div className="flex items-start justify-between gap-2">
+                  <div key={x.id} className="ti-invoice-card" data-tone="open">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-xs text-muted-foreground">{x.expenseDate}</div>
-                        <div className="mt-1 font-semibold tabular-nums">{formatMoney(x.amount, x.currency)}</div>
-                        <div className="mt-1">
-                          <Badge variant="outline">{formatExpenseCategoryLabel(x.aiCategory ?? x.category)}</Badge>
+                        <div className="ti-invoice-client">{x.description ?? 'Expense'}</div>
+                        <div className="ti-invoice-meta mt-1">
+                          {formatExpenseDate(x.expenseDate)} ·{' '}
+                          {formatExpenseCategoryLabel(x.aiCategory ?? x.category)}
                         </div>
-                        <div className="mt-2 text-sm text-foreground">{x.description ?? '—'}</div>
-                        {x.receiptPath ? (
-                          <a
-                            className="mt-2 inline-block text-xs font-medium text-primary underline"
-                            href={`/api/storage/receipt?path=${encodeURIComponent(x.receiptPath)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            View receipt
-                          </a>
-                        ) : null}
                       </div>
-                      <div className="flex shrink-0 gap-1">
+                      <span className="ti-status ti-status-sent">
+                        {formatExpenseCategoryLabel(x.aiCategory ?? x.category)}
+                      </span>
+                    </div>
+                    <div className="ti-invoice-amount">{formatMoney(x.amount, x.currency)}</div>
+                    <div className="flex items-center justify-between border-t border-[var(--tl-line)] pt-3">
+                      {x.receiptPath ? (
+                        <a
+                          className="text-[13px] font-medium text-[var(--tl-accent)] hover:underline"
+                          href={`/api/storage/receipt?path=${encodeURIComponent(x.receiptPath)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          View receipt
+                        </a>
+                      ) : (
+                        <span className="ti-invoice-meta">No receipt</span>
+                      )}
+                      <div className="ti-ledger-actions">
                         {x.source === 'import' ? (
                           <Button
                             type="button"
                             size="sm"
                             variant="secondary"
-                            className="h-9 px-2"
-                            aria-label="View imported expense"
                             onClick={() => setViewing(x)}
                           >
-                            <Eye className="h-4 w-4" />
+                            <Eye className="h-3.5 w-3.5" />
+                            View
                           </Button>
                         ) : null}
                         {canMutate ? (
                           <>
-                            <Button type="button" size="sm" variant="secondary" className="h-9 px-2" onClick={() => openEdit(x)}>
-                              <Pencil className="h-4 w-4" />
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => openEdit(x)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              Edit
                             </Button>
-                            <Button type="button" size="sm" variant="danger" className="h-9 px-2" onClick={() => void onDelete(x.id)}>
-                              <Trash2 className="h-4 w-4" />
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="danger"
+                              onClick={() => void onDelete(x.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete
                             </Button>
                           </>
                         ) : null}
                       </div>
                     </div>
-                  </Card>
+                  </div>
                 ))}
               </div>
 
-              <div className="mt-4 hidden min-h-0 flex-1 overflow-auto lg:block">
-                <table className="w-full min-w-[720px] text-sm">
-                  <thead>
-                    <tr className="text-left text-xs font-semibold text-muted-foreground">
-                      <th className="border-b border-border px-3 py-2">Date</th>
-                      <th className="border-b border-border px-3 py-2">Category</th>
-                      <th className="border-b border-border px-3 py-2">Description</th>
-                      <th className="border-b border-border px-3 py-2">Receipt</th>
-                      <th className="border-b border-border px-3 py-2 text-right">Amount</th>
-                      <th className="border-b border-border px-3 py-2 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <div className="mt-4 hidden min-h-0 flex-1 overflow-auto md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Date</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Receipt</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead className="w-48 text-right">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {filtered.map((x) => (
-                      <tr key={x.id} className="ti-row-hover">
-                        <td className="border-b border-border px-3 py-2.5 text-muted-foreground">{x.expenseDate}</td>
-                        <td className="border-b border-border px-3 py-2.5">
-                          <Badge variant="outline">{formatExpenseCategoryLabel(x.aiCategory ?? x.category)}</Badge>
-                        </td>
-                        <td className="border-b border-border px-3 py-2.5 text-foreground">{x.description ?? '—'}</td>
-                        <td className="border-b border-border px-3 py-2.5">
+                      <TableRow key={x.id} className="group" data-tone="open">
+                        <TableCell>
+                          <div className="ti-invoice-due">{formatExpenseDate(x.expenseDate)}</div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="ti-status ti-status-sent">
+                            {formatExpenseCategoryLabel(x.aiCategory ?? x.category)}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="ti-invoice-client">{x.description ?? '—'}</div>
+                        </TableCell>
+                        <TableCell>
                           {x.receiptPath ? (
                             <a
-                              className="text-xs font-medium text-[var(--ti-brand-accent,#2F6F7E)] underline"
+                              className="text-xs font-medium text-[var(--tl-accent)] hover:underline"
                               href={`/api/storage/receipt?path=${encodeURIComponent(x.receiptPath)}`}
                               target="_blank"
                               rel="noreferrer"
@@ -449,222 +509,95 @@ export default function ExpensesPageClient() {
                               Open
                             </a>
                           ) : (
-                            '—'
+                            <span className="ti-invoice-meta !mt-0">—</span>
                           )}
-                        </td>
-                        <td className="ti-num border-b border-border px-3 py-2.5 text-right font-medium">
-                          {formatMoney(x.amount, x.currency)}
-                        </td>
-                        <td className="border-b border-border px-3 py-2.5 text-right">
-                          <div className="inline-flex flex-wrap justify-end gap-2">
-                            {x.source === 'import' ? (
-                              <Button type="button" size="sm" variant="secondary" className="h-9" onClick={() => setViewing(x)}>
-                                <Eye className="mr-1.5 h-4 w-4" />
-                                View
-                              </Button>
-                            ) : null}
-                            {canMutate ? (
-                              <>
-                                <Button type="button" size="sm" variant="secondary" className="h-9" onClick={() => openEdit(x)}>
-                                  Edit
+                        </TableCell>
+                        <TableCell>
+                          <div className="ti-invoice-amount">{formatMoney(x.amount, x.currency)}</div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {canMutate || x.source === 'import' ? (
+                            <div className="ti-ledger-actions">
+                              {x.source === 'import' ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => setViewing(x)}
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                  View
                                 </Button>
-                                <Button type="button" size="sm" variant="danger" className="h-9" onClick={() => void onDelete(x.id)}>
-                                  Delete
-                                </Button>
-                              </>
-                            ) : x.source !== 'import' ? (
-                              '—'
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
+                              ) : null}
+                              {canMutate ? (
+                                <>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => openEdit(x)}
+                                  >
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="danger"
+                                    onClick={() => void onDelete(x.id)}
+                                  >
+                                    Delete
+                                  </Button>
+                                </>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="ti-invoice-meta !mt-0">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </>
           ) : null}
-
-          {!loading && items.length > 0 && filtered.length === 0 ? (
-            <div className="mt-6 text-center text-sm text-muted-foreground">No expenses match these filters.</div>
-          ) : null}
-        </Card>
-        </PageMain>
+        </Surface>
 
         <PageFootnote>
-          Categories align with AI suggestions (when configured). Totals reflect the filtered list below.
+          Totals above are all-time and monthly. The list follows the filters you select.
         </PageFootnote>
-      </PageBody>
+      </div>
 
-      <Modal open={modalOpen} onOpenChange={setModalOpen}>
-        <ModalContent className="max-w-md">
+      <Modal
+        open={modalOpen}
+        onOpenChange={(next) => {
+          setModalOpen(next);
+          if (!next) {
+            setFormError(null);
+            setFormKey((k) => k + 1);
+          }
+        }}
+      >
+        <ModalContent className="max-w-3xl p-6 sm:p-7" aria-describedby="expense-form-desc">
           <ModalHeader>
-            <ModalTitle>{editingId ? 'Edit expense' : 'Add expense'}</ModalTitle>
-            <ModalDescription>
-              Log costs for reporting and tax. Attach a receipt for your records (optional).
+            <ModalTitle className="ti-h3 text-[var(--tl-ink)]">
+              {editingId ? 'Edit expense' : 'Add expense'}
+            </ModalTitle>
+            <ModalDescription id="expense-form-desc" className="text-[13px] text-[var(--tl-ink-3)]">
+              Log costs for reporting and tax. Attach a receipt when you have one.
             </ModalDescription>
           </ModalHeader>
-          <form onSubmit={submitForm} className="mt-2 space-y-4">
-            {formError ? (
-              <div className="rounded-[var(--ti-radius-sm)] border border-danger/25 bg-danger/10 px-3 py-2 text-sm text-danger">{formError}</div>
-            ) : null}
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="exp-amount">
-                  Amount
-                </label>
-                <Input
-                  id="exp-amount"
-                  inputMode="decimal"
-                  value={form.amount}
-                  onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="exp-currency">
-                  Currency
-                </label>
-                <Input
-                  id="exp-currency"
-                  value={form.currency}
-                  onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value.toUpperCase() }))}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="exp-desc">
-                Description
-              </label>
-              <Input
-                id="exp-desc"
-                value={form.description}
-                onChange={(e) => {
-                  setCategoryFromAi(false);
-                  setForm((f) => ({ ...f, description: e.target.value }));
-                }}
-                placeholder="e.g. Adobe subscription, flight to Cape Town"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="exp-cat">
-                Category
-              </label>
-              <select
-                id="exp-cat"
-                className={cn(
-                  'h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground shadow-[var(--shadow-sm)]',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30'
-                )}
-                value={form.category}
-                onChange={(e) => {
-                  setCategoryFromAi(false);
-                  setForm((f) => ({ ...f, category: e.target.value }));
-                }}
-              >
-                {EXPENSE_CATEGORY_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={aiBusy || !form.description.trim()}
-                onClick={async () => {
-                  setAiBusy(true);
-                  try {
-                    const cat = await categorizeExpenseWithAi(form.description, Number(form.amount));
-                    setForm((f) => ({ ...f, category: cat }));
-                    setCategoryFromAi(true);
-                  } catch {
-                    // AI optional
-                  } finally {
-                    setAiBusy(false);
-                  }
-                }}
-              >
-                {aiBusy ? 'Suggesting…' : 'AI suggest category'}
-              </Button>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="exp-date">
-                Date
-              </label>
-              <Input
-                id="exp-date"
-                type="date"
-                value={form.expenseDate}
-                onChange={(e) => setForm((f) => ({ ...f, expenseDate: e.target.value }))}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Receipt (optional)</label>
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,application/pdf"
-                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-2 file:text-sm file:font-medium"
-                disabled={receiptUploading}
-                onChange={async (e) => {
-                  const f = e.target.files?.[0];
-                  e.target.value = '';
-                  if (!f) return;
-                  setReceiptUploading(true);
-                  setFormError(null);
-                  try {
-                    const path = await uploadExpenseReceipt(f);
-                    setForm((prev) => ({ ...prev, receiptPath: path }));
-                  } catch (err: unknown) {
-                    const msg =
-                      err instanceof Error
-                        ? err.message
-                        : 'Upload failed. Ensure a private Storage bucket named `receipts` exists in Supabase.';
-                    setFormError(msg);
-                    notifyError(msg);
-                  } finally {
-                    setReceiptUploading(false);
-                  }
-                }}
-              />
-              {form.receiptPath ? (
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <a
-                    href={`/api/storage/receipt?path=${encodeURIComponent(form.receiptPath)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-medium text-primary underline"
-                  >
-                    Preview attached file
-                  </a>
-                  <button
-                    type="button"
-                    className="font-medium text-foreground underline"
-                    onClick={() => setForm((f) => ({ ...f, receiptPath: null }))}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="flex flex-wrap justify-end gap-2 pt-2">
-              <Button type="button" variant="secondary" onClick={() => setModalOpen(false)} disabled={saving}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="primary" disabled={saving || receiptUploading}>
-                {saving ? 'Saving…' : editingId ? 'Save changes' : 'Save expense'}
-              </Button>
-            </div>
-          </form>
+          <div className="mt-5">
+            <ExpenseForm
+              key={`${formKey}-${editingId ?? 'new'}`}
+              mode={editingId ? 'edit' : 'create'}
+              initialValues={formInitial}
+              submitting={saving}
+              error={formError}
+              onCancel={() => setModalOpen(false)}
+              onSubmit={submitForm}
+            />
+          </div>
         </ModalContent>
       </Modal>
 
@@ -721,14 +654,21 @@ export default function ExpensesPageClient() {
         open={importOpen}
         onOpenChange={setImportOpen}
         title="Import expenses"
-        description="Upload CSV, Excel, PDF, or an image (screenshot/photo). Text is extracted from PDFs and images; use comma-, tab-, or semicolon-separated columns with a header row. Required: expense_date, amount; optional: currency, category, description."
+        description="Bulk import expenses from a spreadsheet, bank export, PDF, or screenshot."
         endpoint="/api/expenses/import"
         templateHref="/import-templates/timely-expenses.csv"
+        columnGuide={[
+          { name: 'expense_date', required: true, hint: 'YYYY-MM-DD' },
+          { name: 'amount', required: true, hint: 'Numeric amount' },
+          { name: 'currency', hint: 'Defaults to ZAR' },
+          { name: 'category', hint: 'e.g. software, travel, meals' },
+          { name: 'description', hint: 'What the spend was for' },
+        ]}
         onSuccess={() => {
           setPeriod('all');
           void reload();
         }}
       />
-    </AppShell>
+    </MoneyWorkspace>
   );
 }

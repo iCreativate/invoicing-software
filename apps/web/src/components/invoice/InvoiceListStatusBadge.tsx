@@ -1,37 +1,6 @@
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils/cn';
+import { StatusBadge } from '@/components/invoice/StatusBadge';
 import type { InvoiceListItem } from '@/features/invoices/types';
 
-/** Paid / Pending / Overdue (with subtle pulse) / Cancelled — for list views. */
 export function InvoiceListStatusBadge({ inv }: { inv: InvoiceListItem }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const st = inv.status;
-
-  if (st === 'cancelled') {
-    return <Badge variant="outline">Cancelled</Badge>;
-  }
-  if (st === 'viewed') {
-    return <Badge variant="primary">Viewed</Badge>;
-  }
-  if (st === 'paid' || (inv.balance_amount <= 0 && inv.total_amount > 0 && inv.paid_amount > 0)) {
-    return <Badge variant="success">Paid</Badge>;
-  }
-
-  const overdue =
-    st === 'overdue' ||
-    (inv.balance_amount > 0 && inv.due_date && inv.due_date < today && st !== 'draft');
-
-  if (overdue) {
-    return (
-      <Badge variant="danger" className={cn('motion-safe:animate-pulse motion-reduce:animate-none')}>
-        Overdue
-      </Badge>
-    );
-  }
-
-  if (st === 'draft') {
-    return <Badge variant="default">Draft</Badge>;
-  }
-
-  return <Badge variant="primary">Pending</Badge>;
+  return <StatusBadge status={inv.status} />;
 }

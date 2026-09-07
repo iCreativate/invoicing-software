@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
-import { Toaster } from 'sonner';
+import { Toaster } from '@/components/ui/Toaster';
 import { WorkspaceCapabilitiesProvider } from '@/components/workspace/WorkspaceCapabilities';
 import { isPublicShellPath } from '@/lib/routing/routes';
 
@@ -16,7 +16,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     return (
       <>
         {children}
-        <Toaster richColors closeButton position="top-right" />
+        <Toaster />
       </>
     );
   }
@@ -24,7 +24,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <WorkspaceCapabilitiesProvider>
       {children}
-      <Toaster richColors closeButton position="top-right" />
+      <Toaster />
     </WorkspaceCapabilitiesProvider>
   );
 }

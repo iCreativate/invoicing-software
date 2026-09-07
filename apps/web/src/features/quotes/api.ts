@@ -1,10 +1,10 @@
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getWorkspaceOwnerIdForClient } from '@/lib/auth/workspaceClient';
 import { isDemoUiActive } from '@/lib/demo/accounts';
-import { demoQuoteDetail, demoQuotesList, demoReadOnlyError } from '@/lib/demo/fixtures';
+import { demoQuoteDetail, demoQuotesList, demoCreateQuote, demoUpdateQuote, demoEnsureQuoteShareLink } from '@/lib/demo/fixtures';
 import type { QuoteDetail, QuoteListItem } from './types';
 
-function makeQuoteNumber() {
+export function makeQuoteNumber() {
   const y = String(new Date().getFullYear());
   const n = Math.floor(10000 + Math.random() * 90000);
   return `QT-${y}-${n}`;
@@ -50,7 +50,7 @@ export async function fetchQuoteDetail(id: string): Promise<QuoteDetail | null> 
   const { data: q, error } = await supabase
     .from('quotes')
     .select(
-      'id,quote_number,status,issue_date,valid_until,currency,vat_rate,subtotal_amount,tax_amount,total_amount,notes,client_id,converted_invoice_id,public_share_id,viewed_at,accepted_at,declined_at'
+      'id,quote_number,status,issue_date,valid_until,currency,vat_rate,subtotal_amount,tax_amount,total_amount,notes,client_id,converted_invoice_id,public_share_id,viewed_at,accepted_at,declined_at,client:clients(name,email,phone,address,company_name)'
     )
     .eq('id', id)
     .eq('owner_id', ownerId)
@@ -65,6 +65,8 @@ export async function fetchQuoteDetail(id: string): Promise<QuoteDetail | null> 
     .order('created_at', { ascending: true });
   if (itemErr) throw itemErr;
 
+  const client = (q as any).client ?? null;
+
   return {
     id: String((q as any).id),
     quoteNumber: (q as any).quote_number ? String((q as any).quote_number) : null,
@@ -78,6 +80,11 @@ export async function fetchQuoteDetail(id: string): Promise<QuoteDetail | null> 
     totalAmount: Number((q as any).total_amount ?? 0),
     notes: (q as any).notes != null ? String((q as any).notes) : null,
     clientId: String((q as any).client_id),
+    clientName: client?.name ? String(client.name) : null,
+    clientEmail: client?.email ? String(client.email) : null,
+    clientPhone: client?.phone ? String(client.phone) : null,
+    clientAddress: client?.address ? String(client.address) : null,
+    clientCompanyName: client?.company_name ? String(client.company_name) : null,
     convertedInvoiceId: (q as any).converted_invoice_id ? String((q as any).converted_invoice_id) : null,
     publicShareId: (q as any).public_share_id ? String((q as any).public_share_id) : null,
     viewedAt: (q as any).viewed_at ? String((q as any).viewed_at) : null,
@@ -94,22 +101,12 @@ export async function fetchQuoteDetail(id: string): Promise<QuoteDetail | null> 
   };
 }
 
-export async function createQuote(input: {
-  clientId: string;
-  issueDate: string;
-  validUntil: string;
-  currency: string;
-  vatRate: number;
-  notes?: string;
-  items: { description: string; quantity: number; unitPrice: number; vatRate: number }[];
-}): Promise<{ id: string }> {
-  if (isDemoUiActive()) throw demoReadOnlyError();
-  const supabase = createSupabaseBrowserClient();
-  const ownerId = await getWorkspaceOwnerIdForClient();
+type QuoteItemInput = { description: string; quantity: number; unitPrice: number; vatRate: number };
 
+function quoteLineRows(items: QuoteItemInput[]) {
   let subtotal = 0;
   let tax = 0;
-  const lineRows = input.items.map((it) => {
+  const lineRows = items.map((it) => {
     const line = it.quantity * it.unitPrice;
     const v = line * (it.vatRate / 100);
     subtotal += line;
@@ -122,8 +119,28 @@ export async function createQuote(input: {
       line_total: line + v,
     };
   });
+  return { lineRows, subtotal, tax, total: subtotal + tax };
+}
 
-  const quoteNo = makeQuoteNumber();
+export async function createQuote(input: {
+  clientId: string;
+  issueDate: string;
+  validUntil: string;
+  currency: string;
+  vatRate: number;
+  notes?: string;
+  quoteNumber?: string | null;
+  items: QuoteItemInput[];
+}): Promise<{ id: string; quoteNumber: string }> {
+  if (isDemoUiActive()) return demoCreateQuote(input);
+  const supabase = createSupabaseBrowserClient();
+  const ownerId = await getWorkspaceOwnerIdForClient();
+
+  const { lineRows, subtotal, tax, total } = quoteLineRows(input.items);
+  const quoteNo =
+    input.quoteNumber && String(input.quoteNumber).trim().length
+      ? String(input.quoteNumber).trim()
+      : makeQuoteNumber();
   const shareId = newShareId();
   const { data: row, error } = await supabase
     .from('quotes')
@@ -138,7 +155,7 @@ export async function createQuote(input: {
       vat_rate: input.vatRate,
       subtotal_amount: subtotal,
       tax_amount: tax,
-      total_amount: subtotal + tax,
+      total_amount: total,
       notes: input.notes ?? null,
       public_share_id: shareId,
     })
@@ -161,7 +178,7 @@ export async function createQuote(input: {
           vat_rate: input.vatRate,
           subtotal_amount: subtotal,
           tax_amount: tax,
-          total_amount: subtotal + tax,
+          total_amount: total,
           notes: input.notes ?? null,
         })
         .select('id')
@@ -177,7 +194,7 @@ export async function createQuote(input: {
         );
         if (insErr) throw insErr;
       }
-      return { id: quoteId };
+      return { id: quoteId, quoteNumber: quoteNo };
     }
     throw error;
   }
@@ -193,11 +210,65 @@ export async function createQuote(input: {
     if (insErr) throw insErr;
   }
 
-  return { id: quoteId };
+  return { id: quoteId, quoteNumber: quoteNo };
+}
+
+/** Update quote header fields and replace all quote_items. */
+export async function updateQuote(
+  id: string,
+  input: {
+    clientId: string;
+    issueDate: string;
+    validUntil: string;
+    currency: string;
+    vatRate: number;
+    notes?: string | null;
+    quoteNumber?: string | null;
+    items: QuoteItemInput[];
+  }
+): Promise<{ id: string }> {
+  if (isDemoUiActive()) return demoUpdateQuote(id, input);
+  const supabase = createSupabaseBrowserClient();
+  const ownerId = await getWorkspaceOwnerIdForClient();
+
+  const { lineRows, subtotal, tax, total } = quoteLineRows(input.items);
+  const patch: Record<string, unknown> = {
+    client_id: input.clientId,
+    issue_date: input.issueDate,
+    valid_until: input.validUntil,
+    currency: input.currency,
+    vat_rate: input.vatRate,
+    subtotal_amount: subtotal,
+    tax_amount: tax,
+    total_amount: total,
+    notes: input.notes ?? null,
+  };
+  if (input.quoteNumber != null && String(input.quoteNumber).trim().length) {
+    patch.quote_number = String(input.quoteNumber).trim();
+  }
+
+  const { error } = await supabase.from('quotes').update(patch).eq('id', id).eq('owner_id', ownerId);
+  if (error) throw error;
+
+  const { error: delErr } = await supabase.from('quote_items').delete().eq('quote_id', id);
+  if (delErr) throw delErr;
+
+  if (lineRows.length) {
+    const { error: insErr } = await supabase.from('quote_items').insert(
+      lineRows.map((r) => ({
+        quote_id: id,
+        ...r,
+      }))
+    );
+    if (insErr) throw insErr;
+  }
+
+  return { id };
 }
 
 /** Ensure quote has a public_share_id and mark as sent when sharing. */
 export async function ensureQuoteShareLink(quoteId: string): Promise<{ shareId: string; shareUrl: string }> {
+  if (isDemoUiActive()) return demoEnsureQuoteShareLink(quoteId);
   const supabase = createSupabaseBrowserClient();
   const ownerId = await getWorkspaceOwnerIdForClient();
   const { data: q, error } = await supabase

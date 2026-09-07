@@ -3,6 +3,18 @@
  * Architecture allows expansion without rewriting InvoicePreview.
  */
 
+export type InvoiceTemplateLayout =
+  | 'standard'
+  | 'manblue'
+  | 'nexus'
+  | 'technosoft'
+  | 'options'
+  | 'present'
+  | 'tealframe'
+  | 'navylime'
+  | 'navycoral'
+  | 'venture';
+
 export type InvoiceTemplateId =
   | 'modern'
   | 'classic'
@@ -15,9 +27,19 @@ export type InvoiceTemplateId =
   | 'stripe'
   | 'forest'
   | 'copper'
-  | 'letterhead';
+  | 'letterhead'
+  | 'manblue'
+  | 'nexus'
+  | 'technosoft'
+  | 'options'
+  | 'present'
+  | 'tealframe'
+  | 'navylime'
+  | 'navycoral'
+  | 'venture';
 
 export type InvoiceTemplateChrome = {
+  layout?: InvoiceTemplateLayout;
   page: string;
   header: string;
   headerMuted: string;
@@ -224,6 +246,152 @@ export const INVOICE_TEMPLATE_PRESETS: InvoiceTemplateDefinition[] = [
       totalsMuted: 'text-[#5a6169]',
       letterhead: true,
       serif: true,
+    },
+  },
+  {
+    id: 'manblue',
+    label: 'Manblue',
+    description: 'Navy and lime, pill headers',
+    accentHex: '#2E3192',
+    chrome: {
+      layout: 'manblue',
+      page: 'bg-[#E8E8E8]',
+      header: 'bg-transparent',
+      headerMuted: 'text-zinc-600',
+      invoiceTitle: 'text-5xl font-black',
+      tableHead: 'bg-[#2E3192] text-white',
+      tableHeadLast: 'bg-[#C5D97A] text-[#2E3192]',
+      totals: 'text-[#2E3192]',
+      totalsMuted: 'text-zinc-600',
+    },
+  },
+  {
+    id: 'nexus',
+    label: 'Nexus',
+    description: 'Gold accent, framed layout',
+    accentHex: '#C9A961',
+    chrome: {
+      layout: 'nexus',
+      page: 'bg-white border-[12px] border-zinc-700',
+      header: 'bg-white',
+      headerMuted: 'text-zinc-600',
+      invoiceTitle: 'text-4xl font-extralight uppercase tracking-[0.35em]',
+      tableHead: 'bg-[#C9A961] text-white',
+      totals: 'text-zinc-900',
+      totalsMuted: 'text-zinc-600',
+    },
+  },
+  {
+    id: 'technosoft',
+    label: 'Technosoft',
+    description: 'Gold column, dark header bar',
+    accentHex: '#D1B98B',
+    chrome: {
+      layout: 'technosoft',
+      page: 'bg-white',
+      header: 'bg-[#2E2E2E] text-white',
+      headerMuted: 'text-zinc-500',
+      invoiceTitle: 'text-2xl font-bold uppercase',
+      tableHead: 'bg-[#2E2E2E] text-white',
+      tableHeadLast: 'bg-[#D1B98B] text-[#2E2E2E]',
+      totals: 'text-zinc-900',
+      totalsMuted: 'text-zinc-600',
+    },
+  },
+  {
+    id: 'options',
+    label: 'Options',
+    description: 'Cyan accent, banner footer',
+    accentHex: '#17A2C6',
+    chrome: {
+      layout: 'options',
+      page: 'bg-white',
+      header: 'bg-white',
+      headerMuted: 'text-zinc-500',
+      invoiceTitle: 'text-4xl font-black uppercase',
+      tableHead: 'bg-[#17A2C6] text-white',
+      totals: 'text-zinc-900',
+      totalsMuted: 'text-zinc-600',
+    },
+  },
+  {
+    id: 'present',
+    label: 'Present',
+    description: 'Golden pills, sidebar layout',
+    accentHex: '#F5A623',
+    chrome: {
+      layout: 'present',
+      page: 'bg-white',
+      header: 'bg-white',
+      headerMuted: 'text-zinc-600',
+      invoiceTitle: 'text-4xl font-black uppercase',
+      tableHead: 'bg-[#F5A623] text-zinc-900',
+      totals: 'text-zinc-900',
+      totalsMuted: 'text-zinc-600',
+    },
+  },
+  {
+    id: 'tealframe',
+    label: 'Teal Frame',
+    description: 'Teal rails, rounded metadata pill',
+    accentHex: '#2E7D78',
+    chrome: {
+      layout: 'tealframe',
+      page: 'bg-white',
+      header: 'bg-white',
+      headerMuted: 'text-zinc-600',
+      invoiceTitle: 'text-5xl font-bold text-[#2E7D78]',
+      tableHead: 'bg-[#2E7D78] text-white',
+      totals: 'text-white',
+      totalsMuted: 'text-zinc-600',
+    },
+  },
+  {
+    id: 'navylime',
+    label: 'Navy Lime',
+    description: 'Dark header, lime accents',
+    accentHex: '#A4CC34',
+    chrome: {
+      layout: 'navylime',
+      page: 'bg-white',
+      header: 'bg-[#282C3F] text-white',
+      headerMuted: 'text-white/80',
+      invoiceTitle: 'text-4xl font-bold italic text-[#A4CC34]',
+      tableHead: 'bg-[#A4CC34] text-[#282C3F]',
+      totals: 'text-[#A4CC34]',
+      totalsMuted: 'text-white/90',
+    },
+  },
+  {
+    id: 'navycoral',
+    label: 'Navy Coral',
+    description: 'Navy header, coral table bar',
+    accentHex: '#E85D61',
+    chrome: {
+      layout: 'navycoral',
+      page: 'bg-[#F2F2F2]',
+      header: 'bg-[#1A2B4C] text-white',
+      headerMuted: 'text-white/85',
+      invoiceTitle: 'text-4xl font-black uppercase',
+      tableHead: 'bg-[#E85D61] text-zinc-900',
+      totals: 'text-white',
+      totalsMuted: 'text-zinc-700',
+    },
+  },
+  {
+    id: 'venture',
+    label: 'Venture',
+    description: 'Green sidebar, vertical title',
+    accentHex: '#3D8B5F',
+    chrome: {
+      layout: 'venture',
+      page: 'bg-[#F4F4F4]',
+      header: 'bg-[#F4F4F4]',
+      headerMuted: 'text-zinc-600',
+      invoiceTitle: 'text-2xl font-bold uppercase',
+      tableHead: 'bg-[#3D8B5F] text-white',
+      totals: 'text-zinc-900',
+      totalsMuted: 'text-zinc-600',
     },
   },
 ];

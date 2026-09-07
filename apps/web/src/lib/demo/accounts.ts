@@ -1,5 +1,13 @@
+/** When false, sample/mock data paths are disabled and the app always uses live Supabase. */
+export function demoModeEnabled(): boolean {
+  if (process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === '0') return false;
+  if (process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === '1') return true;
+  return process.env.NODE_ENV !== 'production';
+}
+
 /** Client-readable flags set by `/api/demo` (pairs with httpOnly `ti_demo`). */
 export function isDemoUiActive(): boolean {
+  if (!demoModeEnabled()) return false;
   if (typeof document === 'undefined') return false;
   return document.cookie.split(';').some((c) => {
     const t = c.trim();
@@ -7,11 +15,9 @@ export function isDemoUiActive(): boolean {
   });
 }
 
-/** Sample-dashboard fallback when Supabase is unreachable. Off in production unless explicitly enabled. */
+/** Sample-dashboard fallback when Supabase is unreachable. */
 export function demoLoginsEnabled(): boolean {
-  if (process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === '1') return true;
-  if (process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === '0') return false;
-  return process.env.NODE_ENV !== 'production';
+  return demoModeEnabled();
 }
 
 export function friendlyAuthNetworkError(err: unknown): string {

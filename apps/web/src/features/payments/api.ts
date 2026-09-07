@@ -159,6 +159,8 @@ export async function fetchInvoicesForPaymentPicker(): Promise<
     currency: string;
     balance_amount: number;
     total_amount: number;
+    paid_amount: number;
+    due_date: string | null;
     status: string;
   }[]
 > {
@@ -170,6 +172,8 @@ export async function fetchInvoicesForPaymentPicker(): Promise<
       currency: String(row.currency ?? 'ZAR'),
       balance_amount: Number(row.balance_amount ?? 0),
       total_amount: Number(row.total_amount ?? 0),
+      paid_amount: Number(row.paid_amount ?? 0),
+      due_date: row.due_date != null ? String(row.due_date).slice(0, 10) : null,
       status: String(row.status ?? 'draft'),
     }));
   }
@@ -186,6 +190,8 @@ export async function fetchInvoicesForPaymentPicker(): Promise<
     currency: String(row.currency ?? 'ZAR'),
     balance_amount: Number(row.balance_amount ?? 0),
     total_amount: Number(row.total_amount ?? 0),
+    paid_amount: Number(row.paid_amount ?? 0),
+    due_date: row.due_date != null ? String(row.due_date).slice(0, 10) : null,
     status: String(row.status ?? 'draft'),
   }));
 }

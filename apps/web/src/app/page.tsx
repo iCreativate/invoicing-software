@@ -2,14 +2,19 @@ import type { Metadata } from 'next';
 import { LandingPage } from '@/components/landing/LandingPage';
 
 export const metadata: Metadata = {
-  title: 'TimelyInvoices — Invoice. Collect. Understand.',
+  title: 'Timely — Send invoices. Get paid. Stay ahead.',
   description:
-    'Premium invoicing and cashflow for South African SMEs. Send invoices, collect payments, and see what is outstanding — without accounting complexity.',
+    'Timely helps you invoice, collect payments and understand your cash flow — without spending your day chasing clients. Built for South African businesses.',
   openGraph: {
-    title: 'TimelyInvoices — Invoice. Collect. Understand.',
+    title: 'Timely — Send invoices. Get paid. Stay ahead.',
     description:
-      'One clear place to send invoices, collect payments and understand cashflow for South African businesses.',
+      'Invoice, collect and understand your cash flow in one place. No credit card required.',
     type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Timely — Send invoices. Get paid. Stay ahead.',
+    description: 'Invoice, collect and understand your cash flow — without the chase.',
   },
   alternates: {
     canonical: '/',

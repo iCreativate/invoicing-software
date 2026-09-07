@@ -11,19 +11,33 @@ import {
   type SortingState,
   useReactTable,
 } from '@tanstack/react-table';
-import { Area, AreaChart, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts';
+import {
+  AlertCircle,
+  Banknote,
+  Clock3,
+  FileText,
+  Plus,
+  Receipt,
+  Send,
+  TrendingUp,
+  Wallet,
+} from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
-import { GlassCard } from '@/components/dashboard-ui/GlassCard';
-import { StatCard } from '@/components/dashboard-ui/StatCard';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Amount } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
+import { Surface } from '@/components/ui/Card';
+import { SectionHeader } from '@/components/ui/PageHeader';
+import { AppPageHero } from '@/components/layout/AppPageHero';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { openAskTimely } from '@/components/ai/AskTimelyDrawer';
 import { formatMoney } from '@/lib/format/money';
 import { routes } from '@/lib/routing/routes';
 import { cn } from '@/lib/utils/cn';
-import type { DashboardInvoice, DashboardSummary } from '@/lib/dashboard/types';
+import type { DashboardActivity, DashboardInvoice, DashboardSummary } from '@/lib/dashboard/types';
 import { StatusBadge } from '@/components/invoice/StatusBadge';
 import { InvoiceComposerLauncher } from '@/components/invoice/composer/InvoiceComposerLauncher';
-import { AskTimelyDrawer } from '@/components/ai/AskTimelyDrawer';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
 import { themeTokens } from '@/theme/tokens';
 
@@ -50,6 +64,63 @@ function formatDue(iso: string | null) {
   return d.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
+function formatRelativeTime(iso: string) {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return iso.slice(0, 10);
+  const diffMs = Date.now() - t;
+  const mins = Math.round(diffMs / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.round(hours / 24);
+  if (days < 14) return `${days} day${days === 1 ? '' : 's'} ago`;
+  return new Date(iso).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' });
+}
+
+function isDemoRow(id: string) {
+  return id.startsWith('00000000-0000-0000-0000-');
+}
+
+function invoiceHref(id: string) {
+  return isDemoRow(id) ? '#' : `${routes.app.invoices}/${id}`;
+}
+
+function rowAction(inv: DashboardInvoice): { label: string; href: string } {
+  const view = invoiceHref(inv.id);
+  if (inv.status === 'overdue') return { label: 'Collect', href: isDemoRow(inv.id) ? '#' : routes.app.collections };
+  if (inv.status === 'draft') return { label: 'Continue', href: view };
+  return { label: 'View', href: view };
+}
+
+function activityCopy(ev: DashboardActivity): { title: string; detail: string; status: DashboardInvoice['status'] | null } {
+  if (ev.type === 'invoice_sent') {
+    return {
+      title: 'Invoice sent',
+      detail: [ev.invoiceNumber, ev.clientName].filter(Boolean).join(' · ') || 'Invoice sent to client',
+      status: 'sent',
+    };
+  }
+  if (ev.type === 'payment_received') {
+    return {
+      title: 'Payment received',
+      detail: `${formatMoney(ev.amount, ev.currency)}${ev.clientName ? ` · ${ev.clientName}` : ''}`,
+      status: 'paid',
+    };
+  }
+  return {
+    title: 'Reminder sent',
+    detail: [ev.channel, ev.invoiceNumber, ev.clientName].filter(Boolean).join(' · ') || 'Follow-up sent',
+    status: 'viewed',
+  };
+}
+
+function ActivityIcon({ type }: { type: DashboardActivity['type'] }) {
+  if (type === 'payment_received') return <Banknote className="h-3.5 w-3.5" />;
+  if (type === 'reminder_sent') return <Send className="h-3.5 w-3.5" />;
+  return <FileText className="h-3.5 w-3.5" />;
+}
+
 export default function DashboardClient({
   userEmail,
   summary,
@@ -59,16 +130,15 @@ export default function DashboardClient({
 }) {
   const router = useRouter();
   const [sorting, setSorting] = useState<SortingState>([{ id: 'due_date', desc: true }]);
-  const [cashflowDays, setCashflowDays] = useState<7 | 30 | 90>(30);
+  const [chartRange, setChartRange] = useState<'6' | '12'>('6');
   const {
     currency,
     overview,
-    revenueByDay,
+    monthlyIncomeVsExpense,
     insights,
     recentInvoices,
-    actionItems,
-    businessPulse,
     expectedIncoming,
+    activity,
   } = summary;
   const { canEdit, status: capStatus } = useWorkspaceCapabilities();
   const canMutate = capStatus === 'ready' && canEdit;
@@ -77,20 +147,29 @@ export default function DashboardClient({
   const firstName = nameFromEmail(userEmail);
   const mom = insights.collectionMomPercent;
   const upMom = mom != null && mom >= 0;
+  const noHistory =
+    recentInvoices.length === 0 &&
+    overview.outstandingAmount === 0 &&
+    overview.paidThisMonth === 0 &&
+    overview.overdueAmount === 0;
 
   const columns = useMemo<ColumnDef<DashboardInvoice>[]>(
     () => [
       {
         accessorKey: 'invoice_number',
-        header: 'Invoice',
+        header: 'Invoice #',
         cell: ({ row }) => (
-          <span className="font-semibold text-foreground">{row.original.invoice_number || row.original.id.slice(0, 8)}</span>
+          <span className="font-semibold tracking-tight text-[var(--tl-ink)]">
+            {row.original.invoice_number || row.original.id.slice(0, 8)}
+          </span>
         ),
       },
       {
         accessorKey: 'client_name',
-        header: 'Client',
-        cell: ({ row }) => <span className="text-muted-foreground">{row.original.client_name ?? '—'}</span>,
+        header: 'Customer',
+        cell: ({ row }) => (
+          <span className="text-[var(--tl-ink-2)]">{row.original.client_name ?? '—'}</span>
+        ),
       },
       {
         accessorKey: 'status',
@@ -100,17 +179,40 @@ export default function DashboardClient({
       {
         accessorKey: 'due_date',
         header: 'Due date',
-        cell: ({ row }) => <span className="tabular-nums text-muted-foreground">{formatDue(row.original.due_date)}</span>,
+        cell: ({ row }) => (
+          <span className="tabular-nums text-[var(--tl-ink-3)]">{formatDue(row.original.due_date)}</span>
+        ),
       },
       {
         id: 'amount',
         accessorFn: (row) => (row.balance_amount > 0 ? row.balance_amount : row.total_amount),
         header: 'Amount',
         cell: ({ row }) => (
-          <span className="font-semibold tabular-nums">
-            {formatMoney(row.original.balance_amount > 0 ? row.original.balance_amount : row.original.total_amount, row.original.currency)}
+          <span className="ti-amount inline-block w-full">
+            {formatMoney(
+              row.original.balance_amount > 0 ? row.original.balance_amount : row.original.total_amount,
+              row.original.currency
+            )}
           </span>
         ),
+      },
+      {
+        id: 'action',
+        enableSorting: false,
+        header: () => <span className="sr-only">Action</span>,
+        cell: ({ row }) => {
+          const action = rowAction(row.original);
+          if (action.href === '#') return null;
+          return (
+            <Link
+              href={action.href}
+              className="text-[13px] font-medium text-[var(--tl-ink-2)] underline-offset-4 hover:text-[var(--tl-ink)] hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {action.label}
+            </Link>
+          );
+        },
       },
     ],
     []
@@ -125,24 +227,13 @@ export default function DashboardClient({
     getSortedRowModel: getSortedRowModel(),
   });
 
-  const isDemoRow = (id: string) => id.startsWith('00000000-0000-0000-0000-');
-
-  const lineData = useMemo(() => {
-    const slice = revenueByDay.slice(-cashflowDays);
-    const n = Math.max(1, slice.length - 1);
-    return slice.map((d, i) => {
-      const t = i / n;
-      const expected = expectedIncoming * (0.35 + 0.65 * t) * (0.55 + 0.45 * Math.sin(i / 3));
-      const overdue = overview.overdueAmount * (0.7 + 0.3 * Math.cos(i / 4));
-      return {
-        ...d,
-        collected: d.amount,
-        expected: Math.round(expected),
-        overdue: Math.round(overdue),
-        tick: cashflowDays <= 7 ? d.label : i % Math.max(1, Math.floor(slice.length / 6)) === 0 ? d.label : '',
-      };
-    });
-  }, [revenueByDay, cashflowDays, expectedIncoming, overview.overdueAmount]);
+  const barData = useMemo(() => {
+    const slice = chartRange === '6' ? monthlyIncomeVsExpense.slice(-6) : monthlyIncomeVsExpense;
+    return slice.map((d) => ({
+      ...d,
+      tick: d.label.length > 3 ? d.label.slice(0, 3) : d.label,
+    }));
+  }, [monthlyIncomeVsExpense, chartRange]);
 
   const chartRef = useRef<HTMLDivElement>(null);
   const [chartBox, setChartBox] = useState<{ w: number; h: number } | null>(null);
@@ -160,126 +251,141 @@ export default function DashboardClient({
     return () => ro.disconnect();
   }, []);
 
-  const healthBadge =
-    businessPulse.health === 'at_risk'
-      ? 'bg-danger/12 text-danger'
-      : businessPulse.health === 'watch'
-        ? 'bg-warning/12 text-warning'
-        : 'bg-success/12 text-success';
+  const hasChart = barData.some((d) => d.income > 0 || d.expense > 0);
+  const kpis = [
+    {
+      href: routes.app.invoices,
+      icon: Wallet,
+      value: formatMoney(overview.outstandingAmount, currency),
+      label: 'Outstanding',
+      trend: `${overview.outstandingInvoiceCount} open invoice${overview.outstandingInvoiceCount === 1 ? '' : 's'}`,
+    },
+    {
+      href: routes.app.collections,
+      icon: AlertCircle,
+      value: formatMoney(overview.overdueAmount, currency),
+      label: 'Overdue',
+      trend: `${overview.overdueInvoiceCount} need${overview.overdueInvoiceCount === 1 ? 's' : ''} collection`,
+    },
+    {
+      href: routes.app.payments,
+      icon: Banknote,
+      value: formatMoney(overview.paidThisMonth, currency),
+      label: 'Paid this month',
+      trend:
+        mom != null && Number.isFinite(mom)
+          ? `${upMom ? '+' : '−'}${Math.abs(mom).toFixed(1)}% vs last month`
+          : 'This month',
+      trendUp: mom != null ? upMom : undefined,
+    },
+    {
+      href: routes.app.cashflow,
+      icon: Clock3,
+      value: formatMoney(expectedIncoming, currency),
+      label: 'Expected',
+      trend: 'Next 14 days',
+    },
+    {
+      href: routes.app.insights,
+      icon: TrendingUp,
+      value: formatMoney(overview.invoicedThisMonth, currency),
+      label: 'Invoiced',
+      trend: 'This month',
+    },
+  ] as const;
+
+  const quickActions = [
+    { href: `${routes.app.invoices}/new`, label: 'Create Invoice', show: canMutate },
+    { href: `${routes.app.quotes}/new`, label: 'Create Quote', show: canMutate },
+    { href: `${routes.app.clients}/new`, label: 'Create Client', show: canMutate },
+    { href: routes.app.collections, label: 'Open Collections', show: true },
+  ].filter((a) => a.show);
 
   return (
-    <AppShell
-      hideHeader
-      actions={
-        <div className="flex items-center gap-1.5">
-          <AskTimelyDrawer />
-          <InvoiceComposerLauncher />
-        </div>
-      }
-    >
-      <div className="flex w-full flex-col gap-5">
-        <header className="min-w-0">
-          <h1 className="page-title">
-            {greetingForHour(hour)}, {firstName}
-          </h1>
-          <p className="page-subtitle">Here&apos;s how your business is doing today.</p>
-        </header>
+    <AppShell hideHeader>
+      <div className="ti-page-enter flex w-full flex-col gap-4 md:gap-5">
+        <AppPageHero
+          kicker="Dashboard"
+          title={`${greetingForHour(hour)}, ${firstName}.`}
+          description="Here's how your business is doing today."
+          image="money"
+          imageAlt="Timely workspace"
+          actions={
+            canMutate ? (
+              <Button asChild className="h-10">
+                <Link href={`${routes.app.invoices}/new`}>
+                  <Plus className="h-3.5 w-3.5" />
+                  New invoice
+                </Link>
+              </Button>
+            ) : null
+          }
+        />
 
-        <section aria-label="Key metrics" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            label="Paid this month"
-            value={formatMoney(overview.paidThisMonth, currency)}
-            sub={
-              mom != null && Number.isFinite(mom) ? (
-                <span className={upMom ? 'metric-trend-up' : 'metric-trend-down'}>
-                  {upMom ? '↑' : '↓'} {Math.abs(mom).toFixed(1)}% vs last month
+        {/* KPI strip */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5" aria-label="Key metrics">
+          {kpis.map((kpi) => {
+            const Icon = kpi.icon;
+            return (
+              <Link key={kpi.label} href={kpi.href} className="ti-kpi-card outline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--tl-accent)]">
+                <span className="ti-kpi-icon" aria-hidden>
+                  <Icon className="h-3.5 w-3.5" />
                 </span>
-              ) : (
-                'Not enough history yet'
-              )
-            }
-          />
-          <StatCard
-            label="Outstanding"
-            value={formatMoney(overview.outstandingAmount, currency)}
-            sub={`${overview.outstandingInvoiceCount} invoice${overview.outstandingInvoiceCount === 1 ? '' : 's'}`}
-          />
-          <StatCard
-            label="Overdue"
-            value={formatMoney(overview.overdueAmount, currency)}
-            highlight="danger"
-            sub={`${overview.overdueInvoiceCount} invoice${overview.overdueInvoiceCount === 1 ? '' : 's'}`}
-          />
-          <StatCard
-            label="Expected (14d)"
-            value={formatMoney(expectedIncoming, currency)}
-            sub="Due in next two weeks"
-          />
-        </section>
+                <span className="ti-kpi-value">{kpi.value}</span>
+                <span className="ti-kpi-label">{kpi.label}</span>
+                <span
+                  className={cn(
+                    'ti-kpi-trend',
+                    'trendUp' in kpi && kpi.trendUp === true && 'ti-kpi-trend-up',
+                    'trendUp' in kpi && kpi.trendUp === false && 'ti-kpi-trend-down'
+                  )}
+                >
+                  {kpi.trend}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
 
-        <section
-          className="grid grid-cols-1 gap-4 lg:grid-cols-2"
-          aria-label="Cashflow, actions, invoices, and pulse"
-        >
-          <GlassCard className="flex min-h-0 flex-col overflow-hidden p-5">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="section-title">Cashflow overview</h3>
-                <p className="mt-0.5 text-[13px] text-slate-500">Collected, expected & overdue</p>
-              </div>
-              <div className="flex gap-0.5">
-                {([7, 30, 90] as const).map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => setCashflowDays(d)}
-                    className={cn(
-                      'rounded-[var(--tl-radius)] px-2.5 py-1 text-[12px] font-medium transition-colors duration-150',
-                      cashflowDays === d
-                        ? 'bg-primary text-white'
-                        : 'text-slate-500 hover:text-foreground'
-                    )}
-                  >
-                    {d === 30 ? 'Last 30 days' : `${d}d`}
-                  </button>
-                ))}
-              </div>
+        {/* Chart + activity */}
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+          <Surface variant="elevated" className="flex flex-col p-5 sm:p-6" aria-label="Cash collected vs expenses">
+            <SectionHeader
+              kicker="Cashflow"
+              description="Collected vs expenses by month"
+              actions={
+                <div className="ti-pill-track">
+                  {(['6', '12'] as const).map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setChartRange(d)}
+                      className={cn('ti-pill', chartRange === d ? 'ti-pill-active' : 'ti-pill-idle')}
+                    >
+                      Last {d} months
+                    </button>
+                  ))}
+                </div>
+              }
+            />
+
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
+              <LegendSwatch color={themeTokens.chart.collected} label="Collected" />
+              <LegendSwatch color={themeTokens.chart.expected} label="Expenses" />
             </div>
 
-            <div className="mb-4 flex shrink-0 flex-wrap gap-4 text-[12.5px] text-slate-500">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ background: themeTokens.chart.collected }} /> Collected{' '}
-                <span className="tabular font-medium text-slate-900">{formatMoney(overview.paidThisMonth, currency)}</span>
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ background: themeTokens.chart.expected }} /> Expected{' '}
-                <span className="tabular font-medium text-slate-900">{formatMoney(expectedIncoming, currency)}</span>
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ background: themeTokens.chart.overdue }} /> Overdue{' '}
-                <span className="tabular font-medium text-slate-900">{formatMoney(overview.overdueAmount, currency)}</span>
-              </span>
-            </div>
-
-            <div ref={chartRef} className="relative h-56 w-full min-w-0 overflow-hidden">
-              {lineData.some((d) => d.collected > 0 || d.expected > 0) ? (
+            <div ref={chartRef} className="relative mt-5 h-64 w-full min-w-0 overflow-hidden sm:h-72">
+              {hasChart ? (
                 chartBox ? (
-                <AreaChart width={chartBox.w} height={chartBox.h} data={lineData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="cashflow-collected" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={themeTokens.chart.collected} stopOpacity={0.22} />
-                        <stop offset="100%" stopColor={themeTokens.chart.collected} stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="cashflow-expected" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={themeTokens.chart.expected} stopOpacity={0.16} />
-                        <stop offset="100%" stopColor={themeTokens.chart.expected} stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="cashflow-overdue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={themeTokens.chart.overdue} stopOpacity={0.14} />
-                        <stop offset="100%" stopColor={themeTokens.chart.overdue} stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid stroke={themeTokens.chart.grid} strokeDasharray="3 3" vertical={false} />
+                  <BarChart
+                    width={chartBox.w}
+                    height={chartBox.h}
+                    data={barData}
+                    margin={{ top: 8, right: 4, left: 0, bottom: 0 }}
+                    barGap={4}
+                    barCategoryGap="28%"
+                  >
+                    <CartesianGrid vertical={false} strokeDasharray="3 6" stroke={themeTokens.chart.grid} />
                     <XAxis
                       dataKey="tick"
                       tick={{ fontSize: 11, fill: themeTokens.chart.axis }}
@@ -288,27 +394,26 @@ export default function DashboardClient({
                     />
                     <YAxis hide />
                     <Tooltip
-                      cursor={{ stroke: 'rgba(15, 23, 42, 0.08)', strokeWidth: 1 }}
+                      cursor={{ fill: 'rgba(11, 15, 20, 0.03)' }}
                       content={({ active, payload }) => {
                         if (!active || !payload?.length) return null;
-                        const row = payload[0]?.payload as (typeof lineData)[0];
+                        const row = payload[0]?.payload as (typeof barData)[0];
                         return (
-                          <div className="rounded-[var(--tl-radius)] border border-[var(--tl-line)] bg-white px-3.5 py-2.5 shadow-[var(--ti-shadow)]">
-                            <div className="text-[12px] font-medium text-slate-900">{row?.label}</div>
+                          <div className="rounded-[var(--tl-radius-sm)] border border-[var(--tl-line)] bg-[var(--tl-surface)] px-3.5 py-2.5 shadow-[var(--tl-shadow-float)]">
+                            <p className="ti-caption">{row?.label}</p>
                             <div className="mt-2 space-y-1.5">
                               {(
                                 [
-                                  ['Collected', row?.collected, themeTokens.chart.collected],
-                                  ['Expected', row?.expected, themeTokens.chart.expected],
-                                  ['Overdue', row?.overdue, themeTokens.chart.overdue],
+                                  ['Collected', row?.income, themeTokens.chart.collected],
+                                  ['Expenses', row?.expense, themeTokens.chart.expected],
                                 ] as const
                               ).map(([label, amount, color]) => (
-                                <div key={label} className="flex items-center justify-between gap-6 text-[12.5px]">
-                                  <span className="inline-flex items-center gap-1.5 text-slate-500">
+                                <div key={label} className="flex items-center justify-between gap-8 text-[12.5px]">
+                                  <span className="inline-flex items-center gap-1.5 text-[var(--tl-ink-2)]">
                                     <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
                                     {label}
                                   </span>
-                                  <span className="tabular font-medium text-slate-900">
+                                  <span className="ti-amount text-[12.5px] font-medium">
                                     {formatMoney(Number(amount ?? 0), currency)}
                                   </span>
                                 </div>
@@ -318,111 +423,130 @@ export default function DashboardClient({
                         );
                       }}
                     />
-                    <Area
-                      type="monotone"
-                      dataKey="collected"
-                      stroke={themeTokens.chart.collected}
-                      strokeWidth={2.75}
-                      fill="url(#cashflow-collected)"
-                      dot={false}
-                      activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff', fill: themeTokens.chart.collected }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="expected"
-                      stroke={themeTokens.chart.expected}
-                      strokeWidth={2.25}
-                      strokeDasharray="5 4"
-                      fill="url(#cashflow-expected)"
-                      dot={false}
-                      activeDot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: themeTokens.chart.expected }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="overdue"
-                      stroke={themeTokens.chart.overdue}
-                      strokeWidth={2.25}
-                      fill="url(#cashflow-overdue)"
-                      dot={false}
-                      activeDot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: themeTokens.chart.overdue }}
-                    />
-                </AreaChart>
+                    <Bar dataKey="income" fill={themeTokens.chart.collected} radius={[6, 6, 0, 0]} maxBarSize={28} />
+                    <Bar dataKey="expense" fill={themeTokens.chart.expected} radius={[6, 6, 0, 0]} maxBarSize={28} />
+                  </BarChart>
                 ) : null
               ) : (
-                <div className="flex h-full min-h-[14rem] items-center justify-center rounded-lg border border-dashed border-border text-sm text-slate-500">
-                  No payment history in this window yet.
+                <div className="flex h-full min-h-[14rem] flex-col justify-center px-1">
+                  <p className="ti-body text-[var(--tl-ink-2)]">No cashflow history yet.</p>
+                  {canMutate ? (
+                    <div className="mt-4">
+                      <Button asChild variant="secondary">
+                        <Link href={`${routes.app.invoices}/new`}>Create an invoice</Link>
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>
-          </GlassCard>
+          </Surface>
 
-          <GlassCard className="flex min-h-0 max-h-[28rem] flex-col overflow-hidden p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="section-title">Needs attention</h3>
-              <span className="text-[12px] text-slate-400">What to do next</span>
-            </div>
-            {actionItems.length === 0 ? (
-              <p className="text-sm text-slate-500">Nothing urgent — you&apos;re clear for now.</p>
+          <Surface variant="elevated" className="flex flex-col p-5 sm:p-6" aria-label="Recent activity">
+            <SectionHeader
+              kicker="Recent activity"
+              actions={
+                <Link
+                  href={routes.app.notifications}
+                  className="text-[13px] font-medium text-[var(--tl-ink-2)] underline-offset-4 hover:text-[var(--tl-ink)] hover:underline"
+                >
+                  View all
+                </Link>
+              }
+            />
+
+            {activity.length === 0 ? (
+              <div className="mt-6">
+                <p className="ti-body text-[var(--tl-ink-2)]">
+                  {noHistory ? 'Activity will appear once you send invoices and collect payments.' : 'No recent events.'}
+                </p>
+              </div>
             ) : (
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                {actionItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-baseline justify-between gap-3 border-t border-[var(--tl-line)] py-3 first:border-t-0 first:pt-0"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-[13.5px] text-slate-600">{item.title}</div>
-                    </div>
-                    <div className="flex shrink-0 items-baseline gap-3">
-                      <span className="tabular text-[13.5px] font-medium text-foreground">
-                        {formatMoney(item.amount, currency)}
+              <ul className="mt-2" role="list">
+                {activity.slice(0, 6).map((ev, i) => {
+                  const copy = activityCopy(ev);
+                  const href =
+                    'invoiceId' in ev && ev.invoiceId && !isDemoRow(ev.invoiceId)
+                      ? `${routes.app.invoices}/${ev.invoiceId}`
+                      : null;
+                  const inner = (
+                    <>
+                      <span className="ti-activity-icon" aria-hidden>
+                        <ActivityIcon type={ev.type} />
                       </span>
-                      <Button
-                        asChild
-                        size="sm"
-                        variant={item.kind === 'overdue' ? 'primary' : 'ghost'}
-                        className="btn-sm"
-                      >
-                        <Link href={item.href}>{item.cta}</Link>
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-start justify-between gap-2">
+                          <span className="text-[13px] font-semibold tracking-tight text-[var(--tl-ink)]">{copy.title}</span>
+                          <span className="shrink-0 text-[11px] tabular-nums text-[var(--tl-ink-3)]">
+                            {formatRelativeTime(ev.at)}
+                          </span>
+                        </span>
+                        <span className="mt-0.5 block truncate text-[12.5px] text-[var(--tl-ink-2)]">{copy.detail}</span>
+                      </span>
+                      {copy.status ? (
+                        <span className="hidden shrink-0 pt-0.5 sm:inline-flex">
+                          <StatusBadge status={copy.status} />
+                        </span>
+                      ) : null}
+                    </>
+                  );
+                  return (
+                    <li key={`${ev.type}-${ev.at}-${i}`} className="ti-activity-row">
+                      {href ? (
+                        <Link href={href} className="flex min-w-0 flex-1 items-start gap-3">
+                          {inner}
+                        </Link>
+                      ) : (
+                        <div className="flex min-w-0 flex-1 items-start gap-3">{inner}</div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-          </GlassCard>
+          </Surface>
+        </div>
 
-          <GlassCard className="flex min-h-0 max-h-[28rem] flex-col overflow-hidden">
-            <div className="flex shrink-0 flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-              <div>
-                <h2 className="section-title">Recent invoices</h2>
-                <p className="text-xs text-muted-foreground">Open a row to view details</p>
+        {/* Invoices + quick actions */}
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+          <Surface variant="elevated" className="flex flex-col p-5 sm:p-6" aria-label="Recent invoices">
+            <SectionHeader
+              kicker="Recent invoices"
+              actions={
+                <Button asChild variant="ghost" size="sm">
+                  <Link href={routes.app.invoices}>View all</Link>
+                </Button>
+              }
+            />
+            {recentInvoices.length === 0 ? (
+              <div className="mt-4">
+                <EmptyState
+                  title="No invoices yet."
+                  description="Create an invoice and start getting paid."
+                  action={
+                    canMutate ? (
+                      <Button asChild variant="secondary">
+                        <Link href={`${routes.app.invoices}/new`}>New invoice</Link>
+                      </Button>
+                    ) : (
+                      <p className="ti-caption">Read-only users cannot create invoices.</p>
+                    )
+                  }
+                />
               </div>
-              <Button asChild variant="ghost" size="sm" className="self-start sm:self-auto">
-                <Link href={routes.app.invoices}>View all</Link>
-              </Button>
-            </div>
-            <div className="flex-1 overflow-x-auto">
-              {recentInvoices.length === 0 ? (
-                <div className="p-10 text-center text-sm text-muted-foreground">
-                  <p>No invoices yet.</p>
-                  {canMutate ? (
-                    <Button asChild className="mt-4" variant="primary">
-                      <Link href={`${routes.app.invoices}/new`}>Create your first invoice</Link>
-                    </Button>
-                  ) : (
-                    <p className="mt-3 text-xs">Read-only users cannot create invoices.</p>
-                  )}
-                </div>
-              ) : (
-                <Table>
+            ) : (
+              <div className="mt-3 overflow-x-auto">
+                <Table className="[&_td]:py-3.5 [&_th]:py-3">
                   <TableHeader>
                     {table.getHeaderGroups().map((hg) => (
                       <TableRow key={hg.id} className="hover:bg-transparent">
                         {hg.headers.map((header) => (
                           <TableHead
                             key={header.id}
-                            className={cn(header.column.getCanSort() && 'cursor-pointer select-none')}
+                            className={cn(
+                              header.column.getCanSort() && 'cursor-pointer select-none',
+                              (header.id === 'amount' || header.id === 'action') && 'text-right'
+                            )}
                             onClick={header.column.getToggleSortingHandler()}
                           >
                             <span className="inline-flex items-center gap-1">
@@ -436,7 +560,7 @@ export default function DashboardClient({
                   </TableHeader>
                   <TableBody>
                     {table.getRowModel().rows.map((row) => {
-                      const href = isDemoRow(row.original.id) ? '#' : `${routes.app.invoices}/${row.original.id}`;
+                      const href = invoiceHref(row.original.id);
                       return (
                         <TableRow
                           key={row.id}
@@ -454,82 +578,55 @@ export default function DashboardClient({
                           }}
                         >
                           {row.getVisibleCells().map((cell) => (
-                            <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                            <TableCell
+                              key={cell.id}
+                              className={cn(
+                                cell.column.id === 'amount' && 'ti-amount text-right',
+                                cell.column.id === 'action' && 'text-right'
+                              )}
+                            >
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </TableCell>
                           ))}
                         </TableRow>
                       );
                     })}
                   </TableBody>
                 </Table>
-              )}
-            </div>
-          </GlassCard>
+              </div>
+            )}
+          </Surface>
 
-          <GlassCard className="flex min-h-0 flex-col overflow-hidden p-5">
-            <div className="flex shrink-0 items-center justify-between gap-3">
-              <h2 className="section-title">Business pulse</h2>
-              <span className={cn('rounded-[var(--ti-radius-sm)] px-2 py-0.5 text-[11px] font-semibold capitalize', healthBadge)}>
-                {businessPulse.health.replace('_', ' ')}
-              </span>
+          <Surface variant="elevated" className="flex flex-col p-5 sm:p-6" aria-label="Quick actions">
+            <SectionHeader kicker="Quick actions" />
+            <div className="mt-5 flex flex-col gap-2.5">
+              {quickActions.map((action) => (
+                <Link key={action.href} href={action.href} className="ti-quick-action">
+                  <Plus className="h-3.5 w-3.5" />
+                  {action.label}
+                </Link>
+              ))}
+              <button type="button" className="ti-quick-action" onClick={() => openAskTimely()}>
+                <Receipt className="h-3.5 w-3.5" />
+                Ask Timely
+              </button>
             </div>
-            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{businessPulse.headline}</p>
-            <dl className="mt-auto space-y-4 pt-6">
-              <div className="flex items-end justify-between gap-3 border-t border-border pt-4">
-                <div>
-                  <dt className="text-xs text-muted-foreground">Average payment time</dt>
-                  <dd className="mt-1 text-lg font-semibold tabular-nums text-foreground">
-                    {businessPulse.avgDaysToPay != null ? `${businessPulse.avgDaysToPay.toFixed(1)} days` : '—'}
-                  </dd>
-                </div>
-                {businessPulse.avgDaysDelta != null ? (
-                  <dd
-                    className={cn(
-                      'text-xs font-medium tabular-nums',
-                      businessPulse.avgDaysDelta <= 0 ? 'text-success' : 'text-danger'
-                    )}
-                  >
-                    {businessPulse.avgDaysDelta > 0 ? '+' : ''}
-                    {businessPulse.avgDaysDelta.toFixed(1)} days
-                  </dd>
-                ) : null}
-              </div>
-              <div className="flex items-end justify-between gap-3 border-t border-border pt-4">
-                <div>
-                  <dt className="text-xs text-muted-foreground">Collection rate</dt>
-                  <dd className="mt-1 text-lg font-semibold tabular-nums text-foreground">
-                    {businessPulse.collectionRatePercent != null ? `${businessPulse.collectionRatePercent.toFixed(1)}%` : '—'}
-                  </dd>
-                </div>
-                {businessPulse.collectionRateDelta != null ? (
-                  <dd
-                    className={cn(
-                      'text-xs font-medium tabular-nums',
-                      businessPulse.collectionRateDelta >= 0 ? 'text-success' : 'text-danger'
-                    )}
-                  >
-                    {businessPulse.collectionRateDelta >= 0 ? '+' : ''}
-                    {businessPulse.collectionRateDelta.toFixed(1)}%
-                  </dd>
-                ) : businessPulse.collectionMomPercent != null ? (
-                  <dd
-                    className={cn(
-                      'text-xs font-medium tabular-nums',
-                      businessPulse.collectionMomPercent >= 0 ? 'text-success' : 'text-danger'
-                    )}
-                  >
-                    MoM {businessPulse.collectionMomPercent >= 0 ? '+' : ''}
-                    {businessPulse.collectionMomPercent.toFixed(1)}%
-                  </dd>
-                ) : null}
-              </div>
-            </dl>
-          </GlassCard>
-        </section>
+          </Surface>
+        </div>
       </div>
 
       <div className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-[max(1.25rem,env(safe-area-inset-right))] z-40 sm:hidden ti-no-print">
-        <InvoiceComposerLauncher label="" icon className="h-14 w-14 rounded-full shadow-[var(--ti-shadow-lift)]" />
+        <InvoiceComposerLauncher label="" icon className="h-14 w-14 rounded-full shadow-[var(--tl-shadow-float)]" />
       </div>
     </AppShell>
+  );
+}
+
+function LegendSwatch({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-2 text-[12.5px] text-[var(--tl-ink-2)]">
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} aria-hidden />
+      {label}
+    </span>
   );
 }

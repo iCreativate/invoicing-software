@@ -1,22 +1,41 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { AppShell } from '@/components/layout/AppShell';
-import { Card } from '@/components/ui/Card';
+import { Search, UserCheck, UserPlus, Users } from 'lucide-react';
+import { ClientsWorkspace } from '@/components/clients/ClientsWorkspace';
+import { AdminAlertBanner, AdminPanel } from '@/components/workspace/workspace-ui';
+import { PageSummary } from '@/components/layout/PageLayout';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/badge';
 import { Modal, ModalContent, ModalDescription, ModalHeader, ModalTitle } from '@/components/ui/modal';
+import { InviteMemberForm } from '@/components/team/InviteMemberForm';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { EmptyState } from '@/components/dashboard-ui/EmptyState';
 import { fetchEmployeesList, inviteEmployee } from '@/features/employees/api';
 import type { EmployeeListItem } from '@/features/employees/types';
 import { useWorkspaceCapabilities } from '@/components/workspace/WorkspaceCapabilities';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { notifyError, notifySuccess } from '@/lib/notify';
+import { cn } from '@/lib/utils/cn';
 
 function statusVariant(s: EmployeeListItem['status']) {
   if (s === 'active') return 'success';
   if (s === 'inactive') return 'outline';
   return 'primary';
+}
+
+function rowTone(s: EmployeeListItem['status']): 'paid' | 'overdue' | 'draft' | 'open' {
+  if (s === 'active') return 'paid';
+  if (s === 'inactive') return 'draft';
+  return 'open';
+}
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const a = parts[0]?.[0] ?? 'T';
+  const b = parts.length > 1 ? parts[parts.length - 1]?.[0] : '';
+  return (a + b).toUpperCase();
 }
 
 export default function EmployeesPage() {
@@ -28,10 +47,7 @@ export default function EmployeesPage() {
   const [items, setItems] = useState<EmployeeListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteName, setInviteName] = useState('');
-  const [inviteRole, setInviteRole] = useState('Employee');
-  const [invitePermission, setInvitePermission] = useState('member');
+  const [inviteFormKey, setInviteFormKey] = useState(0);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const [inviting, setInviting] = useState(false);
@@ -64,185 +80,233 @@ export default function EmployeesPage() {
     return items.filter((e) => `${e.name} ${e.role} ${e.email} ${e.status}`.toLowerCase().includes(q));
   }, [items, query]);
 
+  const totals = useMemo(() => {
+    return {
+      total: items.length,
+      active: items.filter((e) => e.status === 'active').length,
+      pending: items.filter((e) => e.status !== 'active' && e.status !== 'inactive').length,
+    };
+  }, [items]);
+
   return (
-    <AppShell
-      title="Employees"
+    <ClientsWorkspace
       actions={
-        canInvite ? <Button onClick={() => setOpen(true)}>Invite employee</Button> : null
+        canInvite ? (
+          <Button size="sm" onClick={() => setOpen(true)}>
+            <UserPlus className="h-4 w-4" />
+            Invite member
+          </Button>
+        ) : null
       }
     >
-      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-5">
-        <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="text-sm font-semibold">Team directory</div>
-            <div className="mt-1 text-sm text-muted-foreground">{loading ? 'Loading…' : `${filtered.length} member(s)`}</div>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 md:gap-5">
+        <PageSummary>
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-3" aria-label="Team snapshot">
+            <div className="ti-kpi-card">
+              <span className="ti-kpi-icon" aria-hidden>
+                <Users className="h-3.5 w-3.5" />
+              </span>
+              <span className="ti-kpi-value">{loading ? '—' : String(totals.total)}</span>
+              <span className="ti-kpi-label">Members</span>
+              <span className="ti-kpi-trend">In this workspace</span>
+            </div>
+            <div className="ti-kpi-card">
+              <span className="ti-kpi-icon" aria-hidden>
+                <UserCheck className="h-3.5 w-3.5" />
+              </span>
+              <span className="ti-kpi-value">{loading ? '—' : String(totals.active)}</span>
+              <span className="ti-kpi-label">Active</span>
+              <span className="ti-kpi-trend">Can sign in</span>
+            </div>
+            <div className="ti-kpi-card">
+              <span className="ti-kpi-icon" aria-hidden>
+                <UserPlus className="h-3.5 w-3.5" />
+              </span>
+              <span className="ti-kpi-value">{loading ? '—' : String(totals.pending)}</span>
+              <span className="ti-kpi-label">Pending</span>
+              <span className="ti-kpi-trend">Invites or inactive</span>
+            </div>
           </div>
-          <div className="w-full sm:max-w-sm">
-            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search employees…" />
+        </PageSummary>
+
+        <AdminPanel
+          kicker="Directory"
+          title={`${filtered.length} member${filtered.length === 1 ? '' : 's'}`}
+          description="Roles, permissions, and invitations."
+          className="ti-invoice-ledger flex min-h-0 flex-1 flex-col overflow-hidden"
+          bodyClassName="mt-0 min-h-0 flex-1"
+        >
+          <div className="ti-invoice-toolbar">
+            <div className="ti-invoice-toolbar-filters ml-auto">
+              <div className="relative w-full sm:w-[15rem]">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--tl-ink-3)]" />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search members"
+                  className="pl-9"
+                  aria-label="Search members"
+                />
+              </div>
+            </div>
           </div>
-        </div>
 
-        {error ? <div className="mt-4 rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{error}</div> : null}
-        {inviteNotice ? (
-          <div className="mt-4 rounded-[var(--ti-radius)] border border-warning/30 bg-warning/10 p-3 text-sm text-foreground">
-            {inviteNotice}
-          </div>
-        ) : null}
+          {error ? <AdminAlertBanner tone="error">{error}</AdminAlertBanner> : null}
+          {inviteNotice ? <AdminAlertBanner tone="warning">{inviteNotice}</AdminAlertBanner> : null}
 
-        {!loading && !error && filtered.length === 0 ? (
-          <div className="mt-6 rounded-2xl border border-dashed border-border p-6 text-sm text-muted-foreground">
-            No employees yet. Invite your first team member.
-          </div>
-        ) : null}
+          {loading ? (
+            <div className="mt-5 space-y-0" aria-busy="true" aria-label="Loading team">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-6 border-b border-border py-4">
+                  <Skeleton className="h-9 w-9 rounded-2xl" />
+                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-44 flex-1" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                </div>
+              ))}
+            </div>
+          ) : null}
 
-        <div className="mt-4 min-h-0 flex-1 overflow-auto">
-          <table className="w-full min-w-[960px] border-separate border-spacing-0">
-            <thead>
-              <tr className="text-left text-xs font-semibold text-muted-foreground">
-                <th className="border-b border-border px-3 py-2">Name</th>
-                <th className="border-b border-border px-3 py-2">Role</th>
-                <th className="border-b border-border px-3 py-2">Email</th>
-                <th className="border-b border-border px-3 py-2">Permission</th>
-                <th className="border-b border-border px-3 py-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading
-                ? Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={i} className="text-sm">
-                      <td className="border-b border-border px-3 py-2.5">
-                        <Skeleton className="h-5 w-36" />
-                      </td>
-                      <td className="border-b border-border px-3 py-2.5">
-                        <Skeleton className="h-5 w-24" />
-                      </td>
-                      <td className="border-b border-border px-3 py-2.5">
-                        <Skeleton className="h-5 w-44" />
-                      </td>
-                      <td className="border-b border-border px-3 py-2.5">
-                        <Skeleton className="h-5 w-20" />
-                      </td>
-                      <td className="border-b border-border px-3 py-2.5">
-                        <Skeleton className="h-6 w-16 rounded-full" />
-                      </td>
-                    </tr>
-                  ))
-                : filtered.map((e) => (
-                    <tr key={e.id} className="text-sm">
-                      <td className="border-b border-border px-3 py-2.5 font-semibold">{e.name}</td>
-                      <td className="border-b border-border px-3 py-2.5">{e.role}</td>
-                      <td className="border-b border-border px-3 py-2.5 text-muted-foreground">{e.email}</td>
-                      <td className="border-b border-border px-3 py-2.5 capitalize">{e.permission}</td>
-                      <td className="border-b border-border px-3 py-2.5">
-                        <Badge variant={statusVariant(e.status)}>{e.status}</Badge>
-                      </td>
-                    </tr>
-                  ))}
-            </tbody>
-          </table>
-        </div>
+          {!loading && !error && filtered.length === 0 ? (
+            <div className="mt-6">
+              <EmptyState
+                kicker={items.length === 0 ? 'No members' : 'No matches'}
+                title={items.length === 0 ? 'Invite your first teammate.' : 'No members match that search.'}
+                description={
+                  items.length === 0
+                    ? 'Add people with the right roles so they can help run the books.'
+                    : 'Try a different name, email, or role.'
+                }
+                action={
+                  canInvite && items.length === 0 ? (
+                    <Button onClick={() => setOpen(true)}>Invite member</Button>
+                  ) : null
+                }
+              />
+            </div>
+          ) : null}
 
-        <div className="mt-5 rounded-2xl bg-muted/20 p-4 text-sm text-muted-foreground">
-          Permissions: owner and admin manage the team and invitations. Billing can manage payments (recording, gateways, mark
-          paid). Viewer is read-only in the app (UI enforcement is expanding across screens).
-        </div>
-      </Card>
+          {!loading && !error && filtered.length > 0 ? (
+            <>
+              <div className="mt-4 space-y-3 md:hidden">
+                {filtered.map((e) => (
+                  <div key={e.id} className="ti-invoice-card" data-tone={rowTone(e.status)}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-xs font-semibold text-primary">
+                          {initials(e.name)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="ti-invoice-client truncate">{e.name}</div>
+                          <div className="ti-invoice-meta mt-1 truncate">{e.email}</div>
+                        </div>
+                      </div>
+                      <Badge variant={statusVariant(e.status)}>{e.status}</Badge>
+                    </div>
+                    <div className="ti-invoice-meta border-t border-[var(--tl-line)] pt-3">
+                      {e.role} · <span className="capitalize">{e.permission}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-      <Modal open={open} onOpenChange={setOpen}>
-        <ModalContent>
+              <div className="mt-4 hidden min-h-0 flex-1 overflow-auto md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Name</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Permission</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((e) => (
+                      <TableRow key={e.id} data-tone={rowTone(e.status)}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div className="grid h-9 w-9 place-items-center rounded-2xl bg-primary/10 text-xs font-semibold text-primary">
+                              {initials(e.name)}
+                            </div>
+                            <span className="ti-invoice-number">{e.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>{e.role}</TableCell>
+                        <TableCell className="text-muted-foreground">{e.email}</TableCell>
+                        <TableCell className="capitalize">{e.permission}</TableCell>
+                        <TableCell>
+                          <Badge variant={statusVariant(e.status)}>{e.status}</Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          ) : null}
+
+          <p className={cn('mt-5 ti-caption leading-relaxed text-[var(--tl-ink-3)]')}>
+            Permissions: owner and admin manage the team and invitations. Billing can manage payments. Viewer is
+            read-only.
+          </p>
+        </AdminPanel>
+      </div>
+
+      <Modal
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) {
+            setInviteError(null);
+            setInviteFormKey((k) => k + 1);
+          }
+        }}
+      >
+        <ModalContent className="max-w-3xl p-6 sm:p-7" aria-describedby="invite-member-desc">
           <ModalHeader>
-            <ModalTitle className="text-lg font-semibold">Invite employee</ModalTitle>
-            <ModalDescription className="text-sm text-muted-foreground">
-              Send an invite email and assign a role.
+            <ModalTitle className="ti-h3 text-[var(--tl-ink)]">Invite member</ModalTitle>
+            <ModalDescription id="invite-member-desc" className="text-[13px] text-[var(--tl-ink-3)]">
+              Add someone to your workspace with the right role and access level.
             </ModalDescription>
           </ModalHeader>
 
-          <div className="mt-4 grid gap-3">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Full name</label>
-              <Input value={inviteName} onChange={(e) => setInviteName(e.target.value)} placeholder="e.g. Jane Doe" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Email</label>
-              <Input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="name@company.com" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Role</label>
-              <select
-                className="h-11 w-full rounded-xl bg-white/70 px-3 text-sm shadow-[var(--shadow-sm)] dark:bg-white/5"
-                value={inviteRole}
-                onChange={(e) => setInviteRole(e.target.value)}
-              >
-                <option>Employee</option>
-                <option>Finance</option>
-                <option>Administrator</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Permission</label>
-              <select
-                className="h-11 w-full rounded-xl bg-white/70 px-3 text-sm shadow-[var(--shadow-sm)] dark:bg-white/5"
-                value={invitePermission}
-                onChange={(e) => setInvitePermission(e.target.value)}
-              >
-                <option value="member">Staff (member) — create &amp; edit records</option>
-                <option value="billing">Staff (billing) — finance + payments</option>
-                <option value="admin">Admin — team + settings</option>
-                <option value="viewer">Staff (viewer) — read only</option>
-                <option value="owner">Owner — full access</option>
-              </select>
-            </div>
-
-            {inviteError ? <div className="rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{inviteError}</div> : null}
-
-            <div className="mt-1 flex items-center justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                disabled={inviting}
-                onClick={async () => {
-                  setInviteError(null);
-                  const email = inviteEmail.trim();
-                  if (!email.includes('@')) {
-                    setInviteError('Enter a valid email.');
-                    return;
-                  }
-                  setInviting(true);
-                  try {
-                    setInviteNotice(null);
-                    const out = await inviteEmployee({
-                      name: inviteName.trim() || undefined,
-                      email,
-                      role: inviteRole,
-                      permission: invitePermission,
-                    });
-                    const list = await fetchEmployeesList();
-                    setItems(list);
-                    setInviteEmail('');
-                    setInviteName('');
-                    setInviteRole('Employee');
-                    setInvitePermission('member');
-                    setOpen(false);
-                    notifySuccess('Invitation sent.');
-                    if (out.notice) setInviteNotice(out.notice);
-                  } catch (e: any) {
-                    const msg = e?.message ?? 'Invite failed.';
-                    setInviteError(msg);
-                    notifyError(msg);
-                  } finally {
-                    setInviting(false);
-                  }
-                }}
-              >
-                {inviting ? 'Sending…' : 'Send invite'}
-              </Button>
-            </div>
+          <div className="mt-5">
+            <InviteMemberForm
+              key={inviteFormKey}
+              submitting={inviting}
+              error={inviteError}
+              onCancel={() => setOpen(false)}
+              onSubmit={async ({ name, email, role, permission }) => {
+                setInviteError(null);
+                setInviting(true);
+                try {
+                  setInviteNotice(null);
+                  const out = await inviteEmployee({
+                    name: name || undefined,
+                    email,
+                    role,
+                    permission,
+                  });
+                  const list = await fetchEmployeesList();
+                  setItems(list);
+                  setOpen(false);
+                  setInviteFormKey((k) => k + 1);
+                  notifySuccess('Invitation sent.');
+                  if (out.notice) setInviteNotice(out.notice);
+                } catch (e: any) {
+                  const msg = e?.message ?? 'Invite failed.';
+                  setInviteError(msg);
+                  notifyError(msg);
+                } finally {
+                  setInviting(false);
+                }
+              }}
+            />
           </div>
         </ModalContent>
       </Modal>
-    </AppShell>
+    </ClientsWorkspace>
   );
 }
-

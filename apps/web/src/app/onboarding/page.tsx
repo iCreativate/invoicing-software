@@ -2,21 +2,18 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { AppShell } from '@/components/layout/AppShell';
-import { PageBody } from '@/components/layout/PageLayout';
-import { GlassCard } from '@/components/dashboard-ui/GlassCard';
-import { PageHeader } from '@/components/dashboard-ui/PageHeader';
+import { AuthShell } from '@/components/auth/AuthShell';
 import { Button } from '@/components/ui/Button';
+import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { routes } from '@/lib/routing/routes';
-import { cn } from '@/lib/utils/cn';
 
 const STEPS = [
-  { id: 1, title: 'Business name' },
-  { id: 2, title: 'Logo' },
-  { id: 3, title: 'VAT' },
-  { id: 4, title: 'Bank details' },
-  { id: 5, title: 'Create invoice' },
+  { id: 1, title: 'Your business', subtitle: 'Shown on invoices and quotes.' },
+  { id: 2, title: 'Logo', subtitle: 'Optional — you can add this later.' },
+  { id: 3, title: 'VAT', subtitle: 'Optional if you are not VAT registered.' },
+  { id: 4, title: 'Bank details', subtitle: 'Printed on invoices so clients know where to pay.' },
+  { id: 5, title: 'You’re ready', subtitle: 'Create your first invoice when you are.' },
 ] as const;
 
 export default function OnboardingPage() {
@@ -34,6 +31,8 @@ export default function OnboardingPage() {
     branchCode: '',
     accountType: 'cheque',
   });
+
+  const current = STEPS[step - 1];
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -62,142 +61,151 @@ export default function OnboardingPage() {
       if (!res.ok || !json?.success) throw new Error(json?.error ?? 'Could not save');
       setSaved(true);
       setStep(5);
-    } catch (e: any) {
-      setError(e?.message ?? 'Could not save');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Could not save');
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <AppShell title="Onboarding">
-      <PageBody>
-        <PageHeader title="Set up your workspace" description="Five quick steps so invoices look ready for South African clients." />
+    <AuthShell title={current.title} subtitle={current.subtitle}>
+      <p className="ti-caption mb-6">
+        {step} of {STEPS.length}
+      </p>
 
-        <ol className="mb-4 flex flex-wrap gap-2">
-          {STEPS.map((s) => (
-            <li
-              key={s.id}
-              className={cn(
-                'rounded-md border px-2.5 py-1 text-xs',
-                step === s.id ? 'border-foreground text-foreground' : 'border-border text-muted-foreground'
-              )}
-            >
-              {s.id}. {s.title}
-            </li>
-          ))}
-        </ol>
+      {step === 1 ? (
+        <div className="space-y-5">
+          <Field label="Business name" htmlFor="companyName">
+            <Input
+              id="companyName"
+              className="h-11"
+              value={form.companyName}
+              onChange={(e) => update('companyName', e.target.value)}
+              autoComplete="organization"
+              autoFocus
+            />
+          </Field>
+          <Button
+            type="button"
+            className="h-11 w-full"
+            disabled={form.companyName.trim().length < 2}
+            onClick={() => setStep(2)}
+          >
+            Continue
+          </Button>
+          <p className="text-center text-sm text-[var(--tl-ink-2)]">
+            <Link href={routes.app.dashboard} className="underline-offset-4 hover:text-[var(--tl-ink)] hover:underline">
+              I’ll do this later
+            </Link>
+          </p>
+        </div>
+      ) : null}
 
-        <GlassCard className="space-y-4 p-5">
-          {step === 1 ? (
-            <>
-              <label className="block text-sm">
-                <span className="text-muted-foreground">Business name</span>
-                <Input
-                  className="mt-1"
-                  value={form.companyName}
-                  onChange={(e) => update('companyName', e.target.value)}
-                  placeholder="Acme Trading (Pty) Ltd"
-                />
-              </label>
-              <Button type="button" disabled={form.companyName.trim().length < 2} onClick={() => setStep(2)}>
-                Continue
-              </Button>
-            </>
+      {step === 2 ? (
+        <div className="space-y-5">
+          <Field label="Logo URL" htmlFor="logoUrl" hint="Optional">
+            <Input
+              id="logoUrl"
+              className="h-11"
+              value={form.logoUrl}
+              onChange={(e) => update('logoUrl', e.target.value)}
+              placeholder="https://"
+            />
+          </Field>
+          <Button type="button" className="h-11 w-full" onClick={() => setStep(3)}>
+            Continue
+          </Button>
+          <Button type="button" variant="ghost" className="h-11 w-full" onClick={() => setStep(1)}>
+            Back
+          </Button>
+        </div>
+      ) : null}
+
+      {step === 3 ? (
+        <div className="space-y-5">
+          <Field label="VAT number" htmlFor="vatNumber" hint="Optional">
+            <Input
+              id="vatNumber"
+              className="h-11"
+              value={form.vatNumber}
+              onChange={(e) => update('vatNumber', e.target.value)}
+            />
+          </Field>
+          <Button type="button" className="h-11 w-full" onClick={() => setStep(4)}>
+            Continue
+          </Button>
+          <Button type="button" variant="ghost" className="h-11 w-full" onClick={() => setStep(2)}>
+            Back
+          </Button>
+        </div>
+      ) : null}
+
+      {step === 4 ? (
+        <div className="space-y-5">
+          <Field label="Bank name" htmlFor="bankName">
+            <Input id="bankName" className="h-11" value={form.bankName} onChange={(e) => update('bankName', e.target.value)} />
+          </Field>
+          <Field label="Account name" htmlFor="accountName">
+            <Input
+              id="accountName"
+              className="h-11"
+              value={form.accountName}
+              onChange={(e) => update('accountName', e.target.value)}
+            />
+          </Field>
+          <Field label="Account number" htmlFor="accountNumber">
+            <Input
+              id="accountNumber"
+              className="h-11"
+              value={form.accountNumber}
+              onChange={(e) => update('accountNumber', e.target.value)}
+            />
+          </Field>
+          <Field label="Branch code" htmlFor="branchCode">
+            <Input
+              id="branchCode"
+              className="h-11"
+              value={form.branchCode}
+              onChange={(e) => update('branchCode', e.target.value)}
+            />
+          </Field>
+          {error ? (
+            <div className="ti-error" role="alert">
+              <p className="ti-error-body">{error}</p>
+            </div>
           ) : null}
+          <Button
+            type="button"
+            className="h-11 w-full"
+            loading={saving}
+            disabled={form.companyName.trim().length < 2}
+            onClick={() => void saveProfile()}
+          >
+            Save profile
+          </Button>
+          <Button type="button" variant="ghost" className="h-11 w-full" disabled={saving} onClick={() => setStep(3)}>
+            Back
+          </Button>
+        </div>
+      ) : null}
 
-          {step === 2 ? (
-            <>
-              <label className="block text-sm">
-                <span className="text-muted-foreground">Logo URL (optional)</span>
-                <Input
-                  className="mt-1"
-                  value={form.logoUrl}
-                  onChange={(e) => update('logoUrl', e.target.value)}
-                  placeholder="https://…"
-                />
-              </label>
-              <div className="flex gap-2">
-                <Button type="button" variant="secondary" onClick={() => setStep(1)}>
-                  Back
-                </Button>
-                <Button type="button" onClick={() => setStep(3)}>
-                  Continue
-                </Button>
-              </div>
-            </>
-          ) : null}
-
-          {step === 3 ? (
-            <>
-              <label className="block text-sm">
-                <span className="text-muted-foreground">VAT number (optional)</span>
-                <Input
-                  className="mt-1"
-                  value={form.vatNumber}
-                  onChange={(e) => update('vatNumber', e.target.value)}
-                  placeholder="4xxxxxxxxx"
-                />
-              </label>
-              <div className="flex gap-2">
-                <Button type="button" variant="secondary" onClick={() => setStep(2)}>
-                  Back
-                </Button>
-                <Button type="button" onClick={() => setStep(4)}>
-                  Continue
-                </Button>
-              </div>
-            </>
-          ) : null}
-
-          {step === 4 ? (
-            <>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block text-sm sm:col-span-2">
-                  <span className="text-muted-foreground">Bank name</span>
-                  <Input className="mt-1" value={form.bankName} onChange={(e) => update('bankName', e.target.value)} />
-                </label>
-                <label className="block text-sm">
-                  <span className="text-muted-foreground">Account name</span>
-                  <Input className="mt-1" value={form.accountName} onChange={(e) => update('accountName', e.target.value)} />
-                </label>
-                <label className="block text-sm">
-                  <span className="text-muted-foreground">Account number</span>
-                  <Input className="mt-1" value={form.accountNumber} onChange={(e) => update('accountNumber', e.target.value)} />
-                </label>
-                <label className="block text-sm">
-                  <span className="text-muted-foreground">Branch code</span>
-                  <Input className="mt-1" value={form.branchCode} onChange={(e) => update('branchCode', e.target.value)} />
-                </label>
-                <label className="block text-sm">
-                  <span className="text-muted-foreground">Account type</span>
-                  <Input className="mt-1" value={form.accountType} onChange={(e) => update('accountType', e.target.value)} />
-                </label>
-              </div>
-              {error ? <p className="text-sm text-danger">{error}</p> : null}
-              <div className="flex gap-2">
-                <Button type="button" variant="secondary" onClick={() => setStep(3)}>
-                  Back
-                </Button>
-                <Button type="button" disabled={saving || form.companyName.trim().length < 2} onClick={() => void saveProfile()}>
-                  {saving ? 'Saving…' : 'Save profile'}
-                </Button>
-              </div>
-            </>
-          ) : null}
-
-          {step === 5 ? (
-            <>
-              <p className="text-sm text-muted-foreground">
-                {saved ? 'Your company profile is saved.' : 'Profile ready.'} Create your first invoice to start collecting.
-              </p>
-              <Button asChild>
-                <Link href={`${routes.app.invoices}/new`}>Create invoice</Link>
-              </Button>
-            </>
-          ) : null}
-        </GlassCard>
-      </PageBody>
-    </AppShell>
+      {step === 5 ? (
+        <div className="space-y-5">
+          <p className="text-sm leading-relaxed text-[var(--tl-ink-2)]" role="status">
+            {saved ? 'Your company profile is saved.' : 'Your workspace is ready.'} Create an invoice when you want to
+            get paid.
+          </p>
+          <Button asChild className="h-11 w-full">
+            <Link href={`${routes.app.invoices}/new`}>Create invoice</Link>
+          </Button>
+          <p className="text-center text-sm text-[var(--tl-ink-2)]">
+            <Link href={routes.app.dashboard} className="underline-offset-4 hover:text-[var(--tl-ink)] hover:underline">
+              Go to dashboard
+            </Link>
+          </p>
+        </div>
+      ) : null}
+    </AuthShell>
   );
 }

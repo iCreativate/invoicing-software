@@ -7,10 +7,10 @@ test.describe('marketing', () => {
     await expect(page.getByText(/Collect\./i).first()).toBeVisible();
   });
 
-  test('pricing shows Pro R 299', async ({ page }) => {
+  test('pricing shows Pro R 59', async ({ page }) => {
     await page.goto('/pricing');
     await expect(page.getByRole('heading', { name: /Simple ZAR pricing/i })).toBeVisible();
-    await expect(page.getByText('R 299').first()).toBeVisible();
+    await expect(page.getByText('R 59').first()).toBeVisible();
   });
 });
 

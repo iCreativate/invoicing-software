@@ -8,6 +8,7 @@ export function StatCard({
   className,
   highlight,
   footer,
+  hero,
 }: {
   label: string;
   value: ReactNode;
@@ -15,13 +16,14 @@ export function StatCard({
   className?: string;
   highlight?: 'danger' | 'warning' | 'accent' | 'none';
   footer?: ReactNode;
+  hero?: boolean;
 }) {
   const danger = highlight === 'danger';
 
   return (
     <div className={cn('metric', className)}>
       <div className={cn('metric-label', danger && 'text-danger')}>{label}</div>
-      <div className={cn('metric-value', danger && 'text-danger')}>{value}</div>
+      <div className={cn(hero ? 'ti-metric-hero' : 'metric-value', danger && 'text-danger')}>{value}</div>
       {typeof sub === 'string' ? (
         <div className={cn('metric-meta', danger && 'text-danger/80')}>{sub}</div>
       ) : (

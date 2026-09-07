@@ -32,14 +32,15 @@ export function GlobalKeyboardShortcuts() {
         seq = '';
         const msg = [
           'Keyboard shortcuts',
+          'g d — Dashboard',
+          'g m — Money',
           'g i — Invoices',
           'g q — Quotes',
           'g c — Clients',
+          'g n — Insights',
           'g x — Expenses',
           'g p — Payments',
-          'g r — Recurring',
           'g l — P&L',
-          'g d — Dashboard',
         ].join('\n');
         window.alert(msg);
         return;
@@ -48,14 +49,16 @@ export function GlobalKeyboardShortcuts() {
       if (seq === 'g') {
         e.preventDefault();
         const map: Record<string, string> = {
+          d: routes.app.dashboard,
+          m: routes.app.money,
           i: routes.app.invoices,
           q: routes.app.quotes,
           c: routes.app.clients,
+          n: routes.app.insights,
           x: routes.app.expenses,
           p: routes.app.payments,
           r: routes.app.recurring,
           l: routes.app.reportsPl,
-          d: routes.app.dashboard,
         };
         const dest = map[k];
         seq = '';

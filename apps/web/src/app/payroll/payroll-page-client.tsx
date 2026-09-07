@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import { AppShell } from '@/components/layout/AppShell';
-import { Card } from '@/components/ui/Card';
+import { SettingsWorkspace } from '@/components/settings/SettingsWorkspace';
+import { AdminAlertBanner, AdminPanel } from '@/components/settings/admin-ui';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +33,7 @@ import {
   openPayrollPrintWindow,
   runLinesToCsv,
 } from '@/lib/payroll/export';
-import { ChevronDown, ChevronRight, FileSpreadsheet, FileText, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import { Banknote, Calendar, ChevronDown, ChevronRight, FileSpreadsheet, FileText, Pencil, Plus, Trash2, Users, Wallet } from 'lucide-react';
 
 function statusVariant(s: PayrollRunListItem['status']) {
   if (s === 'paid') return 'success';
@@ -315,8 +315,7 @@ export default function PayrollPageClient() {
     : 0;
 
   return (
-    <AppShell
-      title="Payroll"
+    <SettingsWorkspace
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <Link href={routes.app.team}>
@@ -356,48 +355,59 @@ export default function PayrollPageClient() {
         </div>
       }
     >
-      <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
-        {error ? (
-          <div className="rounded-[var(--ti-radius)] border border-danger/25 bg-danger/10 p-4 text-sm text-danger">{error}</div>
-        ) : null}
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4 md:gap-5">
+        {error ? <AdminAlertBanner tone="error">{error}</AdminAlertBanner> : null}
 
-        <div className="grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Card className="p-5 shadow-[var(--shadow-sm)]">
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Monthly net (worksheet)</div>
-            <div className="mt-2 text-2xl font-semibold tabular-nums">
-              {loading ? '…' : formatMoney(monthlyNetTotal, compRows[0]?.currency ?? 'ZAR')}
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">Sum of net pay for everyone on the worksheet</p>
-          </Card>
-          <Card className="p-5 shadow-[var(--shadow-sm)]">
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Headcount</div>
-            <div className="mt-2 text-2xl font-semibold tabular-nums">{loading ? '…' : compRows.length}</div>
-            <p className="mt-1 text-xs text-muted-foreground">Employees on this payroll worksheet</p>
-          </Card>
-          <Card className="p-5 shadow-[var(--shadow-sm)]">
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Base + bonus</div>
-            <div className="mt-2 text-2xl font-semibold tabular-nums">
-              {loading ? '…' : formatMoney(monthlyGrossish, compRows[0]?.currency ?? 'ZAR')}
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">Before deductions</p>
-          </Card>
-          <Card className="p-5 shadow-[var(--shadow-sm)]">
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Last run</div>
-            <div className="mt-2 text-lg font-semibold">{loading ? '…' : lastRun ? lastRun.period : '—'}</div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {lastRun ? `${lastRun.payDate} · ${formatMoney(lastRun.totalAmount, lastRun.currency)}` : 'No runs yet'}
-            </p>
-          </Card>
+        <div className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">
+          {(
+            [
+              {
+                label: 'Monthly net',
+                value: loading ? '…' : formatMoney(monthlyNetTotal, compRows[0]?.currency ?? 'ZAR'),
+                trend: 'Worksheet total',
+                icon: Wallet,
+              },
+              {
+                label: 'Headcount',
+                value: loading ? '…' : String(compRows.length),
+                trend: 'On this worksheet',
+                icon: Users,
+              },
+              {
+                label: 'Base + bonus',
+                value: loading ? '…' : formatMoney(monthlyGrossish, compRows[0]?.currency ?? 'ZAR'),
+                trend: 'Before deductions',
+                icon: Banknote,
+              },
+              {
+                label: 'Last run',
+                value: loading ? '…' : lastRun ? lastRun.period : '—',
+                trend: lastRun ? `${lastRun.payDate} · ${formatMoney(lastRun.totalAmount, lastRun.currency)}` : 'No runs yet',
+                icon: Calendar,
+              },
+            ] as const
+          ).map((m) => {
+            const Icon = m.icon;
+            return (
+              <div key={m.label} className="ti-kpi-card">
+                <span className="ti-kpi-icon" aria-hidden>
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span className="ti-kpi-value">{m.value}</span>
+                <span className="ti-kpi-label">{m.label}</span>
+                <span className="ti-kpi-trend">{m.trend}</span>
+              </div>
+            );
+          })}
         </div>
 
-        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-0 shadow-[var(--shadow-sm)]">
-          <div className="border-b border-border bg-muted/15 px-5 py-4">
-            <div className="text-sm font-semibold">Payroll worksheet</div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Set base salary, bonuses, and deductions. Net pay updates automatically. Saved to your workspace.
-            </p>
-          </div>
-          <div className="overflow-x-auto p-5 pt-0">
+        <AdminPanel
+          kicker="Payroll worksheet"
+          description="Set base salary, bonuses, and deductions. Net pay updates automatically. Saved to your workspace."
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          bodyClassName="mt-0 min-h-0 flex-1"
+        >
+          <div className="overflow-x-auto">
             <table className="w-full min-w-[920px] border-separate border-spacing-0">
               <thead>
                 <tr className="text-left text-xs font-semibold text-muted-foreground">
@@ -497,14 +507,15 @@ export default function PayrollPageClient() {
               ) : null}
             </table>
           </div>
-        </Card>
+        </AdminPanel>
 
-        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-0 shadow-[var(--shadow-sm)]">
-          <div className="border-b border-border bg-muted/15 px-5 py-4">
-            <div className="text-sm font-semibold">Payroll history</div>
-            <p className="mt-1 text-sm text-muted-foreground">Each run snapshots salaries and prints totals. Expand a row for line items.</p>
-          </div>
-          <div className="overflow-x-auto p-5 pt-0">
+        <AdminPanel
+          kicker="Payroll history"
+          description="Each run snapshots salaries and prints totals. Expand a row for line items."
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          bodyClassName="mt-0 min-h-0 flex-1"
+        >
+          <div className="overflow-x-auto">
             <table className="w-full min-w-[800px] border-separate border-spacing-0">
               <thead>
                 <tr className="text-left text-xs font-semibold text-muted-foreground">
@@ -619,7 +630,7 @@ export default function PayrollPageClient() {
               </tbody>
             </table>
           </div>
-        </Card>
+        </AdminPanel>
       </div>
 
       <Modal open={runOpen} onOpenChange={setRunOpen}>
@@ -741,6 +752,6 @@ export default function PayrollPageClient() {
           </div>
         </ModalContent>
       </Modal>
-    </AppShell>
+    </SettingsWorkspace>
   );
 }
