@@ -53,7 +53,22 @@ function isProtectedPath(pathname: string) {
     pathname === '/company' ||
     pathname.startsWith('/company/') ||
     pathname === '/settings' ||
-    pathname.startsWith('/settings/')
+    pathname.startsWith('/settings/') ||
+    pathname === '/crew' ||
+    pathname.startsWith('/crew/')
+  );
+}
+
+/** Paths suspended/terminated workspaces may still open. */
+function isAccountBlockedExempt(pathname: string) {
+  return (
+    pathname === '/settings' ||
+    pathname.startsWith('/settings/') ||
+    pathname === '/billing' ||
+    pathname.startsWith('/billing/') ||
+    pathname === '/crew' ||
+    pathname.startsWith('/crew/') ||
+    pathname.startsWith('/api/')
   );
 }
 
@@ -151,6 +166,31 @@ export async function middleware(request: NextRequest) {
 
   if (!user && isProtectedPath(pathname)) return redirectTo(request, '/login');
   if (user && isAuthPage(pathname)) return redirectTo(request, '/dashboard');
+
+  // Soft account lifecycle: block suspended/terminated workspaces from app use
+  // (billing + crew remain reachable). Best-effort; missing column/table fails open.
+  if (
+    user &&
+    isProtectedPath(pathname) &&
+    !isAccountBlockedExempt(pathname)
+  ) {
+    try {
+      const { data: profile } = await supabase
+        .from('company_profiles')
+        .select('account_status')
+        .eq('owner_id', user.id)
+        .maybeSingle();
+      const status = String((profile as { account_status?: string } | null)?.account_status ?? 'active').toLowerCase();
+      if (status === 'suspended' || status === 'terminated') {
+        const url = request.nextUrl.clone();
+        url.pathname = '/settings/billing';
+        url.search = 'account=suspended';
+        return NextResponse.redirect(url);
+      }
+    } catch {
+      // fail open
+    }
+  }
 
   return response;
 }
