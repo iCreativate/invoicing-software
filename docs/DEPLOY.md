@@ -179,7 +179,7 @@ Vercel cron header (`x-vercel-cron`) is also accepted when `VERCEL` is set; Netl
 |-----|---------|
 | `TIMELY_CREW_EMAILS` | Comma-separated crew emails allowed to open `/crew` (case-insensitive). Example: `john@icreativate.co.za` |
 | `TIMELY_EFT_BANK_NAME` | Bank name shown on Settings → Billing |
-| `TIMELY_EFT_ACCOUNT_NAME` | Account holder name (UI appends “Trading as Timely Invoices”) |
+| `TIMELY_EFT_ACCOUNT_NAME` | Account name on the bank account. Example: `Timely Invoices`. If this equals Timely Invoices, Billing shows that name only (no “Trading as” split); otherwise UI appends “· Trading as Timely Invoices”. |
 | `TIMELY_EFT_ACCOUNT_NUMBER` | Account number |
 | `TIMELY_EFT_BRANCH_CODE` | Branch code |
 | `TIMELY_EFT_ACCOUNT_TYPE` | e.g. Savings / Cheque |

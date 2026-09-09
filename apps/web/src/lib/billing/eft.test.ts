@@ -27,8 +27,19 @@ describe('eft helpers', () => {
     });
     expect(d.configured).toBe(true);
     expect(d.bankName).toBe('Example Bank');
-    expect(d.accountNameDisplay).toContain('Example Holder');
-    expect(d.accountNameDisplay).toContain('Trading as Timely Invoices');
+    expect(d.accountNameDisplay).toBe('Account name: Example Holder · Trading as Timely Invoices');
+  });
+
+  it('omits Trading as when account name is already Timely Invoices', () => {
+    const d = getEftBankDetailsFromEnv({
+      TIMELY_EFT_BANK_NAME: 'Example Bank',
+      TIMELY_EFT_ACCOUNT_NAME: 'Timely Invoices',
+      TIMELY_EFT_ACCOUNT_NUMBER: '0000000000',
+      TIMELY_EFT_BRANCH_CODE: '000000',
+      TIMELY_EFT_ACCOUNT_TYPE: 'Savings',
+    });
+    expect(d.accountNameDisplay).toBe('Account name: Timely Invoices');
+    expect(d.accountNameDisplay).not.toContain('Trading as');
   });
 
   it('treats only pro/business as EFT upgrade plans', () => {

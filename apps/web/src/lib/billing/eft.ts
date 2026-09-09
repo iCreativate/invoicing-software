@@ -4,16 +4,29 @@
 
 import { getPlan, normalizePlanId, type PlanId } from '@/lib/billing/entitlements';
 
+const PLATFORM_TRADING_NAME = 'Timely Invoices';
+
 export type EftBankDetails = {
   bankName: string;
   accountName: string;
   accountNumber: string;
   branchCode: string;
   accountType: string;
-  /** UI line: "Account name: … · Trading as Timely Invoices" */
+  /** UI line for Billing: account name, with “Trading as …” only when holder ≠ Timely Invoices */
   accountNameDisplay: string;
   configured: boolean;
 };
+
+function formatAccountNameDisplay(accountName: string): string {
+  if (!accountName) {
+    return `Account name: (not configured)`;
+  }
+  // When the bank account already IS Timely Invoices, skip the redundant “Trading as” split.
+  if (accountName.toLowerCase() === PLATFORM_TRADING_NAME.toLowerCase()) {
+    return `Account name: ${accountName}`;
+  }
+  return `Account name: ${accountName} · Trading as ${PLATFORM_TRADING_NAME}`;
+}
 
 export function getEftBankDetailsFromEnv(
   env: Record<string, string | undefined> = process.env
@@ -24,9 +37,7 @@ export function getEftBankDetailsFromEnv(
   const branchCode = String(env.TIMELY_EFT_BRANCH_CODE ?? '').trim();
   const accountType = String(env.TIMELY_EFT_ACCOUNT_TYPE ?? '').trim();
   const configured = Boolean(bankName && accountName && accountNumber && branchCode);
-  const accountNameDisplay = accountName
-    ? `Account name: ${accountName} · Trading as Timely Invoices`
-    : 'Account name: (not configured) · Trading as Timely Invoices';
+  const accountNameDisplay = formatAccountNameDisplay(accountName);
   return {
     bankName,
     accountName,
