@@ -27,15 +27,32 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+const siteUrl = "https://timelyinvoices.com";
+
 export const metadata: Metadata = {
-  title: "TimelyInvoices — Invoicing & cashflow",
-  description: "Quotes, recurring invoices, expenses, and client-friendly payments.",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "TimelyInvoices — ZAR invoices, quotes & VAT for SA",
+    template: "%s · TimelyInvoices",
+  },
+  description:
+    "Create professional ZAR invoices and quotes with VAT. Email or share a public link, and get paid by EFT to your business bank details.",
+  applicationName: "TimelyInvoices",
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml", sizes: "512x512" }],
     apple: [{ url: "/apple-icon.svg", type: "image/svg+xml", sizes: "180x180" }],
   },
   appleWebApp: { capable: true, title: "TimelyInvoices" },
   formatDetection: { telephone: false },
+  openGraph: {
+    type: "website",
+    siteName: "TimelyInvoices",
+    locale: "en_ZA",
+    url: siteUrl,
+  },
+  twitter: {
+    card: "summary_large_image",
+  },
 };
 
 export const viewport: Viewport = {
