@@ -4,21 +4,23 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Input';
 
-type Provider = 'payfast' | 'snapscan' | 'ozow';
+type Provider = 'payfast' | 'snapscan';
 
 const METHODS: { id: Provider; title: string; sub: string }[] = [
   { id: 'payfast', title: 'Card & EFT', sub: 'Secure checkout via PayFast' },
   { id: 'snapscan', title: 'SnapScan', sub: 'Pay with QR on your phone' },
-  { id: 'ozow', title: 'Instant EFT', sub: 'Bank login (Ozow) — connect keys to enable' },
 ];
 
 export function PayNowButton({
   invoiceId,
+  shareId,
   disabled,
   label = 'Pay securely',
   compact = false,
 }: {
   invoiceId: string;
+  /** When set (public invoice / portal), uses share-authenticated create-session (no login). */
+  shareId?: string;
   disabled?: boolean;
   label?: string;
   compact?: boolean;
@@ -31,10 +33,16 @@ export function PayNowButton({
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch('/api/payments/create-session', {
+      const useShare = Boolean(shareId && String(shareId).trim());
+      const endpoint = useShare ? '/api/payments/create-session-by-share' : '/api/payments/create-session';
+      const body = useShare
+        ? { shareId: String(shareId).trim(), provider }
+        : { invoiceId, provider };
+
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoiceId, provider }),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (!res.ok || !json?.success) throw new Error(json?.error ?? 'Failed to start payment');
@@ -59,7 +67,6 @@ export function PayNowButton({
         >
           <option value="payfast">PayFast — card / EFT</option>
           <option value="snapscan">SnapScan — QR</option>
-          <option value="ozow">Ozow — instant EFT</option>
         </Select>
         <Button size="sm" onClick={onPay} disabled={disabled} loading={loading}>
           {label}

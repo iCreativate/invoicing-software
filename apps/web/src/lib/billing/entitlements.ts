@@ -14,7 +14,8 @@ export type EntitlementKey =
   | 'cashflow_insights'
   | 'remove_powered_by'
   | 'invoice_templates'
-  | 'collections_sequences';
+  | 'collections_sequences'
+  | 'invoices_per_month';
 
 export type PlanDefinition = {
   id: PlanId;
@@ -23,6 +24,9 @@ export type PlanDefinition = {
   priceZarMonthly: number;
   entitlements: Partial<Record<EntitlementKey, boolean | number>>;
 };
+
+/** Free / Starter monthly send cap (paid plans are unlimited). */
+export const FREE_MONTHLY_INVOICE_SEND_LIMIT = 10;
 
 export const PLANS: Record<PlanId, PlanDefinition> = {
   free: {
@@ -39,6 +43,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       remove_powered_by: false,
       invoice_templates: 3,
       collections_sequences: false,
+      invoices_per_month: FREE_MONTHLY_INVOICE_SEND_LIMIT,
     },
   },
   starter: {
@@ -55,6 +60,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       remove_powered_by: false,
       invoice_templates: 3,
       collections_sequences: false,
+      invoices_per_month: FREE_MONTHLY_INVOICE_SEND_LIMIT,
     },
   },
   pro: {
@@ -71,6 +77,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       remove_powered_by: true,
       invoice_templates: 20,
       collections_sequences: true,
+      // omit invoices_per_month → unlimited
     },
   },
   business: {
@@ -87,6 +94,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       remove_powered_by: true,
       invoice_templates: 100,
       collections_sequences: true,
+      // omit invoices_per_month → unlimited
     },
   },
 };
@@ -113,6 +121,14 @@ export function entitlementLimit(plan: string | null | undefined, key: Entitleme
   const val = getPlan(plan).entitlements[key];
   if (typeof val === 'number') return val;
   return null;
+}
+
+/**
+ * Monthly sent-invoice cap for the plan.
+ * `null` means unlimited (Pro / Business).
+ */
+export function monthlyInvoiceSendLimit(plan: string | null | undefined): number | null {
+  return entitlementLimit(plan, 'invoices_per_month');
 }
 
 export function subscriptionShowsPoweredBy(plan: string | null | undefined): boolean {

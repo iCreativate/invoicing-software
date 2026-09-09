@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { assertCanEdit, assertRowOwnedByWorkspace, getWorkspaceContext } from '@/lib/auth/workspace';
-import { buildPayFastPaymentUrl } from '@/lib/payments/payfast';
 import { canManageBilling } from '@/lib/permissions/team';
 import { hasEntitlement } from '@/lib/billing/entitlements';
 import { checkRateLimit, rateLimitResponse } from '@/lib/security/rateLimit';
-import { requirePublicAppUrl } from '@/lib/app-url';
+import {
+  buildProviderRedirect,
+  ensureInvoicePublicShareId,
+  paymentMethodForProvider,
+} from '@/lib/payments/onlineSession';
 
 export async function POST(request: Request) {
   try {
@@ -56,7 +59,9 @@ export async function POST(request: Request) {
 
     const { data: invoice, error: invErr } = await supabase
       .from('invoices')
-      .select('id,owner_id,invoice_number,total_amount,balance_amount,currency,client:clients(email,name)')
+      .select(
+        'id,owner_id,invoice_number,total_amount,balance_amount,currency,public_share_id,client:clients(email,name)'
+      )
       .eq('id', invoiceId)
       .single();
 
@@ -80,18 +85,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Online payments currently support ZAR only.' }, { status: 400 });
     }
 
-    const appUrl = requirePublicAppUrl();
+    const publicShareId = await ensureInvoicePublicShareId(
+      supabase,
+      invoiceId,
+      (invoice as any).public_share_id,
+      ctx.workspaceOwnerId
+    );
 
     const { data: sessionRow, error: sessErr } = await supabase
       .from('payment_sessions')
       .insert({
         invoice_id: invoiceId,
         provider,
-        method: provider === 'snapscan' ? 'qr' : provider === 'ozow' ? 'instant_eft' : 'card_or_eft',
+        method: paymentMethodForProvider(provider),
         amount,
         currency,
         status: 'created',
-        meta: { invoiceNumber: (invoice as any).invoice_number ?? null },
+        meta: { invoiceNumber: (invoice as any).invoice_number ?? null, publicShareId },
       })
       .select('id')
       .single();
@@ -101,60 +111,21 @@ export async function POST(request: Request) {
     }
 
     const sessionId = String((sessionRow as any).id);
+    const built = await buildProviderRedirect({
+      supabase,
+      sessionId,
+      provider,
+      amount,
+      invoiceNumber: (invoice as any).invoice_number ? String((invoice as any).invoice_number) : null,
+      clientEmail: (invoice as any)?.client?.email ? String((invoice as any).client.email) : null,
+      publicShareId,
+    });
 
-    if (provider === 'payfast') {
-      const merchantId = process.env.PAYFAST_MERCHANT_ID;
-      const merchantKey = process.env.PAYFAST_MERCHANT_KEY;
-      const passphrase = process.env.PAYFAST_PASSPHRASE || undefined;
-      const sandbox = process.env.PAYFAST_SANDBOX === '1';
-
-      if (!merchantId || !merchantKey) {
-        return NextResponse.json(
-          { success: false, error: 'Missing env: PAYFAST_MERCHANT_ID / PAYFAST_MERCHANT_KEY' },
-          { status: 500 }
-        );
-      }
-
-      const pf = buildPayFastPaymentUrl({
-        config: {
-          merchantId,
-          merchantKey,
-          passphrase,
-          sandbox,
-          returnUrl: `${appUrl}/invoice/${invoiceId}?paid=1`,
-          cancelUrl: `${appUrl}/invoice/${invoiceId}?cancelled=1`,
-          notifyUrl: `${appUrl}/api/payments/webhook/payfast`,
-        },
-        mPaymentId: sessionId,
-        amount,
-        itemName: (invoice as any).invoice_number ? `Invoice ${(invoice as any).invoice_number}` : 'Invoice payment',
-        itemDescription: 'TimelyInvoices payment',
-        emailAddress: (invoice as any)?.client?.email ? String((invoice as any).client.email) : undefined,
-      });
-
-      await supabase.from('payment_sessions').update({ redirect_url: pf.url, status: 'pending' }).eq('id', sessionId);
-      return NextResponse.json({ success: true, data: { sessionId, redirectUrl: pf.url } });
+    if (!built.ok) {
+      return NextResponse.json({ success: false, error: built.error }, { status: built.status });
     }
 
-    if (provider === 'snapscan') {
-      const snapCode = process.env.SNAPSCAN_SNAPCODE;
-      if (!snapCode) {
-        return NextResponse.json({ success: false, error: 'Missing env: SNAPSCAN_SNAPCODE' }, { status: 500 });
-      }
-      const cents = Math.round(amount * 100);
-      const qrUrl = `https://pos.snapscan.io/qr/${encodeURIComponent(snapCode)}?id=${encodeURIComponent(sessionId)}&amount=${cents}&strict=true`;
-      await supabase.from('payment_sessions').update({ redirect_url: qrUrl, status: 'pending' }).eq('id', sessionId);
-      return NextResponse.json({ success: true, data: { sessionId, redirectUrl: qrUrl } });
-    }
-
-    if (provider === 'ozow') {
-      return NextResponse.json(
-        { success: false, error: 'Ozow Instant EFT not fully implemented yet (needs merchant credentials + hash spec).' },
-        { status: 501 }
-      );
-    }
-
-    return NextResponse.json({ success: false, error: 'Unsupported provider' }, { status: 400 });
+    return NextResponse.json({ success: true, data: { sessionId, redirectUrl: built.redirectUrl } });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e?.message ?? 'Failed to create payment session.' }, { status: 500 });
   }

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { getPlan, hasEntitlement, normalizePlanId, subscriptionShowsPoweredBy } from './entitlements';
+import {
+  getPlan,
+  hasEntitlement,
+  monthlyInvoiceSendLimit,
+  normalizePlanId,
+  subscriptionShowsPoweredBy,
+} from './entitlements';
 
 describe('entitlements', () => {
   it('normalizes unknown plans to free', () => {
@@ -21,5 +27,12 @@ describe('entitlements', () => {
   it('requires pro for payment links', () => {
     expect(hasEntitlement('free', 'payment_links')).toBe(false);
     expect(hasEntitlement('pro', 'payment_links')).toBe(true);
+  });
+
+  it('caps free/starter invoice sends and leaves paid unlimited', () => {
+    expect(monthlyInvoiceSendLimit('free')).toBe(10);
+    expect(monthlyInvoiceSendLimit('starter')).toBe(10);
+    expect(monthlyInvoiceSendLimit('pro')).toBeNull();
+    expect(monthlyInvoiceSendLimit('business')).toBeNull();
   });
 });

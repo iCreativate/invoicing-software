@@ -1,4 +1,4 @@
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
@@ -22,22 +22,29 @@ export default async function ClientPortalPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const supabase = await createSupabaseServerClient();
+  let admin;
+  try {
+    admin = createSupabaseAdminClient();
+  } catch {
+    notFound();
+  }
 
-  const { data: portal, error: pErr } = await supabase
+  const { data: portal, error: pErr } = await admin
     .from('client_portals')
     .select('id,client_id,slug,enabled')
     .eq('slug', slug)
-    .single();
+    .maybeSingle();
 
   if (pErr || !portal || !(portal as any).enabled) notFound();
 
   const clientId = String((portal as any).client_id);
-  const { data: client } = await supabase.from('clients').select('id,name,email').eq('id', clientId).single();
-  const { data: invoices } = await supabase
+  const { data: client } = await admin.from('clients').select('id,name,email').eq('id', clientId).maybeSingle();
+  const { data: invoices } = await admin
     .from('invoices')
     .select('id,invoice_number,status,issue_date,due_date,currency,total_amount,paid_amount,balance_amount,public_share_id')
     .eq('client_id', clientId)
+    .neq('status', 'draft')
+    .neq('status', 'cancelled')
     .order('created_at', { ascending: false })
     .limit(50);
 
@@ -102,7 +109,9 @@ export default async function ClientPortalPage({
           ) : (
             <div className="mt-6 grid gap-4">
               {(invoices ?? []).map((inv: any) => {
-                const canPay = Number(inv.balance_amount ?? 0) > 0 && String(inv.status ?? '') !== 'paid';
+                const shareId = inv.public_share_id ? String(inv.public_share_id) : null;
+                const canPay =
+                  Boolean(shareId) && Number(inv.balance_amount ?? 0) > 0 && String(inv.status ?? '') !== 'paid';
                 return (
                   <div
                     key={String(inv.id)}
@@ -141,15 +150,20 @@ export default async function ClientPortalPage({
                         </div>
                       </div>
                       <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-start lg:w-[min(100%,280px)] lg:flex-col">
-                        {inv.public_share_id ? (
-                          <Link href={`/invoice/${String(inv.public_share_id)}`} className="block w-full sm:flex-1 lg:flex-none">
+                        {shareId ? (
+                          <Link href={`/invoice/${shareId}`} className="block w-full sm:flex-1 lg:flex-none">
                             <Button variant="secondary" className="w-full">
                               View invoice
                             </Button>
                           </Link>
                         ) : null}
                         <div className="w-full flex-1 lg:flex-none">
-                          <PayNowButton invoiceId={String(inv.id)} disabled={!canPay} label="Pay securely" />
+                          <PayNowButton
+                            invoiceId={String(inv.id)}
+                            shareId={shareId ?? undefined}
+                            disabled={!canPay}
+                            label="Pay securely"
+                          />
                         </div>
                       </div>
                     </div>

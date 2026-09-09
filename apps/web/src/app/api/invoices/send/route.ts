@@ -15,6 +15,7 @@ import { logInvoiceTimelineEvent } from '@/lib/invoices/timelineServer';
 import { maybeDeductInventoryForSentInvoice } from '@/lib/inventory/invoiceInventory';
 import { writeAuditLog } from '@/lib/audit/log';
 import { requirePublicAppUrl } from '@/lib/app-url';
+import { getPlan, monthlyInvoiceSendLimit } from '@/lib/billing/entitlements';
 
 export async function POST(request: Request) {
   try {
@@ -55,27 +56,38 @@ export async function POST(request: Request) {
     }
 
     try {
-      const now = new Date();
-      const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0));
-      const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0));
-
-      const { count, error: countErr } = await supabase
-        .from('invoices')
-        .select('id', { head: true, count: 'exact' })
+      const { data: planRow } = await supabase
+        .from('company_profiles')
+        .select('subscription_plan')
         .eq('owner_id', ctx.workspaceOwnerId)
-        .not('sent_at', 'is', null)
-        .gte('sent_at', start.toISOString())
-        .lt('sent_at', end.toISOString());
+        .maybeSingle();
+      const plan = (planRow as { subscription_plan?: string } | null)?.subscription_plan;
+      const sendLimit = monthlyInvoiceSendLimit(plan);
 
-      if (!countErr && typeof count === 'number' && count >= 10) {
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              'Free plan limit reached: 10 invoices/month. Upgrade to Starter to send unlimited invoices.',
-          },
-          { status: 402 }
-        );
+      if (sendLimit != null) {
+        const now = new Date();
+        const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0));
+        const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0));
+
+        const { count, error: countErr } = await supabase
+          .from('invoices')
+          .select('id', { head: true, count: 'exact' })
+          .eq('owner_id', ctx.workspaceOwnerId)
+          .not('sent_at', 'is', null)
+          .gte('sent_at', start.toISOString())
+          .lt('sent_at', end.toISOString());
+
+        if (!countErr && typeof count === 'number' && count >= sendLimit) {
+          const pro = getPlan('pro');
+          return NextResponse.json(
+            {
+              success: false,
+              error: `Starter plan limit reached: ${sendLimit} invoices sent this month. Upgrade to ${pro.label} (R${pro.priceZarMonthly}/mo) or Business (R${getPlan('business').priceZarMonthly}/mo) for unlimited sending.`,
+              code: 'entitlement_invoices_per_month',
+            },
+            { status: 402 }
+          );
+        }
       }
     } catch {
       // ignore if schema not migrated yet

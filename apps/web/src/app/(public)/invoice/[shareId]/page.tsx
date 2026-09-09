@@ -1,4 +1,4 @@
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { notFound } from 'next/navigation';
 import { InvoicePreview } from '@/components/invoice/InvoicePreview';
 import { PayNowButton } from '@/components/payments/PayNowButton';
@@ -14,33 +14,43 @@ export default async function PublicInvoicePage({
   params: Promise<{ shareId: string }>;
 }) {
   const { shareId } = await params;
-  const supabase = await createSupabaseServerClient();
+  let admin;
+  try {
+    admin = createSupabaseAdminClient();
+  } catch {
+    notFound();
+  }
 
-  const { data: invoice, error } = await supabase
+  const { data: invoice, error } = await admin
     .from('invoices')
     .select(
       `
       id,
       owner_id,
       invoice_number,
+      status,
       issue_date,
       due_date,
       currency,
       template_id,
+      balance_amount,
       client:clients(name,email,phone,address,company_name,website,company_registration,vat_number),
       items:invoice_items(id,description,quantity,unit_price,tax_rate)
     `
     )
     .eq('public_share_id', shareId)
-    .single();
+    .maybeSingle();
 
   if (error || !invoice) notFound();
+
+  const status = String((invoice as any).status ?? '');
+  if (status === 'draft' || status === 'cancelled') notFound();
 
   const ownerId = (invoice as any).owner_id ? String((invoice as any).owner_id) : null;
 
   let companyRow: any = null;
   if (ownerId) {
-    const full = await supabase
+    const full = await admin
       .from('company_profiles')
       .select(
         'company_name,logo_url,email,phone,address,website,vat_number,bank_name,account_name,account_number,branch_code,account_type,subscription_plan'
@@ -50,14 +60,14 @@ export default async function PublicInvoicePage({
     if (full.error) {
       const msg = String((full.error as any).message ?? '');
       if (msg.includes('bank_name') || msg.includes('account_name') || msg.includes('branch_code')) {
-        const fb = await supabase
+        const fb = await admin
           .from('company_profiles')
           .select('company_name,logo_url,email,phone,address,website,vat_number,subscription_plan')
           .eq('owner_id', ownerId)
           .maybeSingle();
         companyRow = fb.error ? null : fb.data;
       } else if (msg.includes('subscription_plan')) {
-        const fb = await supabase
+        const fb = await admin
           .from('company_profiles')
           .select('company_name,logo_url,email,phone,address,website,vat_number,bank_name,account_name,account_number,branch_code,account_type')
           .eq('owner_id', ownerId)
@@ -96,12 +106,14 @@ export default async function PublicInvoicePage({
     })),
   };
 
+  const canPay = Number((invoice as any).balance_amount ?? 0) > 0 && status !== 'paid';
+
   return (
     <div className="min-h-dvh bg-[hsl(var(--background))] p-4 sm:p-10">
       <PublicInvoiceViewTracker shareId={shareId} />
       <div className="mx-auto max-w-4xl motion-safe:animate-[ti-fade-up_0.45s_ease-out_both]">
         <div className="mb-4 flex items-center justify-end">
-          <PayNowButton invoiceId={String((invoice as any).id)} />
+          <PayNowButton invoiceId={String((invoice as any).id)} shareId={shareId} disabled={!canPay} />
         </div>
         <InvoicePreview
           companyName={String((companyRow as any)?.company_name ?? 'TimelyInvoices')}
