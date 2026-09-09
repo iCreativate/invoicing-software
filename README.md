@@ -1,3 +1,8 @@
+> **⚠️ LEGACY / STALE (TimelyInvoices 1.x Express era)**  
+> The active product is **TimelyInvoices 2.0** in `apps/web` (Next.js + Supabase + Netlify).  
+> Read [`docs/TIMELYINVOICES-2.0.md`](docs/TIMELYINVOICES-2.0.md) and [`docs/DEPLOY.md`](docs/DEPLOY.md).  
+> Root `src/`, `client/`, and `railway.json` are frozen — do **not** use them for 2.0 deploys.
+
 # Timely — Modern Finance, Payroll & Operations Platform
 
 Timely is an all-in-one financial platform for modern businesses — from invoicing and payroll to banking and AI automation.

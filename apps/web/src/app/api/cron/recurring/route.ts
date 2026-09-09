@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import { maybeDeductInventoryForSentInvoice } from '@/lib/inventory/invoiceInventory';
+import { requirePublicAppUrl } from '@/lib/app-url';
 
 function requireCronSecret(request: Request) {
   if (process.env.VERCEL && request.headers.get('x-vercel-cron') === '1') return true;
@@ -122,7 +123,7 @@ export async function GET(request: Request) {
       .eq('id', row.id);
 
     const { data: client } = await admin.from('clients').select('name,email,phone').eq('id', clientId).maybeSingle();
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3002';
+    const appUrl = requirePublicAppUrl();
     const payUrl = `${appUrl}/invoice/${shareId}`;
     const msg = `Hi ${(client as any)?.name ?? ''}, your invoice ${invNo} is ready. Pay or view: ${payUrl}`;
 

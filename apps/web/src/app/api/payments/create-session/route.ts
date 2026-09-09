@@ -5,6 +5,7 @@ import { buildPayFastPaymentUrl } from '@/lib/payments/payfast';
 import { canManageBilling } from '@/lib/permissions/team';
 import { hasEntitlement } from '@/lib/billing/entitlements';
 import { checkRateLimit, rateLimitResponse } from '@/lib/security/rateLimit';
+import { requirePublicAppUrl } from '@/lib/app-url';
 
 export async function POST(request: Request) {
   try {
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Online payments currently support ZAR only.' }, { status: 400 });
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3002';
+    const appUrl = requirePublicAppUrl();
 
     const { data: sessionRow, error: sessErr } = await supabase
       .from('payment_sessions')

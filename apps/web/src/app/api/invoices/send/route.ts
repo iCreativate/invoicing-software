@@ -14,6 +14,7 @@ import {
 import { logInvoiceTimelineEvent } from '@/lib/invoices/timelineServer';
 import { maybeDeductInventoryForSentInvoice } from '@/lib/inventory/invoiceInventory';
 import { writeAuditLog } from '@/lib/audit/log';
+import { requirePublicAppUrl } from '@/lib/app-url';
 
 export async function POST(request: Request) {
   try {
@@ -109,7 +110,7 @@ export async function POST(request: Request) {
 
     await logInvoiceTimelineEvent(supabase, invoiceId, 'sent', {});
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3002';
+    const appUrl = requirePublicAppUrl();
     const shareUrl = `${appUrl}/invoice/${shareId}`;
 
     let companyName = 'TimelyInvoices';

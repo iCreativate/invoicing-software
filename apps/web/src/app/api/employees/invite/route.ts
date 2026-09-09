@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { assertCanManageTeam, getWorkspaceContext } from '@/lib/auth/workspace';
 import { getResend, getResendFromEmail } from '@/lib/integrations/messaging';
+import { requirePublicAppUrl } from '@/lib/app-url';
 
 export async function POST(request: Request) {
   try {
@@ -84,7 +85,7 @@ export async function POST(request: Request) {
     }
     if (error) throw error;
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3002';
+    const appUrl = requirePublicAppUrl();
     const inviteInfo = `You've been invited to TimelyInvoices as ${role}.`;
     const loginUrl = `${appUrl}/login`;
 

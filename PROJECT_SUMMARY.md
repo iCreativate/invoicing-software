@@ -1,3 +1,8 @@
+> **⚠️ LEGACY / STALE (TimelyInvoices 1.x Express era)**  
+> The active product is **TimelyInvoices 2.0** in `apps/web` (Next.js + Supabase + Netlify).  
+> Read [`docs/TIMELYINVOICES-2.0.md`](docs/TIMELYINVOICES-2.0.md) and [`docs/DEPLOY.md`](docs/DEPLOY.md).  
+> Root `src/`, `client/`, and `railway.json` are frozen — do **not** use them for 2.0 deploys.
+
 # Timely Platform - Project Summary
 
 ## 🎉 What Has Been Built

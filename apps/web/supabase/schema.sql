@@ -36,7 +36,7 @@ create index if not exists clients_name_idx on public.clients(name);
 -- Invoices
 create table if not exists public.invoices (
   id uuid primary key default uuid_generate_v4(),
-  invoice_number text,
+  invoice_number text, -- unique per owner_id (see migrations/20260909120000_invoice_number_unique_per_owner.sql)
   status text not null default 'draft', -- draft|sent|partial|paid|overdue|cancelled
   issue_date date not null default now(),
   due_date date not null default (now()::date + 30),

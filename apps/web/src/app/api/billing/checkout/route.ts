@@ -7,6 +7,7 @@ import { getPlan, normalizePlanId, type PlanId } from '@/lib/billing/entitlement
 import { buildPayFastPaymentUrl } from '@/lib/payments/payfast';
 import { checkRateLimit, rateLimitResponse } from '@/lib/security/rateLimit';
 import { writeAuditLog } from '@/lib/audit/log';
+import { requirePublicAppUrl } from '@/lib/app-url';
 
 export async function POST(request: Request) {
   try {
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+    const appUrl = requirePublicAppUrl();
     const mPaymentId = crypto.randomUUID();
 
     const { error: upsertErr } = await supabase.from('platform_subscriptions').upsert(

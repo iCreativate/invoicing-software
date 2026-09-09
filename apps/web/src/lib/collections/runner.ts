@@ -14,6 +14,7 @@ import {
   getResendFromEmail,
 } from '@/lib/integrations/messaging';
 import { logger } from '@/lib/observability/logger';
+import { requirePublicAppUrl } from '@/lib/app-url';
 
 export async function ensureDefaultCollectionSequence(admin: SupabaseClient, ownerId: string) {
   const { data: existing } = await admin
@@ -65,7 +66,7 @@ export async function runCollectionsPass(admin: SupabaseClient, now = new Date()
     .not('owner_id', 'is', null);
   if (profErr) throw profErr;
 
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+  const appUrl = requirePublicAppUrl();
 
   for (const profile of profiles ?? []) {
     const ownerId = String((profile as { owner_id: string }).owner_id);

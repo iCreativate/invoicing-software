@@ -150,12 +150,12 @@ Defined in `apps/web/src/app/globals.css` (`--ti-*`) and `apps/web/src/theme/tok
 
 ## 7. Pricing & entitlements
 
-Published marketing prices (do not change without product decision):
+Published prices (aligned to shipping code in `apps/web/src/lib/billing/entitlements.ts` — Pro was documented as R299; shipping code is **R59**. Prefer code as source of truth until product re-prices):
 
 | Plan | Price |
 |------|-------|
 | Starter (free) | R 0 |
-| Pro | R 299 / mo |
+| Pro | R 59 / mo |
 | Business | R 799 / mo |
 
 Entitlements live in `apps/web/src/lib/billing/entitlements.ts`. Backend is authoritative. Clients cannot PATCH `subscription_plan`.
@@ -257,7 +257,7 @@ Never casually delete financial history.
 - [x] Payment session create asserts workspace ownership
 - [x] Settings API ignores client `subscriptionPlan` spoofing
 - [x] Money helpers (cents) + Vitest harness
-- [x] Entitlements registry (R0 / R299 / R799)
+- [x] Entitlements registry (R0 / R59 / R799) — docs aligned to shipping code 2026-09-09
 - [x] Design tokens + light financial AppShell + grouped nav IA
 - [x] Dashboard 2.0 (metric hierarchy, action centre, business pulse, cashflow ranges)
 - [x] Cashflow / Insights / Integrations / Onboarding pages
@@ -294,3 +294,9 @@ Never casually delete financial history.
 ## 15. Environment variables (names only)
 
 See `apps/web/.env.example`. Critical: `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_*`, `TWILIO_*`, `PAYFAST_*`, `SNAPSCAN_*`, `CRON_SECRET`.
+
+---
+
+## 16. Cron on Netlify
+
+Netlify + `@netlify/plugin-nextjs` does not schedule `/api/cron/*` for us. Use an external scheduler with `CRON_SECRET` — see [`docs/DEPLOY.md`](./DEPLOY.md).

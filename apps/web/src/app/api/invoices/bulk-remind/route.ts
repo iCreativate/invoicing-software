@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getWorkspaceContext } from '@/lib/auth/workspace';
 import { applyEmailTemplate } from '@/lib/email/templates';
 import { getResend, getResendFromEmail, ERR_RESEND_MISSING } from '@/lib/integrations/messaging';
+import { requirePublicAppUrl } from '@/lib/app-url';
 
 export async function POST(request: Request) {
   try {
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: ERR_RESEND_MISSING }, { status: 503 });
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const appUrl = requirePublicAppUrl();
     let sent = 0;
     const errors: string[] = [];
 
