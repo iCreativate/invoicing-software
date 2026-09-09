@@ -116,7 +116,11 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
   const supabaseDown = reach === 'down';
 
   return (
-    <AuthShell title="Sign in to Timely">
+    <AuthShell
+      title="Sign in"
+      kicker="Welcome back"
+      subtitle="Use the email on your Timely workspace."
+    >
       {supabaseDown ? (
         <div className="mb-6 space-y-4">
           <div className="ti-error" role="status">
@@ -168,7 +172,7 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
                 ? `${routes.auth.forgotPassword}?email=${encodeURIComponent(email.trim())}`
                 : routes.auth.forgotPassword
             }
-            className="text-sm text-[var(--tl-ink-2)] underline-offset-4 transition-colors hover:text-[var(--tl-ink)] hover:underline"
+            className="ti-small text-[var(--tl-ink-2)] underline-offset-4 transition-colors hover:text-[var(--tl-ink)] hover:underline"
           >
             Forgot password?
           </Link>
@@ -186,7 +190,7 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
         </Button>
       </form>
 
-      <p className="mt-8 text-sm text-[var(--tl-ink-2)]">
+      <p className="ti-small mt-8 border-t border-[var(--tl-line)] pt-6 text-[var(--tl-ink-2)]">
         Don&apos;t have an account?{' '}
         <Link href={routes.auth.register} className="font-medium text-[var(--tl-ink)] underline-offset-4 hover:underline">
           Create account

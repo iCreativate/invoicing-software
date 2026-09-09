@@ -1,29 +1,35 @@
 import { formatZarDisplay } from '@/components/landing/formatZar';
+import { Surface } from '@/components/ui/Card';
+import { Amount, Text } from '@/components/ui/Text';
 
 export function AuthVisual() {
   return (
-    <div className="mt-16 max-w-sm border-t border-white/10 pt-10">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/35">This month</p>
-      <p className="tl-num mt-3 text-[2rem] font-semibold leading-none tracking-tight text-white">
+    <Surface variant="elevated" className="mt-10 max-w-sm px-5 py-4">
+      <Text variant="meta">This month</Text>
+      <Amount display className="mt-2 block text-[var(--tl-ink)]">
         {formatZarDisplay(71540)}
-      </p>
-      <p className="mt-2 text-sm text-white/50">Collected</p>
+      </Amount>
+      <Text variant="small" className="mt-1">
+        Collected
+      </Text>
 
-      <div className="mt-8 grid grid-cols-2 gap-8">
+      <div className="mt-5 grid grid-cols-2 gap-6 border-t border-[var(--tl-line)] pt-4">
         <div>
-          <p className="text-[11px] text-white/35">Outstanding</p>
-          <p className="tl-num mt-1 text-lg font-semibold text-white">{formatZarDisplay(24180)}</p>
+          <Text variant="caption">Outstanding</Text>
+          <Amount className="mt-1 block">{formatZarDisplay(24180)}</Amount>
         </div>
         <div>
-          <p className="text-[11px] text-white/35">Overdue</p>
-          <p className="tl-num mt-1 text-lg font-semibold text-white/80">{formatZarDisplay(8920)}</p>
+          <Text variant="caption">Overdue</Text>
+          <Amount className="mt-1 block">{formatZarDisplay(8920)}</Amount>
         </div>
       </div>
 
-      <div className="mt-8 flex items-baseline justify-between gap-4 border-t border-white/10 pt-5 text-sm">
-        <span className="text-white/55">INV-10422 · Cape Creative</span>
-        <span className="text-[12px] font-medium text-[var(--tl-success)]">Paid</span>
+      <div className="mt-4 flex items-baseline justify-between gap-4 border-t border-[var(--tl-line)] pt-4">
+        <Text variant="small">INV-10422 · Cape Creative</Text>
+        <Text variant="caption" className="font-medium text-[var(--tl-success)]">
+          Paid
+        </Text>
       </div>
-    </div>
+    </Surface>
   );
 }

@@ -90,6 +90,7 @@ export function ResetPasswordClient() {
   return (
     <AuthShell
       title={checking ? 'Opening reset link' : ready ? 'Choose a new password' : 'Link expired'}
+      kicker="Account"
       subtitle={ready ? 'Use a password you haven’t used elsewhere.' : undefined}
     >
       {checking ? (
@@ -144,7 +145,7 @@ export function ResetPasswordClient() {
       )}
 
       {ready ? (
-        <p className="mt-8 text-sm text-[var(--tl-ink-2)]">
+        <p className="ti-small mt-8 border-t border-[var(--tl-line)] pt-6 text-[var(--tl-ink-2)]">
           <Link href={routes.auth.login} className="font-medium text-[var(--tl-ink)] underline-offset-4 hover:underline">
             Back to sign in
           </Link>

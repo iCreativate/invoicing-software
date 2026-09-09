@@ -7,6 +7,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getPublicAppOrigin } from '@/lib/app-url';
 import { routes } from '@/lib/routing/routes';
 import { AuthShell } from '@/components/auth/AuthShell';
+import { timelyImages } from '@/components/landing/timelyAssets';
 import { AuthPasswordField } from '@/components/auth/AuthPasswordField';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
@@ -102,7 +103,12 @@ export function RegisterClient() {
   };
 
   return (
-    <AuthShell title="Create your Timely account">
+    <AuthShell
+      title="Create account"
+      kicker="Get started"
+      subtitle="Set up your workspace and send your first invoice."
+      imageSrc={timelyImages.lifestyle.businessOwner}
+    >
       <form onSubmit={onSubmit} className="space-y-5">
         <Field label="Name" htmlFor="fullName">
           <Input
@@ -152,7 +158,7 @@ export function RegisterClient() {
         </Button>
       </form>
 
-      <p className="mt-8 text-sm text-[var(--tl-ink-2)]">
+      <p className="ti-small mt-8 border-t border-[var(--tl-line)] pt-6 text-[var(--tl-ink-2)]">
         Already have an account?{' '}
         <Link href={routes.auth.login} className="font-medium text-[var(--tl-ink)] underline-offset-4 hover:underline">
           Sign in

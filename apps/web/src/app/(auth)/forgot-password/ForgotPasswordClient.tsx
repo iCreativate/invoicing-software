@@ -35,7 +35,8 @@ export function ForgotPasswordClient({ initialEmail }: { initialEmail: string })
 
   return (
     <AuthShell
-      title={sent ? 'Check your email' : 'Reset your password'}
+      title={sent ? 'Check your email' : 'Reset password'}
+      kicker="Account"
       subtitle={sent ? undefined : 'We’ll send a link to choose a new password.'}
     >
       {sent ? (
@@ -78,7 +79,7 @@ export function ForgotPasswordClient({ initialEmail }: { initialEmail: string })
       )}
 
       {sent ? null : (
-        <p className="mt-8 text-sm text-[var(--tl-ink-2)]">
+        <p className="ti-small mt-8 border-t border-[var(--tl-line)] pt-6 text-[var(--tl-ink-2)]">
           <Link href={routes.auth.login} className="font-medium text-[var(--tl-ink)] underline-offset-4 hover:underline">
             Back to sign in
           </Link>
