@@ -22,7 +22,7 @@ export const themeTokens = {
     brandSoft: 'rgba(37, 99, 235, 0.07)',
     indigo: '#4F46E5',
     violet: '#7C3AED',
-    sidebar: '#FFFFFF',
+    sidebar: '#020406',
     success: '#16A34A',
     warning: '#D97706',
     danger: '#DC2626',

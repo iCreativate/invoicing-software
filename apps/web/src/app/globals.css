@@ -67,7 +67,7 @@
   --ti-warning: var(--tl-warning);
   --ti-danger: var(--tl-danger);
   --ti-border: var(--tl-line);
-  --ti-sidebar: #ffffff;
+  --ti-sidebar: #020406;
   --ti-container: 1440px;
   --ti-radius: var(--tl-radius);
   --ti-radius-sm: var(--tl-radius-sm);
@@ -146,17 +146,17 @@
   --color-slate-900: #0b0f14;
   --color-slate-950: #020617;
 
-  --color-sidebar: #ffffff;
-  --color-sidebar-hover: #f4f5f7;
-  --color-sidebar-active: rgba(15, 20, 28, 0.08);
-  --color-sidebar-border: #eceef1;
-  --color-sidebar-text: #64748b;
-  --color-sidebar-text-active: #0b0f14;
-  --color-sidebar-muted: #94a3b8;
-  --color-sidebar-foreground: #64748b;
-  --color-sidebar-accent: rgba(15, 20, 28, 0.08);
-  --color-sidebar-accent-foreground: #0b0f14;
-  --color-sidebar-ring: #0f141c;
+  --color-sidebar: #020406;
+  --color-sidebar-hover: rgba(248, 250, 252, 0.06);
+  --color-sidebar-active: rgba(248, 250, 252, 0.1);
+  --color-sidebar-border: rgba(248, 250, 252, 0.08);
+  --color-sidebar-text: #94a3b8;
+  --color-sidebar-text-active: #f8fafc;
+  --color-sidebar-muted: #64748b;
+  --color-sidebar-foreground: #94a3b8;
+  --color-sidebar-accent: rgba(248, 250, 252, 0.1);
+  --color-sidebar-accent-foreground: #f8fafc;
+  --color-sidebar-ring: #2563eb;
 
   --radius-sm: 12px;
   --radius-md: 16px;
@@ -2883,8 +2883,8 @@
     color: var(--color-sidebar-text-active);
   }
   .ti-nav-subitem.is-active {
-    background: color-mix(in srgb, var(--tl-accent) 12%, white);
-    color: var(--tl-ink);
+    background: color-mix(in srgb, var(--tl-accent) 22%, transparent);
+    color: var(--color-sidebar-text-active);
     font-weight: 600;
   }
 

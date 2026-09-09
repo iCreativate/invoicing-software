@@ -59,7 +59,7 @@ function NavLink({
           <span className="truncate">{item.label}</span>
         </span>
       ) : null}
-      {!collapsed && active ? <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[var(--tl-ink-3)]" aria-hidden /> : null}
+      {!collapsed && active ? <ChevronRight className="h-3.5 w-3.5 shrink-0 text-sidebar-muted" aria-hidden /> : null}
     </Link>
   );
 }
