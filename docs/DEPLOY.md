@@ -1,8 +1,10 @@
 # TimelyInvoices 2.0 — Deploy checklist
 
+**Production host = Netlify (`apps/web`).** That is the only ship surface for TimelyInvoices 2.0.
+
 Ship surface: **`apps/web` only** (Next.js on Netlify). Legacy root `src/` + `client/` and `railway.json` are frozen — do not use for 2.0.
 
-Canonical product docs: [`docs/TIMELYINVOICES-2.0.md`](./TIMELYINVOICES-2.0.md). Env names: [`apps/web/.env.example`](../apps/web/.env.example).
+Canonical product docs: [`docs/TIMELYINVOICES-2.0.md`](./TIMELYINVOICES-2.0.md). Env names: [`apps/web/.env.example`](../apps/web/.env.example). Railway context: [`docs/RAILWAY-LEGACY.md`](./RAILWAY-LEGACY.md).
 
 **Do not put secret values in this file.** Names only.
 
@@ -62,6 +64,40 @@ Also add the site URL to Supabase → Authentication → URL Configuration → R
 
 ---
 
+## Railway GitHub deploy statuses are misleading / legacy
+
+Railway project dashboards (e.g. **timelyinvoices**, **trustworthy-optimism**) may show **“Deployed”** after GitHub pushes. **That status is not TimelyInvoices 2.0.**
+
+- Root `railway.json` builds/starts the **frozen Express** app (`npm run build:server` / `npm start`), not `apps/web`.
+- Do **not** treat a Railway “Deployed” badge as evidence that 2.0 shipped.
+- See [`docs/RAILWAY-LEGACY.md`](./RAILWAY-LEGACY.md).
+
+**To silence misleading deploys:**
+
+1. In each Railway project dashboard (**timelyinvoices** and **trustworthy-optimism**): disconnect GitHub deploy (unlink the repo / disable auto-deploy), **or**
+2. Remove the Railway GitHub App from this repository’s GitHub settings (Integrations / Installed GitHub Apps).
+
+Either stops Railway from rebuilding the legacy Express stack on every push.
+
+---
+
+## DNS for `timelyinvoices.app` (currently NXDOMAIN)
+
+Exact clicks for John:
+
+1. **Confirm the domain is registered** at the registrar (ownership / renewal OK).
+2. **Netlify → Domain management → Add domain** `timelyinvoices.app` (and `www.timelyinvoices.app` if desired).
+3. **Copy Netlify’s DNS instructions** for the domain (usually an apex A/ALIAS to Netlify’s load-balancer IP, and/or a `www` CNAME to `*.netlify.app`).
+4. **At the registrar (or Netlify DNS if you delegated nameservers):** create exactly the records Netlify shows.
+5. **Wait** until Netlify shows HTTPS provisioned / certificate active.
+6. **Set env + Auth:**
+   - Netlify: `NEXT_PUBLIC_APP_URL=https://timelyinvoices.app` (no trailing slash)
+   - Supabase → Authentication → URL Configuration → Redirect URLs: add `https://timelyinvoices.app/**` (and www if used)
+
+Until DNS resolves, use the Netlify site URL (`*.netlify.app`) for `NEXT_PUBLIC_APP_URL`, Supabase redirects, and cron targets.
+
+---
+
 ## Supabase migrations (RLS path)
 
 Migrations live under `apps/web/supabase/migrations/` (apply in order):
@@ -98,14 +134,16 @@ Routes (both require `CRON_SECRET`):
 - `GET /api/cron/recurring`
 - `GET /api/cron/collections`
 
+**Site URL:** use the **Netlify site URL** (`https://YOUR_SITE.netlify.app`) until `timelyinvoices.app` DNS + HTTPS work; then switch to `https://timelyinvoices.app`.
+
 Auth (code accepts either; prefer Bearer):
 
 ```bash
 curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
-  "https://YOUR_SITE/api/cron/recurring"
+  "https://YOUR_NETLIFY_OR_CUSTOM_ORIGIN/api/cron/recurring"
 
 curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
-  "https://YOUR_SITE/api/cron/collections"
+  "https://YOUR_NETLIFY_OR_CUSTOM_ORIGIN/api/cron/collections"
 ```
 
 Suggested cadence: daily (or every few hours) for both. Without `CRON_SECRET`, routes return **503**. Wrong secret → **401**.
@@ -119,8 +157,8 @@ Vercel cron header (`x-vercel-cron`) is also accepted when `VERCEL` is set; Netl
 1. Deploy Netlify **branch/preview** or staging site with staging Supabase project.
 2. Apply migrations on staging; set env names above; disable demo login.
 3. Run Vitest + manual smoke (auth, invoice, share, pay session fail-closed without secrets).
-4. Point production Netlify env + production Supabase; apply migrations; set `NEXT_PUBLIC_APP_URL` to prod HTTPS.
-5. Wire external cron to production URLs.
+4. Point production Netlify env + production Supabase; apply migrations; set `NEXT_PUBLIC_APP_URL` to prod HTTPS (Netlify URL until custom domain works).
+5. Wire external cron to those production URLs (Bearer + `CRON_SECRET`).
 6. Only then switch DNS / announce go-live.
 
 ---
@@ -128,4 +166,4 @@ Vercel cron header (`x-vercel-cron`) is also accepted when `VERCEL` is set; Netl
 ## Legacy (do not use for 2.0)
 
 - Root `README.md` / `SETUP.md` / `PROJECT_SUMMARY.md` — Express/Railway era; banners point here.
-- `railway.json` — legacy Express deploy; not TimelyInvoices 2.0.
+- `railway.json` — legacy Express deploy; not TimelyInvoices 2.0. Details: [`docs/RAILWAY-LEGACY.md`](./RAILWAY-LEGACY.md).
