@@ -16,21 +16,11 @@ export async function GET(request: Request) {
     }
 
     const pattern = `%${q}%`;
+    const selectCols =
+      'owner_id,company_name,email,subscription_plan,account_status,suspended_at,terminated_at,created_at,updated_at';
     const [byEmail, byCompany] = await Promise.all([
-      admin
-        .from('company_profiles')
-        .select(
-          'owner_id,company_name,email,subscription_plan,account_status,suspended_at,terminated_at,updated_at'
-        )
-        .ilike('email', pattern)
-        .limit(25),
-      admin
-        .from('company_profiles')
-        .select(
-          'owner_id,company_name,email,subscription_plan,account_status,suspended_at,terminated_at,updated_at'
-        )
-        .ilike('company_name', pattern)
-        .limit(25),
+      admin.from('company_profiles').select(selectCols).ilike('email', pattern).limit(25),
+      admin.from('company_profiles').select(selectCols).ilike('company_name', pattern).limit(25),
     ]);
     if (byEmail.error) throw byEmail.error;
     if (byCompany.error) throw byCompany.error;
@@ -64,6 +54,8 @@ export async function GET(request: Request) {
         accountStatus: c.account_status != null ? String(c.account_status) : 'active',
         suspendedAt: c.suspended_at,
         terminatedAt: c.terminated_at,
+        createdAt: c.created_at,
+        updatedAt: c.updated_at,
         subscription: sub
           ? {
               plan: String(sub.plan),

@@ -79,10 +79,11 @@ function isAuthPage(pathname: string) {
 function redirectTo(request: NextRequest, pathname: string) {
   const url = request.nextUrl.clone();
   url.pathname = pathname;
+  url.search = '';
   if (pathname === '/login') {
-    url.searchParams.set('next', request.nextUrl.pathname);
-  } else {
-    url.search = '';
+    // Preserve intended destination (e.g. /crew or /crew/eft).
+    const nextPath = request.nextUrl.pathname || '/dashboard';
+    url.searchParams.set('next', nextPath);
   }
   return NextResponse.redirect(url);
 }
