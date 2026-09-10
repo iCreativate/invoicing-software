@@ -6,7 +6,7 @@ const ogTitle = 'TimelyInvoices — ZAR invoices, quotes & VAT for SA';
 const ogDescription =
   'Create professional ZAR invoices and quotes with VAT. Email or share a public link, and get paid by EFT to your business bank details.';
 const ogImage = {
-  url: `${siteUrl}/og-app.png`,
+  url: `${siteUrl}/og-hero.png`,
   width: 1200,
   height: 630,
   alt: 'TimelyInvoices — ZAR invoices, quotes and VAT for South African businesses',
