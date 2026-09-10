@@ -1,37 +1,45 @@
 import Link from 'next/link';
 import { routes } from '@/lib/routing/routes';
-import { PLANS } from '@/lib/billing/entitlements';
+import { FREE_MONTHLY_INVOICE_SEND_LIMIT, PLANS } from '@/lib/billing/entitlements';
 import { LandingPrimaryLink, LandingSecondaryLink } from '@/components/landing/ProductChrome';
 import { cn } from '@/lib/utils/cn';
 
 const ORDER = ['free', 'pro', 'business'] as const;
 
 const LABELS: Record<(typeof ORDER)[number], string> = {
-  free: 'Free',
+  free: 'Starter',
   pro: 'Pro',
   business: 'Business',
 };
 
+const freeUsers = Number(PLANS.free.entitlements.team_members ?? 1);
+const freeTemplates = Number(PLANS.free.entitlements.invoice_templates ?? 3);
+const proUsers = Number(PLANS.pro.entitlements.team_members ?? 3);
+const proTemplates = Number(PLANS.pro.entitlements.invoice_templates ?? 20);
+const businessUsers = Number(PLANS.business.entitlements.team_members ?? 25);
+const businessTemplates = Number(PLANS.business.entitlements.invoice_templates ?? 100);
+
 const FEATURES: Record<(typeof ORDER)[number], string[]> = {
-  free: ['Unlimited invoices', 'Client directory', 'Outstanding overview', '1 workspace user'],
+  free: [
+    `${FREE_MONTHLY_INVOICE_SEND_LIMIT} invoices / month · ${freeUsers} user · ${freeTemplates} templates`,
+    'Clients + outstanding overview',
+    '“Powered by Timely” on docs',
+    'No recurring, reminders, payment links, collections, or advanced reports',
+  ],
   pro: [
-    'Everything in Free',
-    'Payment links',
-    'Automated reminders',
-    'Cashflow insights',
-    'Up to 3 users',
+    'Everything in Starter, plus:',
+    'Unlimited invoices · recurring · reminders · payment links · collections',
+    'Cashflow + advanced reports',
+    `${proUsers} users · ${proTemplates} templates · branding removed`,
   ],
   business: [
-    'Everything in Pro',
-    'Advanced reporting',
-    'Priority collections',
-    'More templates',
-    'Up to 25 users',
+    'Everything in Pro, plus:',
+    `${businessUsers} users · ${businessTemplates} templates · team-scale collections & reporting`,
   ],
 };
 
 const FOR: Record<(typeof ORDER)[number], string> = {
-  free: "Send invoices and see what's outstanding.",
+  free: 'Send invoices and see what’s outstanding.',
   pro: 'Collect faster with links, reminders and cashflow.',
   business: 'Teams, reporting and collections at scale.',
 };
@@ -74,7 +82,7 @@ export function PricingSection() {
 
                 <div className="mt-6">
                   <p className="tl-num text-[2.75rem] font-semibold leading-none tracking-tight text-[var(--tl-ink)]">
-                    {price === 0 ? 'R0' : `R${price}`}
+                    {price === 0 ? 'Free' : `R${price}`}
                   </p>
                   <p className="mt-2.5 text-[13px] text-[var(--tl-ink-3)]">
                     {price === 0 ? 'Forever free' : 'per month · excl. VAT'}
