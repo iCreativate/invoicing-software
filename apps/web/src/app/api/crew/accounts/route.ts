@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { requireCrew } from '@/lib/crew/require';
 
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 100;
+
 export async function GET(request: Request) {
   try {
     const supabase = await createSupabaseServerClient(request);
@@ -11,27 +14,33 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const q = String(url.searchParams.get('q') ?? '').trim().replace(/[%_,]/g, '');
-    if (q.length < 2) {
-      return NextResponse.json({ success: true, data: { items: [] } });
-    }
+    const pageRaw = parseInt(String(url.searchParams.get('page') ?? '1'), 10);
+    const page = Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1;
+    const sizeRaw = parseInt(String(url.searchParams.get('pageSize') ?? String(DEFAULT_PAGE_SIZE)), 10);
+    const pageSize = Number.isFinite(sizeRaw)
+      ? Math.min(MAX_PAGE_SIZE, Math.max(1, sizeRaw))
+      : DEFAULT_PAGE_SIZE;
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
 
-    const pattern = `%${q}%`;
     const selectCols =
       'owner_id,company_name,email,subscription_plan,account_status,suspended_at,terminated_at,created_at,updated_at';
-    const [byEmail, byCompany] = await Promise.all([
-      admin.from('company_profiles').select(selectCols).ilike('email', pattern).limit(25),
-      admin.from('company_profiles').select(selectCols).ilike('company_name', pattern).limit(25),
-    ]);
-    if (byEmail.error) throw byEmail.error;
-    if (byCompany.error) throw byCompany.error;
 
-    const merged = new Map<string, any>();
-    for (const r of [...(byEmail.data ?? []), ...(byCompany.data ?? [])]) {
-      merged.set(String((r as any).owner_id), r);
+    let query = admin
+      .from('company_profiles')
+      .select(selectCols, { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    // Empty/missing query → all accounts (paginated). Present query → filter.
+    if (q.length > 0) {
+      query = query.or(`email.ilike.%${q}%,company_name.ilike.%${q}%`);
     }
-    const companies = Array.from(merged.values()).slice(0, 40);
 
-    const ownerIds = companies.map((c: any) => String(c.owner_id)).filter(Boolean);
+    const { data: companies, error, count } = await query;
+    if (error) throw error;
+
+    const ownerIds = (companies ?? []).map((c: any) => String(c.owner_id)).filter(Boolean);
     let subsByOwner: Record<string, any> = {};
     if (ownerIds.length) {
       const { data: subs } = await admin
@@ -43,7 +52,7 @@ export async function GET(request: Request) {
       }
     }
 
-    const items = companies.map((c: any) => {
+    const items = (companies ?? []).map((c: any) => {
       const ownerId = String(c.owner_id);
       const sub = subsByOwner[ownerId];
       return {
@@ -66,7 +75,23 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json({ success: true, data: { items } });
+    const total = typeof count === 'number' ? count : items.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        items,
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages,
+          hasPrev: page > 1,
+          hasNext: page < totalPages,
+        },
+      },
+    });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e?.message ?? 'Search failed' }, { status: 500 });
   }
