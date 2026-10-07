@@ -73,7 +73,7 @@ Also add the site URL to Supabase → Authentication → URL Configuration → R
 
 Railway project dashboards (e.g. **timelyinvoices**, **trustworthy-optimism**) may show **“Deployed”** after GitHub pushes. **That status is not TimelyInvoices 2.0.**
 
-- Root `railway.json` builds/starts the **frozen Express** app (`npm run build:server` / `npm start`), not `apps/web`.
+- There is no root `railway.json` anymore (the old file only built frozen Express). Railway 2.0 services use **`/apps/web/railway.json`** with Root Directory **`/apps/web`**.
 - Do **not** treat a Railway “Deployed” badge as evidence that 2.0 shipped.
 - See [`docs/RAILWAY-LEGACY.md`](./RAILWAY-LEGACY.md).
 

@@ -2,14 +2,11 @@
 
 **Production host = Netlify (`apps/web`).** Railway is **non-ship** for 2.0.
 
-## What `railway.json` does
+## Railway config
 
-Root `railway.json` cannot carry comments (JSON). It configures a **frozen Express** stack:
+There is **no** root `railway.json` (the old file only built the frozen Express stack via `npm run build:server` / `npm start`).
 
-- `buildCommand`: `npm run build:server`
-- `startCommand`: `npm start`
-
-That is the old root `src/` API — **not** the Next.js app in `apps/web`.
+TimelyInvoices 2.0 Railway services should use **Root Directory** `/apps/web` and config-as-code path **`/apps/web/railway.json`** (`npm run build` / `npm run start` — Next.js, not Express).
 
 ## Why “Deployed” on Railway is misleading
 
